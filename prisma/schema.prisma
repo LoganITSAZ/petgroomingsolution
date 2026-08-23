@@ -1,0 +1,283 @@
+// Gentle Groomer — Prisma Schema
+// gentlegroomer.net
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// SYSTEM CONFIG (single-row shop-wide settings)
+// ─────────────────────────────────────────────
+model SystemConfig {
+  id String @id @default("global") // enforces single row
+
+  // Shop identity
+  shopName    String  @default("Gentle Groomer")
+  shopPhone   String?
+  shopEmail   String?
+  shopAddress String?
+  shopWebsite String?
+
+  // Feature flags (toggle per deployment)
+  featureOnlineBooking   Boolean @default(true)  // customers can book via portal
+  featureWalkInPortal    Boolean @default(true)  // customers can check in walk-ins via portal
+  featureEmailNotify     Boolean @default(true)  // send email on booking + ready pickup
+  featureSmsNotify       Boolean @default(false) // send SMS (requires Twilio config)
+  featureWaiverRequired  Boolean @default(true)  // require liability waiver on first signup
+
+  // Liability waiver
+  waiverText    String?  @db.Text // full waiver body; null = feature off even if flag is true
+  waiverVersion String?           // e.g. "1.0" — bump to re-prompt existing customers
+
+  // Business hours (JSON: { monday: { open: "08:00", close: "15:00" } | null, ... })
+  businessHours Json?
+
+  // Notification settings
+  emailFromName    String? // e.g. "Gentle Groomer"
+  emailFromAddress String? // e.g. "no-reply@gentlegroomer.net"
+  twilioAccountSid String? // stored encrypted; null if SMS not configured
+  twilioAuthToken  String? // stored encrypted
+  twilioFromNumber String?
+
+  // Booking rules
+  bookingLeadHours   Int @default(2)  // min hours in advance a customer can book
+  bookingWindowDays  Int @default(30) // how many days ahead customers can book
+  walkInWindowStart  String @default("09:00") // walk-in services available from
+  walkInWindowEnd    String @default("15:00") // walk-in services available until
+
+  updatedAt DateTime @updatedAt
+
+  @@map("system_config")
+}
+
+// ─────────────────────────────────────────────
+// STAFF (internal users — groomers, admins)
+// ─────────────────────────────────────────────
+model Staff {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         StaffRole @default(GROOMER)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  appointments  Appointment[]
+  statusHistory AppointmentStatusHistory[]
+  visitEvents   VisitEvent[]
+
+  @@map("staff")
+}
+
+enum StaffRole {
+  ADMIN
+  GROOMER
+}
+
+// ─────────────────────────────────────────────
+// CUSTOMERS (pet owners — portal users)
+// ─────────────────────────────────────────────
+model Customer {
+  id           String   @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  pets               Pet[]
+  appointments       Appointment[]
+  waiverAcceptances  WaiverAcceptance[]
+
+  @@map("customers")
+}
+
+// ─────────────────────────────────────────────
+// PETS (profiles for dogs, cats, etc.)
+// ─────────────────────────────────────────────
+model Pet {
+  id               String    @id @default(cuid())
+  customerId       String
+  name             String
+  species          Species   @default(DOG)
+  breed            String?
+  dateOfBirth      DateTime?
+  weightLbs        Float?
+  coatType         CoatType?
+  temperamentNotes String?   // e.g. "nervous around other animals, loves treats"
+  healthFlags      String[]  // e.g. ["elderly", "reactive", "allergy:chicken"]
+  groomingNotes    String?   // standing instructions for every visit
+  hasBiteHistory   Boolean   @default(false) // true if pet has ever bitten a groomer
+  photoUrl         String?
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  appointments Appointment[]
+
+  @@map("pets")
+}
+
+enum Species {
+  DOG
+  CAT
+  OTHER
+}
+
+enum CoatType {
+  SHORT
+  MEDIUM
+  LONG
+  DOUBLE
+  CURLY
+  WIRE
+  HAIRLESS
+}
+
+// ─────────────────────────────────────────────
+// STATIONS (grooming stations in the shop)
+// ─────────────────────────────────────────────
+model Station {
+  id           String   @id @default(cuid())
+  name         String   // e.g. "Station 1", "Bath Area", "Drying Station"
+  displayLabel String?  // shorter label for the Pi screen
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  appointments Appointment[]
+
+  @@map("stations")
+}
+
+// ─────────────────────────────────────────────
+// APPOINTMENTS
+// ─────────────────────────────────────────────
+model Appointment {
+  id           String            @id @default(cuid())
+  customerId   String
+  petId        String
+  stationId    String?           // assigned when pet arrives / checked in
+  staffId      String?           // assigned groomer
+  scheduledAt      DateTime          // date + time of appointment (= arrival time for walk-ins)
+  appointmentType  AppointmentType   @default(APPOINTMENT)
+  status           AppointmentStatus @default(SCHEDULED)
+  serviceType      ServiceType
+  durationMins Int?              // estimated duration in minutes
+  visitNotes   String?           // notes specific to this visit
+  checkedInAt  DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  customer      Customer                   @relation(fields: [customerId], references: [id])
+  pet           Pet                        @relation(fields: [petId], references: [id])
+  station       Station?                   @relation(fields: [stationId], references: [id])
+  staff         Staff?                     @relation(fields: [staffId], references: [id])
+  statusHistory AppointmentStatusHistory[]
+  visitEvents   VisitEvent[]
+
+  @@map("appointments")
+}
+
+enum AppointmentStatus {
+  SCHEDULED      // booked, not yet arrived
+  CHECKED_IN     // owner has checked in (online or in person)
+  IN_PROGRESS    // pet is being groomed
+  DRYING         // pet is drying / waiting between steps
+  FINISHING      // final touches
+  COMPLETE       // grooming done, not yet picked up
+  READY_PICKUP   // notified owner, waiting for pickup
+  PICKED_UP      // owner collected pet
+  CANCELLED      // appointment cancelled
+  NO_SHOW        // didn't show up
+}
+
+enum ServiceType {
+  BATH_AND_TIDY      // bath, blow-dry, brush out, tidy trim
+  BATH_AND_TRIM      // above + a full trim
+  FULL_GROOM         // full cut, style, bath
+  LION_CUT           // cat-specific — shaved body, fluffy head/paws/tail
+  NAIL_TRIM          // nails only
+  NAIL_GRIND         // nails ground smooth
+  EAR_CLEANING       // ears only
+  TEETH_BRUSHING     // teeth only
+  GLAND_EXPRESSION   // anal gland expression (walk-in)
+  ADD_ON             // misc add-on service
+  CUSTOM             // custom / consult
+}
+
+enum AppointmentType {
+  APPOINTMENT  // pre-booked via portal or by staff
+  WALK_IN      // customer arrived without a booking (portal check-in or in-person)
+}
+
+// ─────────────────────────────────────────────
+// WAIVER ACCEPTANCES (per customer, per version)
+// ─────────────────────────────────────────────
+model WaiverAcceptance {
+  id             String   @id @default(cuid())
+  customerId     String
+  waiverVersion  String   // matches SystemConfig.waiverVersion at time of signing
+  acceptedAt     DateTime @default(now())
+  ipAddress      String?  // for audit trail
+  userAgent      String?
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@unique([customerId, waiverVersion])
+  @@map("waiver_acceptances")
+}
+
+// ─────────────────────────────────────────────
+// VISIT EVENTS (mid-groom incidents per appointment)
+// ─────────────────────────────────────────────
+model VisitEvent {
+  id            String         @id @default(cuid())
+  appointmentId String
+  eventType     VisitEventType
+  occurredAt    DateTime       @default(now())
+  loggedById    String?        // staff who logged it
+  note          String?        // free-text details
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  loggedBy    Staff?      @relation(fields: [loggedById], references: [id])
+
+  @@map("visit_events")
+}
+
+enum VisitEventType {
+  REWASH             // pet defecated / urinated during groom, required re-wash
+  BITE               // pet bit a groomer — triggers hasBiteHistory flag on Pet
+  BEHAVIORAL         // growling, snapping, excessive stress (non-bite)
+  INJURY             // minor cut, nick, or other incident to the pet
+  MATTING_FOUND      // unexpected matting discovered mid-groom
+  EQUIPMENT_ISSUE    // clippers, dryer, etc. problem
+  OTHER              // catch-all, use note field for details
+}
+
+// ─────────────────────────────────────────────
+// APPOINTMENT STATUS HISTORY (audit trail)
+// ─────────────────────────────────────────────
+model AppointmentStatusHistory {
+  id            String            @id @default(cuid())
+  appointmentId String
+  status        AppointmentStatus
+  changedAt     DateTime          @default(now())
+  changedById   String?           // staff ID if staff changed it; null if system/customer
+  note          String?           // optional note on the transition
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  changedBy   Staff?      @relation(fields: [changedById], references: [id])
+
+  @@map("appointment_status_history")
+}
