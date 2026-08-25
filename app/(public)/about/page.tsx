@@ -1,99 +1,44 @@
 import { getConfig } from "@/lib/config";
 import Link from "next/link";
 
-const SERVICE_LIST = [
-  {
-    name: "Bath & Tidy",
-    description: "Full bath, blow-dry, brush out, and a light trim around the face, feet, and tail.",
-  },
-  {
-    name: "Bath & Trim",
-    description: "Everything in the Bath & Tidy, plus a complete body trim to your pet's preferred style.",
-  },
-  {
-    name: "Full Groom",
-    description: "Comprehensive styling cut, full bath, blow-dry, ear cleaning, and nail trim.",
-  },
-  {
-    name: "Lion Cut",
-    description: "Specialty service for cats — shaved body with a fluffy mane, paws, and tail tip.",
-  },
-  {
-    name: "Nail Trim & Grind",
-    description: "Quick, stress-free nail maintenance to keep paws healthy and floors scratch-free.",
-  },
-  {
-    name: "À La Carte Add-ons",
-    description: "Ear cleaning, teeth brushing, gland expression, and more — bookable alongside any service.",
-  },
-];
-
-const DAY_LABELS: Record<string, string> = {
-  monday: "Monday",
-  tuesday: "Tuesday",
-  wednesday: "Wednesday",
-  thursday: "Thursday",
-  friday: "Friday",
-  saturday: "Saturday",
-  sunday: "Sunday",
-};
-
-function formatTime(t: string): string {
-  const [h, m] = t.split(":").map(Number);
-  const ampm = h >= 12 ? "PM" : "AM";
-  const hour = h % 12 || 12;
-  return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
+export async function generateMetadata() {
+  const config = await getConfig();
+  return {
+    title: `About Us | ${config.shopName}`,
+    description: `Learn about the care philosophy and team behind ${config.shopName}.`,
+  };
 }
-
-export const metadata = {
-  title: "About Us | Gentle Groomer",
-  description: "Learn about Gentle Groomer — our story, our services, and where to find us.",
-};
 
 export default async function AboutPage() {
   const config = await getConfig();
 
-  const businessHours = config.businessHours as Record<
-    string,
-    { open: string; close: string } | null
-  > | null;
-
   return (
-    <main className="bg-stone-50 min-h-screen">
+    <div className="public-shell min-h-screen">
       {/* Hero */}
-      <section className="bg-amber-700 text-white py-20 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <p className="text-amber-300 text-sm font-semibold uppercase tracking-widest mb-3">
+      <section className="relative overflow-hidden px-6 py-24 text-brand-on-700">
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900" />
+        <div className="absolute -right-20 top-0 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute -bottom-24 -left-12 text-[13rem] leading-none text-white/[0.07]" aria-hidden="true">🐾</div>
+        <div className="relative mx-auto max-w-4xl text-center">
+          <p className="mb-5 text-sm font-semibold uppercase tracking-[0.2em] text-brand-on-700">
             Professional Pet Grooming
           </p>
-          <h1 className="text-4xl md:text-5xl font-black leading-tight">
-            About {config.shopName ?? "Gentle Groomer"}
+          <h1 className="text-4xl font-black leading-tight md:text-6xl">
+            About {config.shopName}
           </h1>
-          <p className="mt-5 text-amber-100 text-lg max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-3 text-brand-on-700 text-lg max-w-2xl mx-auto leading-relaxed">
             Where every pet is treated with patience, care, and a whole lot of love.
           </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Link
-              href="/book"
-              className="bg-white text-amber-700 hover:bg-amber-50 px-6 py-3 rounded-xl font-bold text-sm transition-colors"
-            >
-              Book an Appointment
-            </Link>
-            <Link
-              href="/contact"
-              className="border border-amber-300 text-white hover:bg-amber-600 px-6 py-3 rounded-xl font-bold text-sm transition-colors"
-            >
-              Get in Touch
-            </Link>
-          </div>
+          <div className="mx-auto mt-8 h-px w-20 bg-white/40" />
         </div>
       </section>
 
       {/* Our Story */}
-      <section className="py-16 px-6">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-black text-stone-900 mb-5">Our Story</h2>
-          <div className="space-y-4 text-stone-600 leading-relaxed">
+      <section className="px-6 py-16">
+        <div className="glass-panel mx-auto max-w-3xl rounded-3xl p-7 md:p-10">
+          <p className="public-eyebrow mb-4">The Gentle Groomer way</p>
+          <h2 className="public-section-title mb-5">Our Story</h2>
+          <div className="space-y-4 text-muted leading-relaxed">
             <p>
               {config.shopName ?? "Gentle Groomer"} was founded on a simple belief: every pet
               deserves to be groomed by someone who genuinely loves animals. We started as a small,
@@ -112,147 +57,38 @@ export default async function AboutPage() {
               care.
             </p>
           </div>
-        </div>
-      </section>
-
-      {/* Services */}
-      <section className="bg-white border-t border-b border-stone-200 py-16 px-6">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-black text-stone-900 mb-2">Our Services</h2>
-          <p className="text-stone-500 mb-8">
-            We offer a full range of grooming services for dogs and cats of all breeds and sizes.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {SERVICE_LIST.map((svc) => (
-              <div
-                key={svc.name}
-                className="flex gap-4 items-start p-4 rounded-xl border border-stone-100 hover:border-amber-200 hover:bg-amber-50 transition-colors"
-              >
-                <div className="w-8 h-8 flex-shrink-0 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-black text-sm mt-0.5">
-                  ✦
-                </div>
-                <div>
-                  <p className="font-bold text-stone-900">{svc.name}</p>
-                  <p className="text-sm text-stone-500 mt-0.5 leading-relaxed">{svc.description}</p>
-                </div>
+          <div className="mt-8 grid gap-3 border-t border-line pt-6 sm:grid-cols-3">
+            {[
+              ["A gentler pace", "Time and attention for every visit."],
+              ["Experienced hands", "Thoughtful care from start to finish."],
+              ["Comfort first", "A calm approach for every personality."],
+            ].map(([title, description]) => (
+              <div key={title} className="rounded-2xl bg-brand-100/25 p-4">
+                <p className="text-sm font-bold text-ink">{title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted">{description}</p>
               </div>
             ))}
-          </div>
-          <div className="mt-8 text-center">
-            <Link
-              href="/book"
-              className="inline-block bg-amber-600 hover:bg-amber-700 text-white px-7 py-3 rounded-xl font-bold text-sm transition-colors"
-            >
-              Book a Service
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Location & Hours */}
-      <section className="py-16 px-6">
-        <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10">
-          {/* Location */}
-          <div>
-            <h2 className="text-2xl font-black text-stone-900 mb-5">Find Us</h2>
-            <div className="space-y-3 text-stone-600">
-              {config.shopAddress && (
-                <div className="flex items-start gap-3">
-                  <span className="text-amber-600 mt-0.5">📍</span>
-                  <span className="leading-relaxed">{config.shopAddress}</span>
-                </div>
-              )}
-              {config.shopPhone && (
-                <div className="flex items-center gap-3">
-                  <span className="text-amber-600">📞</span>
-                  <a
-                    href={`tel:${config.shopPhone}`}
-                    className="hover:text-amber-700 underline underline-offset-2"
-                  >
-                    {config.shopPhone}
-                  </a>
-                </div>
-              )}
-              {config.shopEmail && (
-                <div className="flex items-center gap-3">
-                  <span className="text-amber-600">✉</span>
-                  <a
-                    href={`mailto:${config.shopEmail}`}
-                    className="hover:text-amber-700 underline underline-offset-2"
-                  >
-                    {config.shopEmail}
-                  </a>
-                </div>
-              )}
-              {config.shopWebsite && (
-                <div className="flex items-center gap-3">
-                  <span className="text-amber-600">🌐</span>
-                  <a
-                    href={config.shopWebsite}
-                    className="hover:text-amber-700 underline underline-offset-2"
-                  >
-                    {config.shopWebsite.replace(/^https?:\/\//, "")}
-                  </a>
-                </div>
-              )}
-            </div>
-            <div className="mt-6">
-              <Link
-                href="/contact"
-                className="inline-block border border-amber-400 text-amber-700 hover:bg-amber-50 px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors"
-              >
-                Send us a message →
-              </Link>
-            </div>
-          </div>
-
-          {/* Hours */}
-          <div>
-            <h2 className="text-2xl font-black text-stone-900 mb-5">Hours</h2>
-            {businessHours ? (
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-stone-100">
-                  {Object.entries(DAY_LABELS).map(([key, label]) => {
-                    const hours = businessHours[key];
-                    return (
-                      <tr key={key}>
-                        <td className="py-2 pr-4 font-medium text-stone-700 w-32">{label}</td>
-                        <td className="py-2 text-stone-500">
-                          {hours ? (
-                            <span>
-                              {formatTime(hours.open)} – {formatTime(hours.close)}
-                            </span>
-                          ) : (
-                            <span className="text-stone-400">Closed</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <p className="text-stone-400 text-sm">
-                Please call or visit our contact page for current hours.
-              </p>
-            )}
           </div>
         </div>
       </section>
 
       {/* CTA footer band */}
-      <section className="bg-amber-700 text-white py-12 px-6 text-center">
-        <h2 className="text-xl font-black mb-2">Ready to book?</h2>
-        <p className="text-amber-200 text-sm mb-6">
+      <section className="relative mx-4 mb-4 overflow-hidden rounded-3xl bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900 px-6 py-14 text-center text-brand-on-700 shadow-xl shadow-brand-900/20">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.22),transparent_48%)]" />
+        <div className="relative">
+        <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-brand-on-700">A calm visit starts here</p>
+        <h2 className="text-2xl font-black mb-2">Ready to book?</h2>
+        <p className="text-brand-on-700 text-sm mb-6">
           Schedule online in minutes. We&apos;ll take it from there.
         </p>
         <Link
           href="/book"
-          className="inline-block bg-white text-amber-700 hover:bg-amber-50 px-7 py-3 rounded-xl font-bold text-sm transition-colors"
+          className="inline-flex items-center justify-center rounded-xl bg-surface px-7 py-3 text-sm font-bold text-brand-text shadow-lg transition hover:-translate-y-0.5 hover:bg-brand-100/40"
         >
-          Book Now
+          Book an Appointment
         </Link>
+        </div>
       </section>
-    </main>
+    </div>
   );
 }

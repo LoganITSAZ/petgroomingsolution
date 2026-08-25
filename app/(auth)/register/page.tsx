@@ -6,6 +6,10 @@ import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
 import RegisterForm from "./RegisterForm";
 
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "Create account" };
+
 // SystemConfig is edited at runtime from /admin, so these pages must not be
 // baked at build time — a prerendered snapshot would freeze shop details,
 // feature flags, and waiver text until the next deploy.

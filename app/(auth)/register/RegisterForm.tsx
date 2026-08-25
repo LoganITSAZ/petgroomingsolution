@@ -91,72 +91,88 @@ export default function RegisterForm({
     <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
         <h1 className="text-2xl font-black text-stone-900 mb-1">Create account</h1>
-        <p className="text-stone-500 mb-6 text-sm">🐾 Gentle Groomer</p>
-
         {serverError && ERROR_MESSAGES[serverError] && (
-          <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
+          <p role="alert" className="text-red-700 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
             {ERROR_MESSAGES[serverError]}
           </p>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           {/* Name row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">
+              <label htmlFor="firstName" className="block text-sm font-medium text-stone-700 mb-1">
                 First name
               </label>
               <input
+                id="firstName"
+                name="firstName"
+                autoComplete="given-name"
                 type="text"
                 required
+                aria-invalid={Boolean(fieldErrors.firstName)}
+                aria-describedby={fieldErrors.firstName ? "firstName-error" : undefined}
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
               {fieldErrors.firstName && (
-                <p className="text-red-600 text-xs mt-1">{fieldErrors.firstName}</p>
+                <p id="firstName-error" className="text-red-600 text-xs mt-1">{fieldErrors.firstName}</p>
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">
+              <label htmlFor="lastName" className="block text-sm font-medium text-stone-700 mb-1">
                 Last name
               </label>
               <input
+                id="lastName"
+                name="lastName"
+                autoComplete="family-name"
                 type="text"
                 required
+                aria-invalid={Boolean(fieldErrors.lastName)}
+                aria-describedby={fieldErrors.lastName ? "lastName-error" : undefined}
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
               {fieldErrors.lastName && (
-                <p className="text-red-600 text-xs mt-1">{fieldErrors.lastName}</p>
+                <p id="lastName-error" className="text-red-600 text-xs mt-1">{fieldErrors.lastName}</p>
               )}
             </div>
           </div>
 
           {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
+            <label htmlFor="email" className="block text-sm font-medium text-stone-700 mb-1">Email</label>
             <input
+              id="email"
+              name="email"
               type="email"
+              autoComplete="email"
               required
+              aria-invalid={Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? "email-error" : undefined}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
             {fieldErrors.email && (
-              <p className="text-red-600 text-xs mt-1">{fieldErrors.email}</p>
+              <p id="email-error" className="text-red-600 text-xs mt-1">{fieldErrors.email}</p>
             )}
           </div>
 
           {/* Phone (optional) */}
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="phone" className="block text-sm font-medium text-stone-700 mb-1">
               Phone{" "}
               <span className="text-stone-400 font-normal">(optional)</span>
             </label>
             <input
+              id="phone"
+              name="phone"
               type="tel"
+              autoComplete="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-400"
@@ -165,34 +181,44 @@ export default function RegisterForm({
 
           {/* Password */}
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">Password</label>
+            <label htmlFor="password" className="block text-sm font-medium text-stone-700 mb-1">Password</label>
             <input
+              id="password"
+              name="password"
               type="password"
+              autoComplete="new-password"
               required
               minLength={8}
+              aria-invalid={Boolean(fieldErrors.password)}
+              aria-describedby={fieldErrors.password ? "password-error" : undefined}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
             {fieldErrors.password && (
-              <p className="text-red-600 text-xs mt-1">{fieldErrors.password}</p>
+              <p id="password-error" className="text-red-600 text-xs mt-1">{fieldErrors.password}</p>
             )}
           </div>
 
           {/* Confirm Password */}
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-stone-700 mb-1">
               Confirm password
             </label>
             <input
+              id="confirmPassword"
+              name="confirmPassword"
               type="password"
+              autoComplete="new-password"
               required
+              aria-invalid={Boolean(fieldErrors.confirmPassword)}
+              aria-describedby={fieldErrors.confirmPassword ? "confirmPassword-error" : undefined}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
             {fieldErrors.confirmPassword && (
-              <p className="text-red-600 text-xs mt-1">{fieldErrors.confirmPassword}</p>
+              <p id="confirmPassword-error" className="text-red-600 text-xs mt-1">{fieldErrors.confirmPassword}</p>
             )}
           </div>
 
@@ -228,7 +254,7 @@ export default function RegisterForm({
           <button
             type="submit"
             disabled={isPending}
-            className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors"
+            className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-brand-on-600 hover:text-brand-on-700 font-semibold py-2.5 rounded-lg transition-colors"
           >
             {isPending ? "Creating account…" : "Create account"}
           </button>
@@ -236,7 +262,7 @@ export default function RegisterForm({
 
         <p className="text-center text-sm text-stone-500 mt-6">
           Already have an account?{" "}
-          <Link href="/login" className="text-brand-600 hover:underline font-medium">
+          <Link href="/login" className="text-brand-text hover:underline font-medium">
             Sign in
           </Link>
         </p>

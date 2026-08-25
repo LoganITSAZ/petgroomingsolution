@@ -6,11 +6,11 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: {
-    default: "Gentle Groomer",
-    template: "%s | Gentle Groomer",
+    default: "Pet Grooming Shop",
+    template: "%s | Pet Grooming Shop",
   },
-  description: "The best and bubbliest groomer in town. Patience, Love & Kindness.",
-  metadataBase: new URL("https://gentlegroomer.net"),
+  description: "Pet grooming appointments, customer care, and shop operations.",
+  metadataBase: new URL(process.env.NEXTAUTH_URL ?? "http://localhost"),
 };
 
 export default function RootLayout({

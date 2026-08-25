@@ -5,10 +5,245 @@
 @layer base {
   :root {
     --radius: 0.5rem;
+
+    /* Theme defaults: a warm amber. The public site overrides
+       these per request from the theme chosen in the admin panel; every other
+       screen inherits them and stays neutral. */
+    --brand-100: 253 240 213;
+    --brand-300: 245 198 116;
+    --brand-500: 236 139 26;
+    --brand-600: 221 112 16;
+    --brand-700: 183 83 16;
+    --brand-900: 118 55 20;
+    /* Text that sits on a brand-600 / brand-700 fill. Resolved per theme in
+       lib/themes.ts so a light brand colour gets dark text instead of white —
+       see the "on-brand" note there. These defaults match the amber above. */
+    --brand-on-600: 28 25 23;
+    --brand-on-700: 255 255 255;
+    --brand-text: 146 65 12;
+    --page-bg: 250 250 249;
+    --surface: 255 255 255;
+    --ink: 28 25 23;
+    --muted: 120 113 108;
+    --line: 231 229 228;
+    --footer-bg: 41 37 36;
+    --footer-ink: 214 211 209;
   }
 
   body {
     @apply bg-stone-50 text-stone-900 antialiased;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  /* ── Dark surfaces ──────────────────────────────────────────────────────
+     Staff, admin and portal screens opt in with a `dark` class on their
+     wrapper. Everything below is a paired override: whenever a background is
+     darkened here, the text and border colours that sit on it are darkened
+     with it. Adding a background without its text partner is what produced
+     dark-on-dark alert boxes before. */
+  .dark,
+  .dark body,
+  .dark .bg-stone-50,
+  .dark.bg-stone-50 { background-color: #111827; color: #f3f4f6; }
+  .dark .bg-white,
+  .dark.bg-white { background-color: #1f2937; }
+  .dark .bg-stone-100,
+  .dark.bg-stone-100 { background-color: #1f2937; }
+  .dark .bg-stone-200,
+  .dark.bg-stone-200 { background-color: #374151; }
+  .dark .bg-stone-300 { background-color: #4b5563; }
+  .dark .bg-stone-900,
+  .dark.bg-stone-900 { background-color: #030712; }
+  .dark .text-stone-900,
+  .dark .text-stone-800 { color: #f9fafb; }
+  .dark .text-stone-700 { color: #e5e7eb; }
+  .dark .text-stone-600 { color: #d1d5db; }
+  /* #9ca3af is only 4.06:1 on the stone-200 fill above, which is where the
+     small capacity pills sit; a step lighter clears AA on every dark surface. */
+  .dark .text-stone-500,
+  .dark .text-stone-400 { color: #a8b0bb; }
+  .dark .border-stone-200,
+  .dark .border-stone-300,
+  .dark .border-stone-100 { border-color: #374151; }
+  .dark .border-stone-400 { border-color: #4b5563; }
+  .dark .divide-stone-100 > :not([hidden]) ~ :not([hidden]) { border-color: #374151; }
+
+  /* Tinted panels. Each family darkens its 50/100 fill, lightens the text
+     that goes on it, and pulls the border in to match. */
+  .dark .bg-amber-50 { background-color: #451a03; }
+  .dark .bg-amber-100 { background-color: #78350f; }
+  .dark .bg-red-50 { background-color: #450a0a; }
+  .dark .bg-red-100 { background-color: #7f1d1d; }
+  .dark .bg-green-50 { background-color: #052e16; }
+  .dark .bg-green-100 { background-color: #14532d; }
+  .dark .bg-emerald-50 { background-color: #022c22; }
+  .dark .bg-emerald-100 { background-color: #064e3b; }
+  .dark .bg-sky-50 { background-color: #082f49; }
+  .dark .bg-sky-100 { background-color: #0c4a6e; }
+  .dark .bg-blue-50 { background-color: #172554; }
+  .dark .bg-blue-100 { background-color: #1e3a8a; }
+  .dark .bg-purple-50 { background-color: #3b0764; }
+  .dark .bg-purple-100 { background-color: #581c87; }
+  .dark .bg-yellow-50 { background-color: #422006; }
+  .dark .bg-yellow-100 { background-color: #713f12; }
+  .dark .bg-orange-50 { background-color: #431407; }
+  .dark .bg-orange-100 { background-color: #7c2d12; }
+  .dark .bg-rose-50 { background-color: #4c0519; }
+  .dark .bg-rose-100 { background-color: #881337; }
+  .dark .bg-teal-50 { background-color: #042f2e; }
+  .dark .bg-teal-100 { background-color: #134e4a; }
+  .dark .bg-indigo-50 { background-color: #1e1b4b; }
+  .dark .bg-indigo-100 { background-color: #312e81; }
+
+  /* Saturated text. The 600–900 shades are dark-on-dark once the surface
+     flips, so every one of them lands on its 300 — at least 5:1 against both
+     the card (#1f2937) and the tinted fills above. */
+  .dark .text-amber-600,
+  .dark .text-amber-700,
+  .dark .text-amber-800,
+  .dark .text-amber-900 { color: #fcd34d; }
+  .dark .text-red-500,
+  .dark .text-red-600,
+  .dark .text-red-700,
+  .dark .text-red-800,
+  .dark .text-red-900 { color: #fca5a5; }
+  .dark .text-green-600,
+  .dark .text-green-700,
+  .dark .text-green-800,
+  .dark .text-green-900 { color: #86efac; }
+  .dark .text-emerald-600,
+  .dark .text-emerald-700,
+  .dark .text-emerald-800,
+  .dark .text-emerald-900 { color: #6ee7b7; }
+  .dark .text-sky-600,
+  .dark .text-sky-700,
+  .dark .text-sky-800,
+  .dark .text-sky-900 { color: #7dd3fc; }
+  .dark .text-blue-600,
+  .dark .text-blue-700,
+  .dark .text-blue-800,
+  .dark .text-blue-900 { color: #93c5fd; }
+  .dark .text-purple-600,
+  .dark .text-purple-700,
+  .dark .text-purple-800,
+  .dark .text-purple-900 { color: #d8b4fe; }
+  .dark .text-yellow-600,
+  .dark .text-yellow-700,
+  .dark .text-yellow-800,
+  .dark .text-yellow-900 { color: #fde047; }
+  .dark .text-orange-600,
+  .dark .text-orange-700,
+  .dark .text-orange-800,
+  .dark .text-orange-900 { color: #fdba74; }
+  .dark .text-rose-600,
+  .dark .text-rose-700,
+  .dark .text-rose-800,
+  .dark .text-rose-900 { color: #fda4af; }
+  .dark .text-teal-600,
+  .dark .text-teal-700,
+  .dark .text-teal-800,
+  .dark .text-teal-900 { color: #5eead4; }
+  .dark .text-indigo-600,
+  .dark .text-indigo-700,
+  .dark .text-indigo-800,
+  .dark .text-indigo-900 { color: #a5b4fc; }
+
+  /* Tinted borders, so a panel keeps its edge once the fill is dark. */
+  .dark .border-amber-200,
+  .dark .border-amber-300 { border-color: #92400e; }
+  .dark .border-red-200,
+  .dark .border-red-300,
+  .dark .border-red-400 { border-color: #991b1b; }
+  .dark .border-green-200,
+  .dark .border-green-300 { border-color: #166534; }
+  .dark .border-emerald-200,
+  .dark .border-emerald-300 { border-color: #065f46; }
+  .dark .border-sky-200 { border-color: #075985; }
+  .dark .border-blue-200 { border-color: #1e40af; }
+  .dark .divide-amber-100 > :not([hidden]) ~ :not([hidden]) { border-color: #92400e; }
+
+  /* Brand type. `--brand-text` is derived to clear AA against a light surface
+     (see brandText() in lib/themes.ts), which makes it dark-on-dark once the
+     portal or the back office flips. The public site never goes dark, so this
+     only has to cover the amber default the working screens paint from. */
+  .dark {
+    --brand-text: 252 211 77;
+  }
+
+  .dark input,
+  .dark textarea,
+  .dark select { background-color: #111827; color: #f9fafb; border-color: #4b5563; }
+  .dark input::placeholder,
+  .dark textarea::placeholder { color: #a8b0bb; }
+  .dark .hover\:bg-stone-50:hover,
+  .dark .hover\:bg-stone-100:hover { background-color: #374151; }
+  .dark .hover\:bg-amber-50:hover { background-color: #451a03; }
+}
+
+@layer components {
+  /* Public site ──────────────────────────────────────────────────────────
+     A few shared primitives give the customer-facing pages depth without
+     baking a fixed colour palette into a site that can be rethemed at runtime.
+     The translucent fills sit over the theme-aware page glow, so this remains
+     warm in amber and still feels intentional in every other brand preset. */
+  .public-shell {
+    @apply relative isolate overflow-hidden bg-page;
+    background-image:
+      radial-gradient(circle at 8% 3%, rgb(var(--brand-100) / 0.7), transparent 25rem),
+      radial-gradient(circle at 95% 17%, rgb(var(--brand-300) / 0.24), transparent 23rem);
+  }
+
+  .glass-panel {
+    @apply border border-white/70 bg-surface/75 shadow-xl shadow-brand-900/5;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .glass-panel-subtle {
+    @apply border border-white/60 bg-surface/55 shadow-lg shadow-brand-900/5;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .public-eyebrow {
+    @apply inline-flex items-center rounded-full border border-brand-300/60 bg-surface/60 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-brand-text shadow-sm;
+  }
+
+  .public-primary-button {
+    @apply inline-flex items-center justify-center rounded-xl bg-brand-600 px-6 py-3 font-bold text-brand-on-600 shadow-lg shadow-brand-900/20 transition duration-200 hover:-translate-y-0.5 hover:bg-brand-700 hover:text-brand-on-700 hover:shadow-xl focus-visible:outline-brand-text;
+  }
+
+  .public-secondary-button {
+    @apply inline-flex items-center justify-center rounded-xl border border-brand-300/70 bg-surface/65 px-6 py-3 font-bold text-ink shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-brand-500 hover:bg-surface hover:text-brand-text focus-visible:outline-brand-text;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .public-section-title {
+    @apply text-3xl font-black tracking-tight text-ink md:text-4xl;
+  }
+
+  /* Back-office density: the shop runs these screens all day and wants rows,
+     not whitespace. The public site and the kiosk keep the default scale. */
+  .app-dense {
+    font-size: 0.9375rem; /* 15px */
+    line-height: 1.4;
+  }
+
+  .app-dense table {
+    line-height: 1.35;
+  }
+
+  /* Keyboard-only jump past the nav. Off-screen until focused. */
+  .skip-link {
+    @apply sr-only;
+  }
+
+  .skip-link:focus {
+    @apply not-sr-only fixed left-3 top-3 z-[100] rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white shadow-lg;
   }
 }
 
@@ -21,5 +256,43 @@
   /* Station display — large readable text for Pi screen */
   .station-display {
     @apply text-4xl font-bold leading-tight;
+  }
+
+  /* Light-mode muted text. Tailwind's stone-400 is 2.5:1 on white and
+     stone-500 is 3.8:1 on stone-200 — both below WCAG AA for body text, and
+     both are used throughout the back office as the secondary label colour.
+     Darkening the two utilities fixes every one of those sites at once and
+     keeps the 400 < 500 < 600 hierarchy intact. The `.dark` rules above are
+     more specific, so dark mode keeps its own lighter values, and the kiosk
+     (which paints its own dark surface without a `dark` class) sets its greys
+     explicitly rather than relying on these. */
+  .text-stone-400 { color: #6b6560; }
+  .text-stone-500 { color: #5f5a55; }
+}
+
+/* Focus. Components pair `focus:outline-none` with a tinted ring, and rings
+   like amber-400 are 1.7:1 against white — not a visible indicator. This
+   restores a real outline for keyboard users only (pointer clicks are
+   unaffected) and wins over the utility, which is why it carries !important
+   and sits outside the layers. WCAG 2.4.7 / 2.4.11. */
+:focus-visible {
+  outline: 2px solid #1c1917 !important;
+  outline-offset: 2px !important;
+}
+
+.dark :focus-visible,
+.bg-stone-900 :focus-visible,
+.bg-stone-800 :focus-visible {
+  outline-color: #fafaf9 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

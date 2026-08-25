@@ -1,120 +1,98 @@
 import type { Metadata } from "next";
+import ServicePricingExplorer from "@/components/ServicePricingExplorer";
+import { prisma } from "@/lib/prisma";
+import { formatCents } from "@/lib/pricing";
+import { livePromotions } from "@/lib/promotions";
+import { getConfig } from "@/lib/config";
 
 export const metadata: Metadata = { title: "Services & Pricing" };
 
-const DOG_SERVICES = [
-  { service: "Bath + Tidy", small: "$45", medium: "$60", large: "$85", xl: "$120" },
-  { service: "Bath + Trim", small: "$55", medium: "$75", large: "$100", xl: "$145" },
-  { service: "Full Groom", small: "$75", medium: "$100", large: "$140", xl: "$190" },
-  { service: "Nail Trim", small: "$17", medium: "$20", large: "$25", xl: "$30" },
-  { service: "Nail Grind", small: "$20", medium: "$25", large: "$30", xl: "$35" },
-  { service: "Teeth Brushing", small: "$15", medium: "$15", large: "$15", xl: "$15" },
-  { service: "Ear Cleaning", small: "$15", medium: "$15", large: "$15", xl: "$15" },
-];
+// Prices and promotions are edited in the admin panel at runtime; a static
+// snapshot would freeze them until the next deploy.
+export const dynamic = "force-dynamic";
 
-const CAT_SERVICES = [
-  { service: "Bath / Comb / Nails", price: "$55–$70" },
-  { service: "Haircut", price: "$95–$130" },
-  { service: "Lion Cut", price: "$85–$110" },
-];
+export default async function ServicesPage() {
+  const [config, services, surcharges, promotions] = await Promise.all([
+    getConfig(),
+    prisma.service.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
+    prisma.surcharge.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+    }),
+    livePromotions("site"),
+  ]);
 
-const WALKIN_SERVICES = [
-  { service: "Nail Trim", note: "Walk-in, 9am–3pm" },
-  { service: "Teeth Brushing", note: "Walk-in, 9am–3pm" },
-  { service: "Gland Expression", note: "Walk-in, 9am–3pm" },
-];
+  const offersByService = new Map<string, { title: string; code: string | null }[]>();
+  for (const promotion of promotions) {
+    offersByService.set(promotion.serviceId, [
+      ...(offersByService.get(promotion.serviceId) ?? []),
+      { title: promotion.title, code: promotion.code },
+    ]);
+  }
 
-const SURCHARGES = [
-  { condition: "Matted coat", fee: "$15–$55" },
-  { condition: "Difficult / aggressive handling", fee: "$15–$55" },
-  { condition: "Late pickup (after close)", fee: "$25" },
-];
+  const serviceOptions = services
+    .filter((service) => service.species === "DOG" || service.species === "CAT" || service.species === null)
+    .map((service) => ({
+      id: service.id,
+      name: service.name,
+      description: service.description,
+      category: service.category,
+      species: service.species,
+      priceSmallCents: service.priceSmallCents,
+      priceMediumCents: service.priceMediumCents,
+      priceLargeCents: service.priceLargeCents,
+      priceXlCents: service.priceXlCents,
+      priceFlatCents: service.priceFlatCents,
+      priceMaxCents: service.priceMaxCents,
+      durationMins: service.durationMins,
+      walkInEligible: service.walkInEligible,
+      offers: offersByService.get(service.id) ?? [],
+    }));
 
-export default function ServicesPage() {
   return (
-    <div className="max-w-5xl mx-auto px-4 py-16">
-      <h1 className="text-4xl font-black text-stone-900 mb-2">Services & Pricing</h1>
-      <p className="text-stone-500 mb-12">Pricing varies by pet size. Appointments required for most services.</p>
+    <div className="public-shell min-h-screen px-4 py-12">
+      <div className="mx-auto max-w-5xl">
+        <header className="glass-panel mb-8 rounded-3xl p-7 md:p-10">
+          <p className="public-eyebrow mb-4">Made for every coat &amp; character</p>
+          <h1 className="public-section-title mb-2">Services &amp; Pricing</h1>
+          <p className="max-w-2xl text-muted">
+            Start with your pet type and we&apos;ll narrow the menu to the care that fits them best.
+          </p>
+        </header>
 
-      {/* Dogs */}
-      <section className="mb-14">
-        <h2 className="text-2xl font-bold text-stone-800 mb-4">🐶 Dogs</h2>
-        <p className="text-stone-500 text-sm mb-4">Pricing by weight: Small &lt;15 lbs · Medium 15–30 lbs · Large 30–45 lbs · XL 50 lbs+</p>
-        <div className="overflow-x-auto rounded-xl border border-stone-200">
-          <table className="w-full text-left">
-            <thead className="bg-stone-100 text-stone-600 text-sm uppercase tracking-wide">
-              <tr>
-                <th className="px-4 py-3">Service</th>
-                <th className="px-4 py-3">Small</th>
-                <th className="px-4 py-3">Medium</th>
-                <th className="px-4 py-3">Large</th>
-                <th className="px-4 py-3">XL</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DOG_SERVICES.map((row, i) => (
-                <tr key={row.service} className={i % 2 === 0 ? "bg-white" : "bg-stone-50"}>
-                  <td className="px-4 py-3 font-medium text-stone-900">{row.service}</td>
-                  <td className="px-4 py-3 text-stone-600">{row.small}</td>
-                  <td className="px-4 py-3 text-stone-600">{row.medium}</td>
-                  <td className="px-4 py-3 text-stone-600">{row.large}</td>
-                  <td className="px-4 py-3 text-stone-600">{row.xl}</td>
-                </tr>
+        {serviceOptions.length === 0 ? (
+          <div className="glass-panel rounded-3xl p-7 text-muted">
+            Pricing is being updated. Call {config.shopPhone ?? "the shop"} for a quote.
+          </div>
+        ) : (
+          <ServicePricingExplorer services={serviceOptions} />
+        )}
+
+        {surcharges.length > 0 && (
+          <details className="glass-panel-subtle mt-6 rounded-2xl px-5 py-4">
+            <summary className="cursor-pointer font-bold text-ink">Additional fees &amp; care notes</summary>
+            <p className="mt-2 text-sm text-muted">Some pets need extra time or specialized care. We&apos;ll always discuss this with you first.</p>
+            <ul className="mt-4 space-y-2">
+              {surcharges.map((surcharge) => (
+                <li key={surcharge.id} className="flex justify-between gap-4 rounded-xl bg-surface/50 px-3 py-2 text-sm">
+                  <span className="text-ink/80">
+                    {surcharge.label}
+                    {surcharge.note && <span className="block text-xs text-muted">{surcharge.note}</span>}
+                  </span>
+                  <span className="shrink-0 font-semibold text-ink">
+                    {surcharge.minCents != null && surcharge.maxCents != null
+                      ? `${formatCents(surcharge.minCents)}–${formatCents(surcharge.maxCents)}`
+                      : formatCents(surcharge.minCents ?? surcharge.maxCents)}
+                  </span>
+                </li>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Cats */}
-      <section className="mb-14">
-        <h2 className="text-2xl font-bold text-stone-800 mb-4">🐱 Cats</h2>
-        <div className="overflow-x-auto rounded-xl border border-stone-200">
-          <table className="w-full text-left">
-            <thead className="bg-stone-100 text-stone-600 text-sm uppercase tracking-wide">
-              <tr>
-                <th className="px-4 py-3">Service</th>
-                <th className="px-4 py-3">Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              {CAT_SERVICES.map((row, i) => (
-                <tr key={row.service} className={i % 2 === 0 ? "bg-white" : "bg-stone-50"}>
-                  <td className="px-4 py-3 font-medium text-stone-900">{row.service}</td>
-                  <td className="px-4 py-3 text-stone-600">{row.price}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Walk-in */}
-      <section className="mb-14">
-        <h2 className="text-2xl font-bold text-stone-800 mb-4">Walk-in Services</h2>
-        <p className="text-stone-500 text-sm mb-4">No appointment needed. Available 9am–3pm daily.</p>
-        <ul className="space-y-2">
-          {WALKIN_SERVICES.map((s) => (
-            <li key={s.service} className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-              <span className="font-medium text-stone-900">{s.service}</span>
-              <span className="text-stone-500 text-sm">{s.note}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* Surcharges */}
-      <section>
-        <h2 className="text-2xl font-bold text-stone-800 mb-4">Additional Fees</h2>
-        <ul className="space-y-2">
-          {SURCHARGES.map((s) => (
-            <li key={s.condition} className="flex justify-between bg-stone-100 rounded-lg px-4 py-3">
-              <span className="text-stone-700">{s.condition}</span>
-              <span className="font-semibold text-stone-900">{s.fee}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+            </ul>
+          </details>
+        )}
+      </div>
     </div>
   );
 }

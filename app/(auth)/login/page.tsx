@@ -38,8 +38,6 @@ function LoginForm() {
     <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
         <h1 className="text-2xl font-black text-stone-900 mb-1">Sign in</h1>
-        <p className="text-stone-500 mb-6 text-sm">🐾 Gentle Groomer</p>
-
         {/* Toggle customer / staff */}
         <div className="flex rounded-lg border border-stone-200 p-1 mb-6 gap-1">
           {(["customer", "staff"] as const).map((t) => (
@@ -48,7 +46,7 @@ function LoginForm() {
               onClick={() => setUserType(t)}
               className={`flex-1 py-2 rounded-md text-sm font-semibold transition-colors capitalize ${
                 userType === t
-                  ? "bg-brand-600 text-white"
+                  ? "bg-brand-600 text-brand-on-600"
                   : "text-stone-500 hover:text-stone-800"
               }`}
             >
@@ -57,11 +55,14 @@ function LoginForm() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
+            <label htmlFor="email" className="block text-sm font-medium text-stone-700 mb-1">Email</label>
             <input
+              id="email"
+              name="email"
               type="email"
+              autoComplete="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -69,20 +70,27 @@ function LoginForm() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">Password</label>
+            <label htmlFor="password" className="block text-sm font-medium text-stone-700 mb-1">Password</label>
             <input
+              id="password"
+              name="password"
               type="password"
+              autoComplete="current-password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
           </div>
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && (
+            <p role="alert" className="text-red-600 text-sm">
+              {error}
+            </p>
+          )}
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors"
+            className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-brand-on-600 hover:text-brand-on-700 font-semibold py-2.5 rounded-lg transition-colors"
           >
             {loading ? "Signing in…" : "Sign in"}
           </button>
@@ -91,7 +99,7 @@ function LoginForm() {
         {userType === "customer" && (
           <p className="text-center text-sm text-stone-500 mt-6">
             New here?{" "}
-            <Link href="/register" className="text-brand-600 hover:underline font-medium">
+            <Link href="/register" className="text-brand-text hover:underline font-medium">
               Create an account
             </Link>
           </p>
