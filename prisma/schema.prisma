@@ -1,5 +1,4 @@
-// Gentle Groomer — Prisma Schema
-// gentlegroomer.net
+// Pet grooming shop management schema
 
 generator client {
   provider = "prisma-client-js"
@@ -17,38 +16,74 @@ model SystemConfig {
   id String @id @default("global") // enforces single row
 
   // Shop identity
-  shopName    String  @default("Gentle Groomer")
+  shopTagline String? // the line under the shop name on the public site
+  shopName    String  @default("Your Grooming Shop")
   shopPhone   String?
   shopEmail   String?
   shopAddress String?
   shopWebsite String?
 
   // Feature flags (toggle per deployment)
-  featureOnlineBooking   Boolean @default(true)  // customers can book via portal
-  featureWalkInPortal    Boolean @default(true)  // customers can check in walk-ins via portal
-  featureEmailNotify     Boolean @default(true)  // send email on booking + ready pickup
-  featureSmsNotify       Boolean @default(false) // send SMS (requires Twilio config)
-  featureWaiverRequired  Boolean @default(true)  // require liability waiver on first signup
+  featureOnlineBooking  Boolean @default(true) // customers can book via portal
+  featureWalkInPortal   Boolean @default(true) // customers can check in walk-ins via portal
+  featureEmailNotify    Boolean @default(true) // send email on booking + ready pickup
+  featureSmsNotify      Boolean @default(false) // send SMS (requires Twilio config)
+  featureWaiverRequired Boolean @default(true) // require liability waiver on first signup
+  featureRewards        Boolean @default(false) // visit punch card for customers
 
   // Liability waiver
-  waiverText    String?  @db.Text // full waiver body; null = feature off even if flag is true
-  waiverVersion String?           // e.g. "1.0" — bump to re-prompt existing customers
+  waiverText    String? @db.Text // full waiver body; null = feature off even if flag is true
+  waiverVersion String? // e.g. "1.0" — bump to re-prompt existing customers
 
   // Business hours (JSON: { monday: { open: "08:00", close: "15:00" } | null, ... })
   businessHours Json?
 
   // Notification settings
-  emailFromName    String? // e.g. "Gentle Groomer"
+  // No sender-name column: emails go out as the shop name (SystemConfig.shopName).
   emailFromAddress String? // e.g. "no-reply@gentlegroomer.net"
   twilioAccountSid String? // stored encrypted; null if SMS not configured
   twilioAuthToken  String? // stored encrypted
   twilioFromNumber String?
 
+  // Public site appearance
+  themePreset       String  @default("default") // id from lib/themes.ts
+  themeAutoSeasonal Boolean @default(false) // follow the calendar instead
+  themeBrandColor   String? // #rrggbb override for the brand ramp
+  themeBannerText   String? // seasonal line shown above the site header
+
+  // How late an arrival may be before the schedule flags it. Green until the
+  // first threshold, then amber, orange and finally treated as missed.
+  lateArrivalWatchMins  Int @default(5)
+  lateArrivalLateMins   Int @default(15)
+  lateArrivalMissedMins Int @default(30)
+
+  // How long a finished pet may wait before the shop is nudged. Three levels,
+  // so a short wait reads differently from one that is becoming a problem.
+  pickupWatchMins    Int @default(60)
+  pickupLateMins     Int @default(120)
+  pickupCriticalMins Int @default(240)
+
+  // Capacity rules, set once for the whole shop rather than per station.
+  // Groom tables and bathing stations always hold exactly one pet; only a
+  // kennel compartment can be shared.
+  kennelCapacityPerCompartment Int @default(1)
+
+  // Scheduling: the week past which scheduled hours read as overtime.
+  overtimeWeeklyHours Int @default(40)
+
+  // Rewards. Punches are finished visits; every `rewardVisitsPerReward` of
+  // them earns one `rewardLabel` to hand over at the counter.
+  rewardVisitsPerReward Int    @default(8)
+  rewardLabel           String @default("A free nail trim")
+
+  // Payroll
+  defaultCommissionPercent Float @default(40) // percent of ticket paid to the groomer
+
   // Booking rules
-  bookingLeadHours   Int @default(2)  // min hours in advance a customer can book
-  bookingWindowDays  Int @default(30) // how many days ahead customers can book
-  walkInWindowStart  String @default("09:00") // walk-in services available from
-  walkInWindowEnd    String @default("15:00") // walk-in services available until
+  bookingLeadHours  Int    @default(2) // min hours in advance a customer can book
+  bookingWindowDays Int    @default(30) // how many days ahead customers can book
+  walkInWindowStart String @default("09:00") // walk-in services available from
+  walkInWindowEnd   String @default("15:00") // walk-in services available until
 
   updatedAt DateTime @updatedAt
 
@@ -59,46 +94,185 @@ model SystemConfig {
 // STAFF (internal users — groomers, admins)
 // ─────────────────────────────────────────────
 model Staff {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  passwordHash String
-  role         StaffRole @default(GROOMER)
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String          @id @default(cuid())
+  name            String
+  email           String          @unique
+  passwordHash    String
+  // A person can hold several roles at once — groomer who also baths, admin
+  // who still works the floor. ADMIN is what unlocks the admin panel.
+  roles           StaffRole[]     @default([GROOMER])
+  isActive        Boolean         @default(true)
+  themePreference ThemePreference @default(LIGHT)
+  photoId         String?
 
-  appointments  Appointment[]
-  statusHistory AppointmentStatusHistory[]
-  visitEvents   VisitEvent[]
+  // Percent of the services they finish that they are paid. Null falls back to
+  // SystemConfig.defaultCommissionPercent.
+  commissionPercent Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Where this person normally works. Assignments default to it.
+  defaultStationId String?
+
+  // Whether they are on the floor right now. "Working" is not stored — it is
+  // derived from having a pet in hand.
+  presence      StaffPresence @default(OFF_SHIFT)
+  presenceSince DateTime      @default(now())
+
+  defaultStation       Station?                   @relation("HomeStation", fields: [defaultStationId], references: [id])
+  photo                Photo?                     @relation(fields: [photoId], references: [id], onDelete: SetNull)
+  preferredByCustomers Customer[]                 @relation("PreferredGroomer")
+  appointments         Appointment[]
+  statusHistory        AppointmentStatusHistory[]
+  visitEvents          VisitEvent[]
+  waiverRevisions      WaiverRevision[]
+  StaffPresenceEvent   StaffPresenceEvent[]
+  StaffShift           StaffShift[]
+
+  rewardRedemptions RewardRedemption[]
 
   @@map("staff")
 }
 
+enum StaffPresence {
+  OFF_SHIFT // signed off for the day
+  READY // on the floor and free to take a pet
+  BREAK // away on a break
+  RESTROOM // stepped out briefly
+}
+
+// A dated shift. Recurring rotas are generated into rows rather than stored as
+// a pattern: the shop edits individual days constantly, and a concrete row is
+// what every screen actually needs.
+model StaffShift {
+  id       String   @id @default(cuid())
+  staffId  String
+  startsAt DateTime
+  endsAt   DateTime
+  note     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, startsAt])
+  @@index([startsAt])
+  @@map("staff_shifts")
+}
+
+// Append-only record of presence changes, so a shift can be reconstructed.
+model StaffPresenceEvent {
+  id        String        @id @default(cuid())
+  staffId   String
+  presence  StaffPresence
+  changedAt DateTime      @default(now())
+  note      String?
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, changedAt])
+  @@map("staff_presence_events")
+}
+
 enum StaffRole {
-  ADMIN
-  GROOMER
+  ADMIN // full access, including the admin panel
+  GROOMER // grooms pets
+  BATHER // bathing and prep
+}
+
+// ─────────────────────────────────────────────
+// BREED GUIDE (grooming reference, editable by the shop)
+// ─────────────────────────────────────────────
+// A job aid at the station, not a rulebook: seeded with widely documented coat
+// characteristics and kept current by whoever actually grooms them.
+model BreedGuide {
+  id      String    @id @default(cuid())
+  breed   String    @unique
+  species Species   @default(DOG)
+  coat    CoatType?
+
+  // What to expect from the coat and the groom.
+  summary     String @db.Text
+  // Bullet points, one per line, shown at the station.
+  tips        String @db.Text
+  // Typical time this breed takes, when it differs from the service default.
+  typicalMins Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("breed_guides")
+}
+
+// ─────────────────────────────────────────────
+// PHOTOS (small profile images, stored in the database)
+// ─────────────────────────────────────────────
+// Kept in Postgres rather than on disk: one volume to back up, nothing to lose
+// on redeploy, and these are a few hundred kilobytes each.
+model Photo {
+  id        String   @id @default(cuid())
+  mimeType  String
+  byteSize  Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  customers Customer[]
+  staff     Staff[]
+  pets      Pet[]
+
+  @@map("photos")
 }
 
 // ─────────────────────────────────────────────
 // CUSTOMERS (pet owners — portal users)
 // ─────────────────────────────────────────────
 model Customer {
-  id           String   @id @default(cuid())
-  firstName    String
-  lastName     String
-  email        String   @unique
-  phone        String?
-  passwordHash String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              String          @id @default(cuid())
+  firstName       String
+  lastName        String
+  email           String          @unique
+  phone           String?
+  passwordHash    String
+  isActive        Boolean         @default(true)
+  themePreference ThemePreference @default(LIGHT)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
-  pets               Pet[]
-  appointments       Appointment[]
-  waiverAcceptances  WaiverAcceptance[]
+  // The groomer this customer books with. Bookings default to them, and they
+  // default to their own station.
+  preferredStaffId String?
+  photoId          String? // optional headshot, so staff recognise them
+
+  // Where they are. Free text: the shop writes addresses the way it says them,
+  // and geocoding is a lookup on top rather than a set of typed columns.
+  address String?
+
+  // Someone else the owner has approved to drop off or collect their pet.
+  altContactName  String?
+  altContactPhone String?
+  altContactEmail String?
+
+  // The rate this customer is on. Null means the published catalog price.
+  pricingTierId String?
+  // Why this customer is priced the way they are — read at the counter.
+  pricingNotes  String? @db.Text
+
+  photo             Photo?             @relation(fields: [photoId], references: [id], onDelete: SetNull)
+  preferredStaff    Staff?             @relation("PreferredGroomer", fields: [preferredStaffId], references: [id])
+  pricingTier       PricingTier?       @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
+  pets              Pet[]
+  appointments      Appointment[]
+  waiverAcceptances WaiverAcceptance[]
+  rewardEarnings    RewardEarning[]
+  rewardRedemptions RewardRedemption[]
 
   @@map("customers")
+}
+
+enum ThemePreference {
+  LIGHT
+  DARK
 }
 
 // ─────────────────────────────────────────────
@@ -109,23 +283,32 @@ model Pet {
   customerId       String
   name             String
   species          Species   @default(DOG)
+  sex              PetSex    @default(UNKNOWN)
   breed            String?
   dateOfBirth      DateTime?
   weightLbs        Float?
   coatType         CoatType?
-  temperamentNotes String?   // e.g. "nervous around other animals, loves treats"
-  healthFlags      String[]  // e.g. ["elderly", "reactive", "allergy:chicken"]
-  groomingNotes    String?   // standing instructions for every visit
+  temperamentNotes String? // e.g. "nervous around other animals, loves treats"
+  healthFlags      String[] // e.g. ["elderly", "reactive", "allergy:chicken"]
+  groomingNotes    String? // standing instructions for every visit
   hasBiteHistory   Boolean   @default(false) // true if pet has ever bitten a groomer
-  photoUrl         String?
+  photoUrl         String? // external image, if the shop uses one
+  photoId          String? // uploaded photo held in the database
   isActive         Boolean   @default(true)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   customer     Customer      @relation(fields: [customerId], references: [id])
+  photo        Photo?        @relation(fields: [photoId], references: [id], onDelete: SetNull)
   appointments Appointment[]
 
   @@map("pets")
+}
+
+enum PetSex {
+  MALE
+  FEMALE
+  UNKNOWN
 }
 
 enum Species {
@@ -148,89 +331,285 @@ enum CoatType {
 // STATIONS (grooming stations in the shop)
 // ─────────────────────────────────────────────
 model Station {
-  id           String   @id @default(cuid())
-  name         String   // e.g. "Station 1", "Bath Area", "Drying Station"
-  displayLabel String?  // shorter label for the Pi screen
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  id        String      @id @default(cuid())
+  name      String // e.g. "Station 1", "Bath Area", "Kennel Bank A"
+  role      StationRole @default(GROOMER) // what this station is used for
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+
+  // Who may work this station. Empty means anyone on staff.
+  allowedRoles StaffRole[] @default([])
+
+  // KENNEL stations only: the unit's physical layout. Kennel rows are
+  // generated to fill this grid — see app/api/kennels.
+  kennelRows    Int?
+  kennelColumns Int?
 
   appointments Appointment[]
+  kennels      Kennel[]
+  homeStaff    Staff[]       @relation("HomeStation")
 
   @@map("stations")
+}
+
+enum StationRole {
+  GROOMER // groom table
+  BATHING // wash / bathing station
+  KENNEL // a bank of kennels, laid out as a grid
+}
+
+// ─────────────────────────────────────────────
+// KENNELS (individual doors inside a KENNEL station)
+// ─────────────────────────────────────────────
+model Kennel {
+  id        String   @id @default(cuid())
+  stationId String
+  row       Int // 1-based position in the unit grid
+  column    Int // 1-based position in the unit grid
+  label     String // what is written on the door, e.g. "A1"
+  isActive  Boolean  @default(true) // false = out of service, cannot be occupied
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  station      Station       @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  // Who is inside. A compartment holds as many pets as the shop allows —
+  // see SystemConfig.kennelCapacityPerCompartment.
+  appointments Appointment[]
+
+  @@unique([stationId, row, column])
+  @@unique([stationId, label])
+  @@map("kennels")
+}
+
+// ─────────────────────────────────────────────
+// SERVICE CATALOG (what the shop sells, and for how much)
+// ─────────────────────────────────────────────
+model Service {
+  id String @id @default(cuid())
+
+  // What kind of service this is, in the shop's own terms. `type` is the
+  // narrow taxonomy appointments and reports have always used; it is derived
+  // from the category so nobody has to pick from eleven near-identical values.
+  category    ServiceCategory @default(GROOM)
+  type        ServiceType
+  name        String // customer-facing name, e.g. "Bath + Tidy"
+  description String? // shown to customers
+  staffNotes  String? // internal: how to do it, what to watch for. Never public.
+  species     Species? // null = offered for any species
+
+  // Dog pricing is by size; cats and add-ons use the flat price, optionally
+  // with an upper bound so a range can be shown ("$55-$70"). Cents, always.
+  priceSmallCents  Int?
+  priceMediumCents Int?
+  priceLargeCents  Int?
+  priceXlCents     Int?
+  priceFlatCents   Int?
+  priceMaxCents    Int?
+
+  // Size pricing can be driven from a single base price: the tiers are
+  // recalculated as base x multiplier whenever the base moves, so raising
+  // prices is one number per service instead of four.
+  pricingMode      PricingMode @default(MANUAL)
+  basePriceCents   Int?
+  mediumMultiplier Float       @default(1.33)
+  largeMultiplier  Float       @default(1.87)
+  xlMultiplier     Float       @default(2.53)
+
+  durationMins   Int?
+  walkInEligible Boolean  @default(false)
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  appointmentServices AppointmentService[]
+  promotions          Promotion[]
+
+  // Not unique on [type, species]: Postgres does not dedupe NULL species, so
+  // the constraint would only half work. Uniqueness is enforced on the name.
+  @@unique([name])
+  @@index([type])
+  @@map("services")
+}
+
+enum ServiceCategory {
+  GROOM // haircut and style
+  BATH // wash, dry, brush out
+  NAILS // trimming or grinding
+  DENTAL // teeth
+  EARS // ear cleaning
+  ADD_ON // extras sold alongside a groom
+  OTHER // anything else
+}
+
+enum PricingMode {
+  MANUAL // every size typed in by hand
+  BASE // small price is the base; the other sizes are derived from it
+}
+
+// Extra fees quoted alongside the catalog (matting, difficult handling, ...)
+model Surcharge {
+  id        String   @id @default(cuid())
+  label     String
+  minCents  Int?
+  maxCents  Int?
+  note      String?
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("surcharges")
+}
+
+// ─────────────────────────────────────────────
+// MARKETING (promotions shown on the site and at the counter)
+// ─────────────────────────────────────────────
+model Promotion {
+  id          String    @id @default(cuid())
+  serviceId   String // a promotion always promotes one catalog service
+  title       String
+  body        String    @db.Text
+  code        String? // promo code customers quote
+  startsAt    DateTime?
+  endsAt      DateTime? // exclusive
+  isActive    Boolean   @default(true)
+  showOnSite  Boolean   @default(true) // public pages
+  showToStaff Boolean   @default(true) // counter script on the staff dashboard
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId])
+  @@map("promotions")
 }
 
 // ─────────────────────────────────────────────
 // APPOINTMENTS
 // ─────────────────────────────────────────────
 model Appointment {
-  id           String            @id @default(cuid())
-  customerId   String
-  petId        String
-  stationId    String?           // assigned when pet arrives / checked in
-  staffId      String?           // assigned groomer
-  scheduledAt      DateTime          // date + time of appointment (= arrival time for walk-ins)
-  appointmentType  AppointmentType   @default(APPOINTMENT)
-  status           AppointmentStatus @default(SCHEDULED)
-  serviceType      ServiceType
-  durationMins Int?              // estimated duration in minutes
-  visitNotes   String?           // notes specific to this visit
-  checkedInAt  DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id              String            @id @default(cuid())
+  customerId      String
+  petId           String
+  stationId       String? // assigned when pet arrives / checked in
+  staffId         String? // assigned groomer
+  scheduledAt     DateTime // date + time of appointment (= arrival time for walk-ins)
+  appointmentType AppointmentType   @default(APPOINTMENT)
+  status          AppointmentStatus @default(SCHEDULED)
+  serviceType     ServiceType
+  durationMins    Int? // estimated duration in minutes
+  visitNotes      String? // notes specific to this visit
+  needsKennel     Boolean           @default(true) // holds a kennel for the visit
+  checkedInAt     DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   customer      Customer                   @relation(fields: [customerId], references: [id])
   pet           Pet                        @relation(fields: [petId], references: [id])
   station       Station?                   @relation(fields: [stationId], references: [id])
   staff         Staff?                     @relation(fields: [staffId], references: [id])
+  services      AppointmentService[]
   statusHistory AppointmentStatusHistory[]
   visitEvents   VisitEvent[]
+  // The compartment this pet is in, once it has been put away.
+  kennelId      String?
+  kenneledAt    DateTime?
 
+  // The rate this visit was quoted under, snapshotted at booking. Editing a
+  // tier later must not silently reprice a visit already quoted.
+  pricingTierId        String?
+  pricingDiscountCents Int?
+
+  kennel        Kennel?        @relation(fields: [kennelId], references: [id])
+  pricingTier   PricingTier?   @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
+  rewardEarning RewardEarning?
+
+  @@index([scheduledAt, status])
+  @@index([stationId, status])
   @@map("appointments")
 }
 
+// Services booked on one visit. `Appointment.serviceType` stays the primary
+// service so existing screens and emails keep working; every service booked --
+// including that one -- also has a row here.
+model AppointmentService {
+  id            String      @id @default(cuid())
+  appointmentId String
+  serviceId     String? // catalog row, if the service is still listed
+  serviceType   ServiceType
+  priceCents    Int? // snapshot of the quoted price
+  sortOrder     Int         @default(0)
+  createdAt     DateTime    @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  service     Service?    @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@unique([appointmentId, serviceId])
+  @@index([serviceType])
+  @@map("appointment_services")
+}
+
 enum AppointmentStatus {
-  SCHEDULED      // booked, not yet arrived
-  CHECKED_IN     // owner has checked in (online or in person)
-  IN_PROGRESS    // pet is being groomed
-  DRYING         // pet is drying / waiting between steps
-  FINISHING      // final touches
-  COMPLETE       // grooming done, not yet picked up
-  READY_PICKUP   // notified owner, waiting for pickup
-  PICKED_UP      // owner collected pet
-  CANCELLED      // appointment cancelled
-  NO_SHOW        // didn't show up
+  SCHEDULED // booked, not yet arrived
+  CHECKED_IN // owner has checked in (online or in person)
+  IN_PROGRESS // pet is being groomed
+  DRYING // pet is drying / waiting between steps
+  FINISHING // final touches
+  COMPLETE // grooming done, not yet picked up
+  READY_PICKUP // notified owner, waiting for pickup
+  PICKED_UP // owner collected pet
+  CANCELLED // appointment cancelled
+  NO_SHOW // didn't show up
 }
 
 enum ServiceType {
-  BATH_AND_TIDY      // bath, blow-dry, brush out, tidy trim
-  BATH_AND_TRIM      // above + a full trim
-  FULL_GROOM         // full cut, style, bath
-  LION_CUT           // cat-specific — shaved body, fluffy head/paws/tail
-  NAIL_TRIM          // nails only
-  NAIL_GRIND         // nails ground smooth
-  EAR_CLEANING       // ears only
-  TEETH_BRUSHING     // teeth only
-  GLAND_EXPRESSION   // anal gland expression (walk-in)
-  ADD_ON             // misc add-on service
-  CUSTOM             // custom / consult
+  BATH_AND_TIDY // bath, blow-dry, brush out, tidy trim
+  BATH_AND_TRIM // above + a full trim
+  FULL_GROOM // full cut, style, bath
+  LION_CUT // cat-specific — shaved body, fluffy head/paws/tail
+  NAIL_TRIM // nails only
+  NAIL_GRIND // nails ground smooth
+  EAR_CLEANING // ears only
+  TEETH_BRUSHING // teeth only
+  GLAND_EXPRESSION // anal gland expression (walk-in)
+  ADD_ON // misc add-on service
+  CUSTOM // custom / consult
 }
 
 enum AppointmentType {
-  APPOINTMENT  // pre-booked via portal or by staff
-  WALK_IN      // customer arrived without a booking (portal check-in or in-person)
+  APPOINTMENT // pre-booked via portal or by staff
+  WALK_IN // customer arrived without a booking (portal check-in or in-person)
 }
 
 // ─────────────────────────────────────────────
 // WAIVER ACCEPTANCES (per customer, per version)
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// WAIVER REVISIONS (the published text of every version)
+// ─────────────────────────────────────────────
+model WaiverRevision {
+  id          String   @id @default(cuid())
+  version     String   @unique // matches SystemConfig.waiverVersion when published
+  text        String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String? // staff member who published it
+
+  createdBy Staff? @relation(fields: [createdById], references: [id])
+
+  @@map("waiver_revisions")
+}
+
 model WaiverAcceptance {
-  id             String   @id @default(cuid())
-  customerId     String
-  waiverVersion  String   // matches SystemConfig.waiverVersion at time of signing
-  acceptedAt     DateTime @default(now())
-  ipAddress      String?  // for audit trail
-  userAgent      String?
+  id            String   @id @default(cuid())
+  customerId    String
+  waiverVersion String // matches SystemConfig.waiverVersion at time of signing
+  acceptedAt    DateTime @default(now())
+  ipAddress     String? // for audit trail
+  userAgent     String?
 
   customer Customer @relation(fields: [customerId], references: [id])
 
@@ -246,8 +625,8 @@ model VisitEvent {
   appointmentId String
   eventType     VisitEventType
   occurredAt    DateTime       @default(now())
-  loggedById    String?        // staff who logged it
-  note          String?        // free-text details
+  loggedById    String? // staff who logged it
+  note          String? // free-text details
 
   appointment Appointment @relation(fields: [appointmentId], references: [id])
   loggedBy    Staff?      @relation(fields: [loggedById], references: [id])
@@ -256,13 +635,13 @@ model VisitEvent {
 }
 
 enum VisitEventType {
-  REWASH             // pet defecated / urinated during groom, required re-wash
-  BITE               // pet bit a groomer — triggers hasBiteHistory flag on Pet
-  BEHAVIORAL         // growling, snapping, excessive stress (non-bite)
-  INJURY             // minor cut, nick, or other incident to the pet
-  MATTING_FOUND      // unexpected matting discovered mid-groom
-  EQUIPMENT_ISSUE    // clippers, dryer, etc. problem
-  OTHER              // catch-all, use note field for details
+  REWASH // pet defecated / urinated during groom, required re-wash
+  BITE // pet bit a groomer — triggers hasBiteHistory flag on Pet
+  BEHAVIORAL // growling, snapping, excessive stress (non-bite)
+  INJURY // minor cut, nick, or other incident to the pet
+  MATTING_FOUND // unexpected matting discovered mid-groom
+  EQUIPMENT_ISSUE // clippers, dryer, etc. problem
+  OTHER // catch-all, use note field for details
 }
 
 // ─────────────────────────────────────────────
@@ -273,11 +652,102 @@ model AppointmentStatusHistory {
   appointmentId String
   status        AppointmentStatus
   changedAt     DateTime          @default(now())
-  changedById   String?           // staff ID if staff changed it; null if system/customer
-  note          String?           // optional note on the transition
+  changedById   String? // staff ID if staff changed it; null if system/customer
+  note          String? // optional note on the transition
 
   appointment Appointment @relation(fields: [appointmentId], references: [id])
   changedBy   Staff?      @relation(fields: [changedById], references: [id])
 
   @@map("appointment_status_history")
+}
+
+// ─────────────────────────────────────────────
+// PRICING TIERS (legacy and negotiated rates)
+// ─────────────────────────────────────────────
+
+enum DiscountKind {
+  PERCENT // a share off every line
+  AMOUNT // a fixed sum off the visit
+}
+
+// A named rate the shop honours for a group of customers — the price agreed
+// with someone in 2014, a staff rate, a rescue partnership.
+//
+// Defining the rate once rather than per customer is the point: "raise legacy
+// rates by 5%" is one edit here, not a sweep through every profile. The
+// discount is applied to the catalog price at quote time and snapshotted onto
+// the visit, so changing a tier never reprices a visit already quoted.
+model PricingTier {
+  id              String       @id @default(cuid())
+  name            String       @unique // "Legacy 2015", "Friends & family"
+  discountKind    DiscountKind @default(PERCENT)
+  discountPercent Float? // when PERCENT — 0–100
+  discountCents   Int? // when AMOUNT — off the visit total
+  note            String? // why this tier exists; shown to staff
+  isActive        Boolean      @default(true)
+  sortOrder       Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  customers    Customer[]
+  appointments Appointment[]
+
+  @@map("pricing_tiers")
+}
+
+// ─────────────────────────────────────────────
+// REWARDS (visit punch card)
+// ─────────────────────────────────────────────
+
+// One punch, earned by finishing a visit.
+//
+// There is no balance column anywhere: the punch count is the number of these
+// rows, and what is available to redeem is derived against the redemptions
+// below. A stored counter would drift the first time a visit was cancelled
+// after it was marked complete.
+//
+// `appointmentId` is unique, which is what makes earning idempotent — a visit
+// moves through COMPLETE, READY_PICKUP and PICKED_UP and each one tries.
+model RewardEarning {
+  id            String   @id @default(cuid())
+  customerId    String
+  appointmentId String   @unique
+  earnedAt      DateTime @default(now())
+
+  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("reward_earnings")
+}
+
+// A reward handed over at the counter. Who gave it, and what it was.
+model RewardRedemption {
+  id         String   @id @default(cuid())
+  customerId String
+  staffId    String? // who handed it over
+  label      String // snapshot of the reward on offer at the time
+  note       String?
+  redeemedAt DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  staff    Staff?   @relation(fields: [staffId], references: [id])
+
+  @@index([customerId])
+  @@map("reward_redemptions")
+}
+
+/// Addresses already placed on a map.
+///
+/// OpenStreetMap's Nominatim is keyless but rate-limited and asks not to be
+/// hammered, so every lookup is kept here for good. A row with null
+/// coordinates is a remembered miss — retried a day later, not every render.
+model GeocodeCache {
+  query     String   @id // normalised address: trimmed, collapsed, lowercased
+  lat       Float?
+  lon       Float?
+  label     String? // what Nominatim called the place
+  checkedAt DateTime @default(now()) @updatedAt
+
+  @@map("geocode_cache")
 }

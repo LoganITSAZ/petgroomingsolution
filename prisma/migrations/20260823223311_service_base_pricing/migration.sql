@@ -1,0 +1,9 @@
+-- CreateEnum
+CREATE TYPE "PricingMode" AS ENUM ('MANUAL', 'BASE');
+
+-- AlterTable
+ALTER TABLE "services" ADD COLUMN     "basePriceCents" INTEGER,
+ADD COLUMN     "largeMultiplier" DOUBLE PRECISION NOT NULL DEFAULT 1.87,
+ADD COLUMN     "mediumMultiplier" DOUBLE PRECISION NOT NULL DEFAULT 1.33,
+ADD COLUMN     "pricingMode" "PricingMode" NOT NULL DEFAULT 'MANUAL',
+ADD COLUMN     "xlMultiplier" DOUBLE PRECISION NOT NULL DEFAULT 2.53;

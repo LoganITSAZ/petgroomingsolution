@@ -1,0 +1,5 @@
+ALTER TABLE "staff" ADD COLUMN "photoId" TEXT;
+
+ALTER TABLE "staff"
+ADD CONSTRAINT "staff_photoId_fkey"
+FOREIGN KEY ("photoId") REFERENCES "photos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
