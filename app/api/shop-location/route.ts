@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { getConfig } from "@/lib/config";
 import { embedUrl, geocode } from "@/lib/maps";
 
+// Reads SystemConfig at request time, so it must never be prerendered: a
+// static snapshot would freeze the shop address into the build, and the
+// build machine has no database to read it from in the first place.
+export const dynamic = "force-dynamic";
+
 /**
  * Where the shop is, for screens that cannot render a server component.
  *

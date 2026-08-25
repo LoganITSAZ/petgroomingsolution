@@ -4,6 +4,7 @@ import { KENNELABLE_STATUSES, kennelDemand } from "@/lib/kennels";
 import { formatRole, formatServiceType, formatStatus, shopDayRange } from "@/lib/utils";
 import { stationCapacity } from "@/lib/stations";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 import { currentStaffIsAdmin } from "@/lib/staff-roles";
 
 // Screen readers announce the title first; without one every page in the
@@ -115,28 +116,24 @@ export default async function StaffStationsPage({
   ].filter(Boolean);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-black text-stone-900">Stations</h1>
-          <p className="text-sm text-stone-500 mt-1">
-            {summary.length > 0 ? summary.join(" · ") : "Nothing configured yet."}
-          </p>
-        </div>
-        {isAdmin && (
+    <PageShell
+      title="Stations"
+      subtitle={summary.length > 0 ? summary.join(" · ") : "Nothing configured yet."}
+      actions={
+        isAdmin ? (
           <Link
             href="/admin/stations"
             className="text-sm text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
           >
             Add or edit stations →
           </Link>
-        )}
-      </div>
-
+        ) : null
+      }
+    >
       {searchParams.error === "kennel_not_found" && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
-          That kennel no longer exists.
-        </div>
+        <PageSection className="bg-red-50">
+          <p className="text-red-800 text-sm font-medium">That kennel no longer exists.</p>
+        </PageSection>
       )}
 
       {/* One pet at a time: grooming, then bathing */}
@@ -145,14 +142,13 @@ export default async function StaffStationsPage({
         { role: StationRole.BATHING, ...bathing },
       ].map(({ role, list, used, capacity }) =>
         list.length === 0 ? null : (
-          <section key={role}>
-            <h2 className="font-bold text-stone-700 mb-3 text-sm uppercase tracking-widest">
-              {ROLE_HEADING[role]}{" "}
-              <span className="text-stone-400">
-                ({used}/{capacity} in use)
-              </span>
-            </h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <PageSection
+            key={role}
+            tone="muted"
+            title={ROLE_HEADING[role]}
+            hint={`${used}/${capacity} in use`}
+            bodyClassName="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"
+          >
               {list.map((station) => {
                 const occupants = occupantsByStation.get(station.id) ?? [];
                 const capacity = stationCapacity(station);
@@ -230,22 +226,18 @@ export default async function StaffStationsPage({
                   </Link>
                 );
               })}
-            </div>
-          </section>
+          </PageSection>
         )
       )}
 
       {/* Kennels */}
       {kennelUnits.length > 0 && (
-        <section>
-          <h2 className="font-bold text-stone-700 mb-3 text-sm uppercase tracking-widest">
-            {ROLE_HEADING.KENNEL}{" "}
-            <span className="text-stone-400">
-              ({kennelUnits.length} unit{kennelUnits.length !== 1 ? "s" : ""} ·{" "}
-              {kennelOccupied}/{kennelTotal} occupied)
-            </span>
-          </h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <PageSection
+          tone="muted"
+          title={ROLE_HEADING.KENNEL}
+          hint={`${kennelUnits.length} unit${kennelUnits.length !== 1 ? "s" : ""} · ${kennelOccupied}/${kennelTotal} occupied`}
+          bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3"
+        >
             {kennelUnits.map((station) => {
               const occupied = station.kennels.reduce(
                 (inside, k) => inside + k.appointments.length,
@@ -256,7 +248,7 @@ export default async function StaffStationsPage({
                 <Link
                   key={station.id}
                   href={`/staff/stations/${station.id}`}
-                  className="bg-white border border-stone-200 rounded-xl p-4 hover:border-emerald-300 transition-colors"
+                  className="bg-white border border-stone-200 rounded-lg p-4 hover:border-emerald-300 transition-colors"
                 >
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="font-bold text-stone-900 text-base truncate">
@@ -326,35 +318,33 @@ export default async function StaffStationsPage({
                 </Link>
               );
             })}
-          </div>
-        </section>
+        </PageSection>
       )}
 
       {active.length === 0 && (
-        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+        <PageSection grow className="text-center text-stone-400 text-sm">
           Nothing active yet. An admin can add one from{" "}
           <Link href="/admin/stations/new" className="text-amber-700 hover:underline">
             the admin panel
           </Link>
           .
-        </div>
+        </PageSection>
       )}
 
       {inactive.length > 0 && (
-        <section>
-          <h2 className="font-bold text-stone-400 mb-3 text-sm uppercase tracking-widest">
-            Inactive ({inactive.length})
-          </h2>
-          <div className="bg-white border border-stone-200 rounded-xl divide-y divide-stone-100">
-            {inactive.map((station) => (
-              <div key={station.id} className="px-4 py-2 flex items-center justify-between">
-                <span className="text-stone-500">{station.name}</span>
-                <span className="text-xs text-stone-400">{ROLE_HEADING[station.role]}</span>
-              </div>
-            ))}
-          </div>
-        </section>
+        <PageSection
+          title={`Inactive (${inactive.length})`}
+          padded={false}
+          bodyClassName="divide-y divide-stone-100 border-t border-stone-100 mt-2"
+        >
+          {inactive.map((station) => (
+            <div key={station.id} className="px-4 py-2 flex items-center justify-between">
+              <span className="text-stone-500">{station.name}</span>
+              <span className="text-xs text-stone-400">{ROLE_HEADING[station.role]}</span>
+            </div>
+          ))}
+        </PageSection>
       )}
-    </div>
+    </PageShell>
   );
 }

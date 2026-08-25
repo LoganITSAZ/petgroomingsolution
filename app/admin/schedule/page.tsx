@@ -13,6 +13,7 @@ import {
 import { getConfig } from "@/lib/config";
 import { formatShopDate, formatShopTime24, shopDayKey } from "@/lib/utils";
 import { deleteShift, generateWeek, saveShift } from "./actions";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -87,20 +88,20 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     "w-full border border-stone-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400";
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-bold text-stone-900">Schedule</h1>
-          <p className="text-sm text-stone-500 mt-1">
-            {shifts.length} shift{shifts.length !== 1 ? "s" : ""} this week across {staff.length}{" "}
-            groomers and bathers. Staff read the same week at{" "}
-            <Link href="/staff/schedule" className="text-amber-700 hover:text-amber-900 underline">
-              /staff/schedule
-            </Link>
-            .
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <PageShell
+      title="Schedule"
+      subtitle={
+        <>
+          {shifts.length} shift{shifts.length !== 1 ? "s" : ""} this week across {staff.length}{" "}
+          groomers and bathers. Staff read the same week at{" "}
+          <Link href="/staff/schedule" className="text-amber-700 hover:text-amber-900 underline">
+            /staff/schedule
+          </Link>
+          .
+        </>
+      }
+      actions={
+        <>
           <Link
             href={`/admin/schedule?week=${prevWeek}`}
             className="px-2 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-sm"
@@ -117,29 +118,23 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           >
             →
           </Link>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {(searchParams.saved || searchParams.deleted || searchParams.generated) && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           {searchParams.generated ? "Week filled from the pattern." : "Schedule updated."}
-        </div>
+        </p>
       )}
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
-        </div>
+        </p>
       )}
 
       {/* What to look at before this week is worked */}
-      <div className="bg-white border border-stone-200 rounded-xl p-3">
-        <div className="flex items-baseline justify-between gap-3 mb-2">
-          <h2 className="text-sm font-bold text-stone-800">Scheduling check</h2>
-          <span className="text-xs text-stone-400">
-            Overtime past {config.overtimeWeeklyHours}h/week
-          </span>
-        </div>
-
+      <PageSection title="Scheduling check" hint={`Overtime past ${config.overtimeWeeklyHours}h/week`}>
         {advice.length === 0 ? (
           <p className="text-sm text-stone-500">
             Nothing to flag: every open day is covered, nobody is scheduled into overtime, and no
@@ -181,10 +176,10 @@ export default async function SchedulePage({ searchParams }: PageProps) {
             </span>
           ))}
         </div>
-      </div>
+            </PageSection>
 
       {/* Lay down a whole week at once */}
-      <details className="bg-white border border-stone-200 rounded-xl">
+      <details className="border-t border-stone-100">
         <summary className="px-3 py-2 cursor-pointer text-sm font-semibold text-stone-800">
           Fill the week from a pattern
         </summary>
@@ -254,11 +249,11 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
       {/* The grid */}
       {staff.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-6 text-center text-stone-400 text-sm">
+        <PageSection grow className="text-center text-stone-400 text-sm">
           No groomers or bathers to schedule.
-        </div>
+        </PageSection>
       ) : (
-        <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
+        <PageSection grow scroll padded={false} bodyClassName="overflow-auto">
           <table className="w-full text-sm">
             <thead className="bg-stone-50 text-stone-500 text-[10px] uppercase tracking-widest">
               <tr>
@@ -358,8 +353,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
               ))}
             </tbody>
           </table>
-        </div>
+        </PageSection>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 import CustomerPetFields from "../CustomerPetFields";
 import { CoatType, PetSex, Species } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -218,18 +219,12 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-3">
-      {/* Back link */}
-      <Link
-        href="/staff/appointments"
-        className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 transition-colors"
-      >
-        ← Back to Appointments
-      </Link>
-
-      <div className="bg-white border border-stone-200 rounded-2xl p-4">
-        <h1 className="text-xl font-black text-stone-900 mb-3">New Appointment</h1>
-
+    <PageShell
+      back={{ href: "/staff/appointments", label: "Back to Appointments" }}
+      title="New Appointment"
+      className="max-w-2xl mx-auto w-full flex-none"
+    >
+      <PageSection>
         <form action={createAppointment} className="space-y-3">
           <CustomerPetFields
             customers={customers.map((customer) => ({
@@ -322,7 +317,7 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
             </Link>
           </div>
         </form>
-      </div>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

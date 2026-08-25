@@ -42,6 +42,24 @@ export interface StaffProfile {
   } | null;
   week: { day: string; hours: string }[];
   activity: { at: string; petName: string; statusLabel: string }[];
+  /**
+   * This person's own numbers, taken from the same leaderboard row
+   * /staff/analytics ranks — null only when they have no row at all.
+   */
+  analytics: {
+    windowDays: number;
+    today: number;
+    week: number;
+    month: number;
+    lifetime: number;
+    bestDay: number;
+    streak: number;
+    avgTurnaroundMins: number | null;
+    commissionPercent: number;
+    payWeek: string;
+    payMonth: string;
+    badges: { key: string; label: string; detail: string }[];
+  } | null;
 }
 
 export default function StaffProfileDialog({
@@ -177,6 +195,74 @@ export default function StaffProfileDialog({
                 <p className="text-[10px] text-stone-500 uppercase tracking-wide">Today&apos;s shift</p>
               </div>
             </section>
+
+            {/* Their own numbers, the same arithmetic the leaderboard runs */}
+            {profile.analytics && (
+              <section className="mt-3 border-t border-stone-100 pt-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                    Their numbers
+                  </h3>
+                  <Link
+                    href="/staff/analytics"
+                    className="text-[10px] text-stone-400 hover:text-stone-700 underline"
+                    onClick={() => setOpen(false)}
+                  >
+                    leaderboard
+                  </Link>
+                </div>
+                <dl className="mt-1.5 grid grid-cols-4 gap-2 text-center">
+                  {[
+                    { label: "Week", value: profile.analytics.week },
+                    { label: "Month", value: profile.analytics.month },
+                    { label: "Lifetime", value: profile.analytics.lifetime },
+                    { label: "Best day", value: profile.analytics.bestDay },
+                  ].map((figure) => (
+                    <div key={figure.label} className="rounded-lg bg-stone-50 py-1.5">
+                      <dd className="text-lg font-black text-stone-900 leading-none">
+                        {figure.value}
+                      </dd>
+                      <dt className="text-[10px] text-stone-500 uppercase tracking-wide mt-1">
+                        {figure.label}
+                      </dt>
+                    </div>
+                  ))}
+                </dl>
+                <p className="mt-1.5 text-xs text-stone-500">
+                  {profile.analytics.streak} shop day
+                  {profile.analytics.streak === 1 ? "" : "s"} in a row ·{" "}
+                  {profile.analytics.avgTurnaroundMins != null
+                    ? `${profile.analytics.avgTurnaroundMins} min average turnaround`
+                    : "no turnaround on record"}
+                </p>
+                {/*
+                  Pay here is the same estimate the leaderboard shows: commission
+                  on the list price of what they finished, not a payroll figure.
+                */}
+                <p className="text-xs text-stone-500">
+                  Est. pay {profile.analytics.payWeek} this week ·{" "}
+                  {profile.analytics.payMonth} this month, at{" "}
+                  {profile.analytics.commissionPercent}% of list price
+                </p>
+                {profile.analytics.badges.length > 0 && (
+                  <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                    {profile.analytics.badges.map((badge) => (
+                      <li
+                        key={badge.key}
+                        title={badge.detail}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800"
+                      >
+                        {badge.label}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-1 text-[10px] text-stone-400">
+                  Week, month and pay cover the last {profile.analytics.windowDays} days; lifetime
+                  is every visit on record.
+                </p>
+              </section>
+            )}
 
             {/* The week */}
             {profile.week.length > 0 && (

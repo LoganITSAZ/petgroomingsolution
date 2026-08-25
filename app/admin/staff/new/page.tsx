@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { StaffRole, StationRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
 import StaffForm from "../StaffForm";
 import { createStaff } from "../actions";
+import { PageShell } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -34,18 +34,12 @@ export default async function NewStaffPage({
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
 
   return (
-    <div className="space-y-3">
-      <div>
-        <Link href="/admin/staff" className="text-sm text-stone-500 hover:text-stone-800">
-          ← Back to Staff
-        </Link>
-        <h1 className="text-xl font-bold text-stone-900 mt-2">Add Staff</h1>
-      </div>
+    <PageShell back={{ href: "/admin/staff", label: "Back to Staff" }} title="Add Staff">
 
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
-        </div>
+        </p>
       )}
 
       <StaffForm
@@ -62,6 +56,6 @@ export default async function NewStaffPage({
           defaultStationId: null,
         }}
       />
-    </div>
+    </PageShell>
   );
 }

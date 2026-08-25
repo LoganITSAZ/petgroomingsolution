@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireManager } from "@/lib/auth-guards";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -23,7 +23,7 @@ function parseWhen(value: FormDataEntryValue | null): Date | null | "invalid" {
 }
 
 export async function savePromotion(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const id = ((formData.get("id") as string | null) ?? "").trim();
   const title = ((formData.get("title") as string | null) ?? "").trim();
@@ -65,7 +65,7 @@ export async function savePromotion(formData: FormData): Promise<void> {
 }
 
 export async function deletePromotion(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
   const id = (formData.get("id") as string | null) ?? "";
   await prisma.promotion.delete({ where: { id } });
   done("?deleted=1");

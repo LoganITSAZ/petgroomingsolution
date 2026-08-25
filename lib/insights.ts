@@ -3,7 +3,7 @@ import { AppointmentStatus, AppointmentType } from "@prisma/client";
 import { FINISHED_STATUSES } from "@/lib/analytics";
 import { kennelDemand } from "@/lib/kennels";
 import { formatCents } from "@/lib/pricing";
-import { formatServiceType, formatShopDate, shopDayRange } from "@/lib/utils";
+import { formatServiceType, formatShopDate, SHOP_TIMEZONE, shopDayRange } from "@/lib/utils";
 
 /**
  * Observations drawn from the shop's own records.
@@ -302,7 +302,7 @@ export async function peakHours(days = 60): Promise<{ hour: number; visits: numb
   for (const visit of visits) {
     const hour = Number(
       new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/Phoenix",
+        timeZone: SHOP_TIMEZONE,
         hour: "2-digit",
         hourCycle: "h23",
       }).format(visit.scheduledAt)

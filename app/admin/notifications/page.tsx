@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guards";
+import { currentStaffIsAdmin } from "@/lib/staff-roles";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -64,26 +66,26 @@ interface PageProps {
 }
 
 export default async function NotificationsPage({ searchParams }: PageProps) {
+  // Delivery credentials are a technical screen — admin only, not the manager.
+  if (!(await currentStaffIsAdmin())) redirect("/staff");
+
   const config = await getConfig();
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-xl font-bold text-stone-900">Notification Settings</h1>
-        <p className="text-sm text-stone-500 mt-1">
-          Configure email and SMS delivery settings for customer notifications.
-        </p>
-      </div>
+    <PageShell
+      title="Notification Settings"
+      subtitle="Configure email and SMS delivery settings for customer notifications."
+    >
 
       {searchParams.saved === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Notification settings saved successfully.
-        </div>
+        </p>
       )}
 
       <form action={saveNotifications}>
         {/* Email Settings */}
-        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-5">
+        <PageSection bodyClassName="space-y-5">
           <div className="flex items-center justify-between border-b border-stone-100 pb-3">
             <div>
               <h2 className="text-base font-semibold text-stone-800">Email Notifications</h2>
@@ -117,10 +119,10 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
               </p>
             </div>
           </div>
-        </div>
+        </PageSection>
 
         {/* SMS Settings */}
-        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-5 mt-3">
+        <PageSection bodyClassName="space-y-5">
           <div className="flex items-center justify-between border-b border-stone-100 pb-3">
             <div>
               <h2 className="text-base font-semibold text-stone-800">SMS Notifications</h2>
@@ -208,17 +210,17 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
               </p>
             </div>
           </div>
-        </div>
+        </PageSection>
 
-        <div className="flex justify-end pt-4">
+        <PageSection tone="muted" bodyClassName="flex justify-end">
           <button
             type="submit"
             className="bg-amber-700 hover:bg-amber-800 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
           >
             Save Notification Settings
           </button>
-        </div>
+        </PageSection>
       </form>
-    </div>
+    </PageShell>
   );
 }

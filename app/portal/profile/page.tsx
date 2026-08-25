@@ -13,7 +13,7 @@ export const metadata = { title: "My profile" };
 
 export default async function PortalProfilePage() {
   const session = await auth();
-  if (!session?.user) redirect("/login?type=customer");
+  if (!session?.user || session.user.userType !== "customer") redirect("/login?type=customer");
 
   const customerId = session.user.id;
 
@@ -28,25 +28,34 @@ export default async function PortalProfilePage() {
     "use server";
 
     const session = await auth();
-    if (!session?.user) redirect("/login?type=customer");
+    if (!session?.user || session.user.userType !== "customer") redirect("/login?type=customer");
     const customerId = session.user.id;
 
-    const firstName = (formData.get("firstName") as string)?.trim();
-    const lastName = (formData.get("lastName") as string)?.trim();
-    const phone = (formData.get("phone") as string)?.trim();
-    const address = (formData.get("address") as string | null)?.trim();
+    // Two forms post to this one action — the details form and the appearance
+    // form — so a field the submitted form did not carry must not be written.
+    // `phone` used to be written unconditionally, which meant saving a theme
+    // from the appearance form silently cleared the customer's phone number.
+    const posted = (field: string): string | undefined => {
+      const value = formData.get(field);
+      return typeof value === "string" ? value.trim() : undefined;
+    };
+
+    const firstName = posted("firstName");
+    const lastName = posted("lastName");
+    const phone = posted("phone");
+    const address = posted("address");
     const themePreference = formData.get("themePreference");
 
-    if (!firstName || !lastName) return;
+    // A form that carries the name must carry a usable one; a form that does
+    // not carry it at all is not editing it.
+    const namesPosted = firstName !== undefined || lastName !== undefined;
+    if (namesPosted && (!firstName || !lastName)) return;
 
     await prisma.customer.update({
       where: { id: customerId },
       data: {
-        firstName,
-        lastName,
-        phone: phone || null,
-        // A field the submitted form did not carry must not be overwritten:
-        // the appearance form posts no address, the details form no theme.
+        ...(namesPosted && { firstName, lastName }),
+        ...(phone !== undefined && { phone: phone || null }),
         ...(address !== undefined && { address: address || null }),
         ...(themePreference !== null && {
           themePreference:
@@ -63,7 +72,7 @@ export default async function PortalProfilePage() {
     "use server";
 
     const session = await auth();
-    if (!session?.user) redirect("/login?type=customer");
+    if (!session?.user || session.user.userType !== "customer") redirect("/login?type=customer");
     const customerId = session.user.id;
 
     const currentPassword = formData.get("currentPassword") as string;
@@ -230,8 +239,6 @@ export default async function PortalProfilePage() {
           <p className="text-sm text-stone-500 mt-0.5">Choose the display style for your account.</p>
         </div>
         <form action={updateProfile} className="flex items-center gap-3">
-          <input type="hidden" name="firstName" value={customer.firstName} />
-          <input type="hidden" name="lastName" value={customer.lastName} />
           <input type="hidden" name="phone" value={customer.phone ?? ""} />
           <label htmlFor="themePreference" className="text-sm font-semibold text-stone-700">Theme</label>
           <select

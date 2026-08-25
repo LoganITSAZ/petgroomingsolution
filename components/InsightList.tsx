@@ -6,10 +6,10 @@ import type { Insight } from "@/lib/insights";
  * came from, so staff can tell a real pattern from a coincidence.
  */
 
-const TONE: Record<Insight["tone"], { border: string; dot: string }> = {
-  neutral: { border: "border-stone-200", dot: "bg-stone-400" },
-  opportunity: { border: "border-emerald-200", dot: "bg-emerald-500" },
-  warning: { border: "border-amber-300", dot: "bg-amber-500" },
+const TONE: Record<Insight["tone"], { border: string; dot: string; surface: string; title: string }> = {
+  neutral: { border: "border-sky-200", dot: "bg-sky-500", surface: "bg-sky-50/70", title: "text-sky-950" },
+  opportunity: { border: "border-emerald-200", dot: "bg-emerald-500", surface: "bg-emerald-50/70", title: "text-emerald-950" },
+  warning: { border: "border-amber-300", dot: "bg-amber-500", surface: "bg-amber-50/80", title: "text-amber-950" },
 };
 
 export default function InsightList({
@@ -33,7 +33,7 @@ export default function InsightList({
           <>
             <span className="flex items-baseline gap-2">
               <span className={`w-1.5 h-1.5 rounded-full ${tone.dot} shrink-0`} />
-              <span className="font-semibold text-stone-900">{insight.title}</span>
+              <span className={`font-semibold ${tone.title}`}>{insight.title}</span>
             </span>
             <span className="block text-stone-600 pl-3.5">{insight.detail}</span>
             <span className="block text-xs text-stone-400 pl-3.5">{insight.evidence}</span>
@@ -43,7 +43,7 @@ export default function InsightList({
         return (
           <li
             key={insight.id}
-            className={`text-sm bg-white border rounded-lg px-3 py-2 ${tone.border}`}
+            className={`text-sm border rounded-lg px-3 py-2 shadow-sm ${tone.border} ${tone.surface}`}
           >
             {insight.href ? (
               <Link href={insight.href} className="block hover:opacity-80">

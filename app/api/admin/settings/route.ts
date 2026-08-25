@@ -38,7 +38,7 @@ const PATCHABLE_FIELDS = new Set([
 
 // Roles come from the database, not the token: a role granted after sign-in
 // has to take effect immediately.
-async function requireAdmin(session: Session | null) {
+async function requireManager(session: Session | null) {
   if (!session?.user) return "Unauthorized";
   if (session.user.userType !== "staff") return "Forbidden";
   const roles = await getStaffRoles(session.user.id);
@@ -50,7 +50,7 @@ async function requireAdmin(session: Session | null) {
 // Returns the full SystemConfig row. Admin only.
 export async function GET(_req: Request) {
   const session = await auth();
-  const denied = await requireAdmin(session);
+  const denied = await requireManager(session);
   if (denied) {
     const status = denied === "Unauthorized" ? 401 : 403;
     return NextResponse.json({ error: denied }, { status });
@@ -65,7 +65,7 @@ export async function GET(_req: Request) {
 // Body: partial SystemConfig (only whitelisted fields are applied)
 export async function PATCH(req: Request) {
   const session = await auth();
-  const denied = await requireAdmin(session);
+  const denied = await requireManager(session);
   if (denied) {
     const status = denied === "Unauthorized" ? 401 : 403;
     return NextResponse.json({ error: denied }, { status });

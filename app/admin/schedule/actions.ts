@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireManager } from "@/lib/auth-guards";
 import { shopMoment } from "@/lib/shop-time";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -21,7 +21,7 @@ function done(week: string, params: string): never {
 }
 
 export async function saveShift(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const week = ((formData.get("week") as string | null) ?? "").trim();
   const id = ((formData.get("id") as string | null) ?? "").trim();
@@ -56,7 +56,7 @@ export async function saveShift(formData: FormData): Promise<void> {
 }
 
 export async function deleteShift(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
   const week = ((formData.get("week") as string | null) ?? "").trim();
   const id = (formData.get("id") as string | null) ?? "";
   await prisma.staffShift.delete({ where: { id } });
@@ -68,7 +68,7 @@ export async function deleteShift(formData: FormData): Promise<void> {
  * hours. Existing shifts for those days are left alone unless asked.
  */
 export async function generateWeek(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const week = ((formData.get("week") as string | null) ?? "").trim();
   const staffIds = formData.getAll("staffIds").map((value) => String(value)).filter(Boolean);

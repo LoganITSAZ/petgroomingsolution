@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireManager } from "@/lib/auth-guards";
 import { DiscountKind } from "@prisma/client";
 import { parseDollarsToCents } from "@/lib/pricing";
 import { revalidatePath } from "next/cache";
@@ -19,7 +19,7 @@ function done(params: string): never {
  * amount cannot keep a stale figure that nothing reads but everyone sees.
  */
 export async function savePricingTier(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const id = ((formData.get("id") as string | null) ?? "").trim();
   const name = ((formData.get("name") as string | null) ?? "").trim();
@@ -71,7 +71,7 @@ export async function savePricingTier(formData: FormData): Promise<void> {
  * discount, so nothing reprices retroactively.
  */
 export async function deletePricingTier(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const id = (formData.get("id") as string | null) ?? "";
   const tier = await prisma.pricingTier.findUnique({ where: { id } });

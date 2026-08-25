@@ -18,6 +18,8 @@ export interface KennelChoice {
   stationName: string;
   inside: number;
   capacity: number;
+  /** True when the extra room comes from the pets inside sharing a home. */
+  sharedHousehold: boolean;
 }
 
 export default function CheckInDialog({
@@ -100,6 +102,7 @@ export default function CheckInDialog({
                     <option key={kennel.id} value={kennel.id}>
                       {kennel.stationName} · {kennel.label}
                       {kennel.capacity > 1 && ` (${kennel.inside}/${kennel.capacity})`}
+                      {kennel.sharedHousehold && " · same household"}
                     </option>
                   ))}
                 </select>

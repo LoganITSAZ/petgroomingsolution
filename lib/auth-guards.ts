@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { getStaffRoles } from "@/lib/staff-roles";
+import { canManage, getStaffRoles } from "@/lib/staff-roles";
 import { StaffRole } from "@prisma/client";
 
 /**
@@ -13,6 +13,26 @@ import { StaffRole } from "@prisma/client";
 export async function requireStaff(): Promise<string> {
   const session = await auth();
   if (session?.user?.userType !== "staff") {
+    throw new Error("Unauthorized");
+  }
+  return session.user.id;
+}
+
+/**
+ * Signed-in manager or admin. Returns their id.
+ *
+ * This is the gate for running the shop — prices, rota, staff, waiver. The
+ * technical screens (system status, notification credentials) use
+ * `requireAdmin()` instead, and that difference is the only thing separating
+ * the two roles.
+ */
+export async function requireManager(): Promise<string> {
+  const session = await auth();
+  if (session?.user?.userType !== "staff") {
+    throw new Error("Unauthorized");
+  }
+  const roles = await getStaffRoles(session.user.id);
+  if (!canManage(roles)) {
     throw new Error("Unauthorized");
   }
   return session.user.id;

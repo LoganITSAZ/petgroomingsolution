@@ -3,6 +3,7 @@ import type { Promotion, Service } from "@prisma/client";
 import { promotionState } from "@/lib/promotions";
 import { formatShopDate, formatShopTime } from "@/lib/utils";
 import { deletePromotion, savePromotion } from "./actions";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -176,32 +177,33 @@ export default async function AdminMarketingPage({ searchParams }: PageProps) {
   const liveCount = promotions.filter((p) => promotionState(p, now) === "live").length;
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-xl font-bold text-stone-900">Marketing</h1>
-        <p className="text-sm text-stone-500 mt-1">
+    <PageShell
+      title="Marketing"
+      subtitle={
+        <>
           {liveCount} promotion{liveCount !== 1 ? "s" : ""} running now. Live copy appears on the
           public site and on the staff dashboard.
-        </p>
-      </div>
+        </>
+      }
+    >
 
       {searchParams.saved && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Saved {searchParams.saved}.
-        </div>
+        </p>
       )}
       {searchParams.deleted === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Promotion removed.
-        </div>
+        </p>
       )}
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
-        </div>
+        </p>
       )}
 
-      <details className="bg-white border border-stone-200 rounded-xl">
+      <details className="border-t border-stone-100">
         <summary className="px-6 py-4 cursor-pointer text-sm font-semibold text-stone-800">
           + New promotion
         </summary>
@@ -219,16 +221,16 @@ export default async function AdminMarketingPage({ searchParams }: PageProps) {
       </details>
 
       {services.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+        <PageSection grow className="text-center text-stone-400 text-sm">
           Add a service first — a promotion has to point at something the shop sells.
-        </div>
+        </PageSection>
       ) : promotions.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+        <PageSection grow className="text-center text-stone-400 text-sm">
           No promotions yet. Anything published here shows beside its service on the site and at
           the counter.
-        </div>
+        </PageSection>
       ) : (
-        <div className="bg-white border border-stone-200 rounded-xl divide-y divide-stone-100">
+        <PageSection grow scroll padded={false} bodyClassName="divide-y divide-stone-100">
           {promotions.map((promotion) => {
             const state = promotionState(promotion, now);
             return (
@@ -285,8 +287,8 @@ export default async function AdminMarketingPage({ searchParams }: PageProps) {
               </details>
             );
           })}
-        </div>
+        </PageSection>
       )}
-    </div>
+    </PageShell>
   );
 }

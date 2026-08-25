@@ -9,11 +9,14 @@ import {
   shopDayRange,
 } from "@/lib/utils";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 import { auth } from "@/lib/auth";
 import { PRESENCE_CLASS, PRESENCE_LABEL, floorRoster } from "@/lib/presence";
 import { describeShifts, isOnShiftNow, scheduleGaps, todaysShifts, weekDays } from "@/lib/schedule";
 import StaffProfileDialog, { type StaffProfile } from "@/components/StaffProfileDialog";
 import { currentStaffIsAdmin } from "@/lib/staff-roles";
+import { LEADERBOARD_WINDOW_DAYS, getLeaderboard } from "@/lib/analytics";
+import { formatCents } from "@/lib/pricing";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -51,8 +54,18 @@ export default async function StaffTeamPage() {
   const weekStart = days[0];
   const weekEnd = new Date(days[6].getTime() + 24 * 60 * 60 * 1000);
 
-  const [team, todayAppointments, onFloor, recentActivity, roster, shifts, gaps, weekShifts, homes] =
-    await Promise.all([
+  const [
+    team,
+    todayAppointments,
+    onFloor,
+    recentActivity,
+    roster,
+    shifts,
+    gaps,
+    weekShifts,
+    homes,
+    leaderboard,
+  ] = await Promise.all([
     prisma.staff.findMany({
       select: { id: true, name: true, email: true, roles: true, isActive: true },
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
@@ -87,9 +100,13 @@ export default async function StaffTeamPage() {
     prisma.staff.findMany({
       select: { id: true, defaultStation: { select: { name: true } } },
     }),
+    // The same rows /staff/analytics ranks, read here per person so a profile
+    // and the leaderboard can never disagree.
+    getLeaderboard(),
   ]);
 
   const presenceById = new Map(roster.map((member) => [member.id, member]));
+  const analyticsById = new Map(leaderboard.map((row) => [row.staffId, row]));
   const homeById = new Map(homes.map((row) => [row.id, row.defaultStation?.name ?? null]));
 
   const weekByStaff = new Map<string, { day: string; hours: string }[]>();
@@ -135,18 +152,18 @@ export default async function StaffTeamPage() {
   });
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-black text-stone-900">Team</h1>
-          <p className="text-sm text-stone-500 mt-1">
-            {working} of {active.length} on the floor working a pet
-            {unassignedOnFloor > 0 &&
-              ` · ${unassignedOnFloor} pet${unassignedOnFloor !== 1 ? "s" : ""} on the floor with no groomer`}
-          </p>
-        </div>
-        {isAdmin && (
-          <span className="flex items-center gap-3 whitespace-nowrap">
+    <PageShell
+      title="Team"
+      subtitle={
+        <>
+          {working} of {active.length} on the floor working a pet
+          {unassignedOnFloor > 0 &&
+            ` · ${unassignedOnFloor} pet${unassignedOnFloor !== 1 ? "s" : ""} on the floor with no groomer`}
+        </>
+      }
+      actions={
+        isAdmin ? (
+          <>
             <Link
               href="/admin/schedule"
               className="text-sm text-amber-700 hover:text-amber-900 underline"
@@ -159,33 +176,30 @@ export default async function StaffTeamPage() {
             >
               Add or remove staff →
             </Link>
-          </span>
-        )}
-      </div>
-
+          </>
+        ) : null
+      }
+    >
       {gaps.length > 0 && (
-        <section className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-          <h2 className="font-bold text-amber-800 text-xs uppercase tracking-widest">
-            Schedule and floor disagree
-          </h2>
-          <ul className="text-sm text-stone-700 mt-1 space-y-0.5">
+        <PageSection className="bg-amber-50" title="Schedule and floor disagree">
+          <ul className="text-sm text-stone-700 space-y-0.5">
             {gaps.map((gap) => (
               <li key={`${gap.staffId}-${gap.kind}`}>
                 <span className="font-semibold">{gap.staffName}</span> — {gap.detail}
               </li>
             ))}
           </ul>
-        </section>
+        </PageSection>
       )}
 
       {active.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+        <PageSection grow className="text-center text-stone-400 text-sm">
           No active staff accounts.
-        </div>
+        </PageSection>
       ) : (
         /* One line per person: the floor reads this at a glance, and the
            detail that matters is what they are on right now. */
-        <div className="bg-white border border-stone-200 rounded-xl divide-y divide-stone-100 text-sm">
+        <PageSection grow scroll padded={false} bodyClassName="divide-y divide-stone-100 text-sm">
           {active.map((member) => {
             const floor = presenceById.get(member.id);
             const shiftHours = describeShifts(shifts.get(member.id));
@@ -237,6 +251,24 @@ export default async function StaffTeamPage() {
                   petName: entry.appointment.pet.name,
                   statusLabel: formatStatus(entry.status),
                 })),
+              analytics: (() => {
+                const row = analyticsById.get(member.id);
+                if (!row) return null;
+                return {
+                  windowDays: LEADERBOARD_WINDOW_DAYS,
+                  today: row.today,
+                  week: row.week,
+                  month: row.month,
+                  lifetime: row.lifetime,
+                  bestDay: row.bestDay,
+                  streak: row.streak,
+                  avgTurnaroundMins: row.avgTurnaroundMins,
+                  commissionPercent: row.commissionPercent,
+                  payWeek: formatCents(row.payWeekCents),
+                  payMonth: formatCents(row.payMonthCents),
+                  badges: row.badges,
+                };
+              })(),
             };
 
             return (
@@ -318,15 +350,11 @@ export default async function StaffTeamPage() {
               </StaffProfileDialog>
             );
           })}
-        </div>
+        </PageSection>
       )}
 
       {serviceAccounts.length > 0 && (
-        <section>
-          <h2 className="font-bold text-stone-400 mb-3 text-sm uppercase tracking-widest">
-            Access only ({serviceAccounts.length})
-          </h2>
-          <div className="bg-white border border-stone-200 rounded-xl divide-y divide-stone-100">
+        <PageSection title={`Access only (${serviceAccounts.length})`} padded={false} bodyClassName="divide-y divide-stone-100">
             {serviceAccounts.map((member) => (
               <div key={member.id} className="px-3 py-2 flex items-center justify-between gap-3">
                 <span className="text-stone-600">{member.name}</span>
@@ -335,16 +363,11 @@ export default async function StaffTeamPage() {
                 </span>
               </div>
             ))}
-          </div>
-        </section>
+        </PageSection>
       )}
 
       {inactive.length > 0 && (
-        <section>
-          <h2 className="font-bold text-stone-400 mb-3 text-sm uppercase tracking-widest">
-            Inactive ({inactive.length})
-          </h2>
-          <div className="bg-white border border-stone-200 rounded-xl divide-y divide-stone-100">
+        <PageSection title={`Inactive (${inactive.length})`} padded={false} bodyClassName="divide-y divide-stone-100">
             {inactive.map((member) => (
               <div key={member.id} className="px-4 py-2 flex items-center justify-between">
                 <span className="text-stone-500">{member.name}</span>
@@ -353,9 +376,8 @@ export default async function StaffTeamPage() {
                 </span>
               </div>
             ))}
-          </div>
-        </section>
+        </PageSection>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -5,6 +5,7 @@ import { formatRole } from "@/lib/utils";
 import { KENNELABLE_STATUSES } from "@/lib/kennels";
 import { getConfig } from "@/lib/config";
 import { saveCapacityRules } from "./actions";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -56,30 +57,31 @@ export default async function StationsPage({ searchParams }: PageProps) {
   );
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-stone-900">Stations</h1>
-          <p className="text-sm text-stone-500 mt-1">
-            {activeCount} of {stations.length} station{stations.length !== 1 ? "s" : ""} active.
-            Each station carries a role that decides how it is used on the floor.
-          </p>
-        </div>
+    <PageShell
+      title="Stations"
+      subtitle={
+        <>
+          {activeCount} of {stations.length} station{stations.length !== 1 ? "s" : ""} active.
+          Each station carries a role that decides how it is used on the floor.
+        </>
+      }
+      actions={
         <Link
           href="/admin/stations/new"
           className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
         >
           + Add Station
         </Link>
-      </div>
+      }
+    >
 
       {searchParams.created && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           {searchParams.created} created.
-        </div>
+        </p>
       )}
       {searchParams.saved && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           {searchParams.saved} saved.
           {searchParams.kept && (
             <span className="font-normal">
@@ -87,29 +89,34 @@ export default async function StationsPage({ searchParams }: PageProps) {
               {searchParams.kept} stayed in place — still occupied.
             </span>
           )}
-        </div>
+        </p>
       )}
       {searchParams.error === "not_found" && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           That station no longer exists.
-        </div>
+        </p>
       )}
 
       {searchParams.capacity === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Capacity rules saved.
-        </div>
+        </p>
+      )}
+      {searchParams.error === "invalid_household" && (
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
+          One household may share between the general rule and 8 pets per compartment.
+        </p>
       )}
       {searchParams.error === "invalid_capacity" && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           A compartment holds between 1 and 4 pets.
-        </div>
+        </p>
       )}
 
       {/* Capacity rules, shop-wide */}
       <form
         action={saveCapacityRules}
-        className="bg-white border border-stone-200 rounded-xl px-3 py-2 flex flex-wrap items-center gap-3"
+        className="border-t border-stone-100 bg-stone-50 px-3 py-2 flex flex-wrap items-center gap-3"
       >
         <span className="text-sm font-semibold text-stone-800">Capacity</span>
         <span className="text-sm text-stone-500">
@@ -117,7 +124,7 @@ export default async function StationsPage({ searchParams }: PageProps) {
         </span>
         <span className="flex items-center gap-2 ml-auto">
           <label htmlFor="kennelCapacityPerCompartment" className="text-sm text-stone-600">
-            Pets per kennel compartment
+            Unrelated pets per compartment
           </label>
           <input
             id="kennelCapacityPerCompartment"
@@ -126,6 +133,19 @@ export default async function StationsPage({ searchParams }: PageProps) {
             min={1}
             max={4}
             defaultValue={config.kennelCapacityPerCompartment}
+            className="w-16 border border-stone-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+          {/* Dogs from one home are kennelled together on purpose. */}
+          <label htmlFor="kennelHouseholdMaxPerCompartment" className="text-sm text-stone-600">
+            From one household
+          </label>
+          <input
+            id="kennelHouseholdMaxPerCompartment"
+            name="kennelHouseholdMaxPerCompartment"
+            type="number"
+            min={config.kennelCapacityPerCompartment}
+            max={8}
+            defaultValue={config.kennelHouseholdMaxPerCompartment}
             className="w-16 border border-stone-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
           />
           <button
@@ -138,22 +158,22 @@ export default async function StationsPage({ searchParams }: PageProps) {
       </form>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white border border-stone-200 rounded-xl p-4">
+      <PageSection bodyClassName="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">Total Stations</p>
           <p className="text-2xl font-bold text-stone-800 mt-1">{stations.length}</p>
         </div>
-        <div className="bg-white border border-stone-200 rounded-xl p-4">
+        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">Active</p>
           <p className="text-2xl font-bold text-green-700 mt-1">{activeCount}</p>
         </div>
-        <div className="bg-white border border-stone-200 rounded-xl p-4">
+        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">Inactive</p>
           <p className="text-2xl font-bold text-stone-400 mt-1">{stations.length - activeCount}</p>
         </div>
         <Link
           href="/staff/stations"
-          className="bg-white border border-stone-200 rounded-xl p-4 hover:border-amber-300 transition-colors"
+          className="border border-stone-200 rounded-lg bg-stone-50/60 p-4 hover:border-amber-300 transition-colors"
         >
           <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">Kennels In Use</p>
           <p className="text-2xl font-bold text-stone-800 mt-1">
@@ -161,10 +181,10 @@ export default async function StationsPage({ searchParams }: PageProps) {
             <span className="text-base font-medium text-stone-400">/{kennelTotal}</span>
           </p>
         </Link>
-      </div>
+            </PageSection>
 
       {/* Stations table */}
-      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+      <PageSection grow scroll padded={false}>
         {stations.length === 0 ? (
           <div className="py-8 text-center text-stone-400 text-sm">
             No stations configured yet.{" "}
@@ -262,7 +282,7 @@ export default async function StationsPage({ searchParams }: PageProps) {
             </table>
           </div>
         )}
-      </div>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

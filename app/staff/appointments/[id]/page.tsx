@@ -1,10 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 import { AppointmentStatus, StaffRole, StationRole, VisitEventType } from "@prisma/client";
 import { nextStatus } from "@/lib/appointment-status";
 import { getServiceOptions } from "@/lib/appointment-services";
-import { KENNELABLE_STATUSES, compartmentCapacity } from "@/lib/kennels";
+import {
+  KENNELABLE_STATUSES,
+  compartmentCapacity,
+  compartmentRoom,
+  householdCompartmentLimit,
+} from "@/lib/kennels";
 import { formatCents } from "@/lib/pricing";
 import { rewardCard } from "@/lib/rewards";
 import {
@@ -132,7 +138,8 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
   });
   if (!appointment) notFound();
 
-  const [stations, groomers, serviceOptions, allKennels, perCompartment] = await Promise.all([
+  const [stations, groomers, serviceOptions, allKennels, perCompartment, householdMax] =
+    await Promise.all([
     prisma.station.findMany({
       where: { isActive: true, role: { not: StationRole.KENNEL } },
       orderBy: [{ role: "asc" }, { name: "asc" }],
@@ -148,17 +155,35 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
       where: { isActive: true, station: { isActive: true } },
       include: {
         station: { select: { name: true } },
-        _count: { select: { appointments: { where: { status: { in: KENNELABLE_STATUSES } } } } },
+        appointments: {
+          where: { status: { in: KENNELABLE_STATUSES } },
+          select: { id: true, customerId: true },
+        },
       },
       orderBy: [{ station: { name: "asc" } }, { row: "asc" }, { column: "asc" }],
     }),
     compartmentCapacity(),
+    householdCompartmentLimit(),
   ]);
 
-  // A door is offered when it still has room, or when this pet is already in it.
+  /*
+   * A door is offered when it still has room for THIS pet, or when the pet is
+   * already in it. Room is per household: a compartment holding this owner's
+   * other dogs takes one more of theirs past the general rule.
+   */
+  const kennelRoom = new Map(
+    allKennels.map((kennel) => [
+      kennel.id,
+      compartmentRoom(
+        kennel.appointments.map((occupant) => occupant.customerId),
+        appointment.customerId,
+        perCompartment,
+        householdMax
+      ),
+    ])
+  );
   const openKennels = allKennels.filter(
-    (kennel) =>
-      kennel.id === appointment.kennelId || kennel._count.appointments < perCompartment
+    (kennel) => kennel.id === appointment.kennelId || kennelRoom.get(kennel.id)?.ok
   );
 
   const insights = [
@@ -188,45 +213,44 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
     : null;
 
   return (
-    <div className="space-y-5 max-w-5xl">
-      <Link
-        href="/staff/appointments"
-        className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 transition-colors"
-      >
-        ← Back to Appointments
-      </Link>
+    <PageShell
+      back={{ href: "/staff/appointments", label: "Back to Appointments" }}
+      title={appointment.pet.name}
+      subtitle={`${appointment.customer.firstName} ${appointment.customer.lastName} · ${formatStatus(appointment.status)}`}
+      className="max-w-5xl w-full"
+    >
 
       {appointment.pet.hasBiteHistory && (
-        <div className="bg-red-600 text-white rounded-xl px-5 py-3 font-bold text-sm flex items-center gap-3">
+        <div className="border-t border-stone-100 bg-red-600 text-white px-3 py-2.5 font-bold text-sm flex items-center gap-3">
           <span className="text-xl">⚠</span> BITE HISTORY — handle with extreme caution
         </div>
       )}
 
       {notice && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-3 text-green-800 text-sm font-medium">
+        <div className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           {NOTICES[notice]}
         </div>
       )}
       {searchParams.kennel && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-3 text-green-800 text-sm font-medium">
+        <div className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           {searchParams.kennel === "cleared" ? "Kennel emptied." : "Pet moved into the kennel."}
         </div>
       )}
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-3 text-red-800 text-sm font-medium">
+        <div className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
         </div>
       )}
 
       {/* What the counter has to know before it quotes or hands the pet back. */}
       {appointment.customer.pricingNotes && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 text-amber-800 text-sm">
+        <div className="border-t border-stone-100 bg-amber-50 px-3 py-2 text-amber-800 text-sm">
           <span className="font-bold uppercase tracking-wide text-xs block">Pricing note</span>
           <span className="whitespace-pre-wrap">{appointment.customer.pricingNotes}</span>
         </div>
       )}
       {card.available > 0 && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3 text-emerald-800 text-sm font-medium flex items-center justify-between gap-3 flex-wrap">
+        <div className="border-t border-stone-100 bg-emerald-50 px-3 py-2 text-emerald-800 text-sm font-medium flex items-center justify-between gap-3 flex-wrap">
           <span>
             ★ Reward ready — {card.label}
             <span className="block text-xs font-normal">
@@ -244,7 +268,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
       )}
 
       {/* Header */}
-      <div className="bg-white border border-stone-200 rounded-xl p-4">
+      <PageSection>
         {arrival === "missed" && (
           <div
             className={`mb-4 rounded-xl px-4 py-3 ${ARRIVAL_CLASS[arrival]}`}
@@ -398,20 +422,17 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
             ))}
           </div>
         )}
-      </div>
+      </PageSection>
 
       {insights.length > 0 && (
-        <section>
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1.5">
-            Worth knowing about this pet
-          </h2>
+        <PageSection title="Worth knowing about this pet">
           <InsightList insights={insights} compact />
-        </section>
+        </PageSection>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Assignment */}
-        <section className="bg-white border border-stone-200 rounded-xl p-4">
+        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             Assignment &amp; schedule
           </h2>
@@ -504,8 +525,11 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
                   {openKennels.map((kennel) => (
                     <option key={kennel.id} value={kennel.id}>
                       {kennel.station.name} · {kennel.label}
-                      {perCompartment > 1 &&
-                        ` (${kennel._count.appointments}/${perCompartment})`}
+                      {(() => {
+                        const room = kennelRoom.get(kennel.id);
+                        if (!room || room.limit <= 1) return null;
+                        return ` (${room.inside}/${room.limit}${room.sharedHousehold ? " · same household" : ""})`;
+                      })()}
                     </option>
                   ))}
                 </select>
@@ -533,7 +557,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
         </section>
 
         {/* Services */}
-        <section className="bg-white border border-stone-200 rounded-xl p-4">
+        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             Services
           </h2>
@@ -612,11 +636,11 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
             </form>
           </details>
         </section>
-      </div>
+      </PageSection>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Visit events */}
-        <section className="bg-white border border-stone-200 rounded-xl p-4">
+        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             What happened ({appointment.visitEvents.length})
           </h2>
@@ -674,7 +698,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
         </section>
 
         {/* Audit trail */}
-        <section className="bg-white border border-stone-200 rounded-xl p-4">
+        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             Status history
           </h2>
@@ -703,7 +727,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
             </ul>
           )}
         </section>
-      </div>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

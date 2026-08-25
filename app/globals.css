@@ -97,6 +97,8 @@
   .dark .bg-teal-100 { background-color: #134e4a; }
   .dark .bg-indigo-50 { background-color: #1e1b4b; }
   .dark .bg-indigo-100 { background-color: #312e81; }
+  .dark .bg-violet-50 { background-color: #2e1065; }
+  .dark .bg-violet-100 { background-color: #4c1d95; }
 
   /* Saturated text. The 600–900 shades are dark-on-dark once the surface
      flips, so every one of them lands on its 300 — at least 5:1 against both
@@ -150,6 +152,10 @@
   .dark .text-indigo-700,
   .dark .text-indigo-800,
   .dark .text-indigo-900 { color: #a5b4fc; }
+  .dark .text-violet-600,
+  .dark .text-violet-700,
+  .dark .text-violet-800,
+  .dark .text-violet-900 { color: #c4b5fd; }
 
   /* Tinted borders, so a panel keeps its edge once the fill is dark. */
   .dark .border-amber-200,
@@ -163,6 +169,7 @@
   .dark .border-emerald-300 { border-color: #065f46; }
   .dark .border-sky-200 { border-color: #075985; }
   .dark .border-blue-200 { border-color: #1e40af; }
+  .dark .border-violet-200 { border-color: #5b21b6; }
   .dark .divide-amber-100 > :not([hidden]) ~ :not([hidden]) { border-color: #92400e; }
 
   /* Brand type. `--brand-text` is derived to clear AA against a light surface

@@ -195,6 +195,7 @@ export function shopDayKey(date: Date = new Date()): string {
 export function formatRole(role: string): string {
   const map: Record<string, string> = {
     ADMIN: "Admin",
+    MANAGER: "Shop manager",
     GROOMER: "Groomer",
     BATHER: "Bather",
     CUSTOMER: "Customer",
@@ -206,6 +207,7 @@ export function formatRole(role: string): string {
 export function roleBadgeClass(role: string): string {
   const map: Record<string, string> = {
     ADMIN: "bg-amber-100 text-amber-800",
+    MANAGER: "bg-violet-100 text-violet-800",
     GROOMER: "bg-stone-100 text-stone-700",
     BATHER: "bg-sky-100 text-sky-700",
   };
@@ -215,9 +217,9 @@ export function roleBadgeClass(role: string): string {
 /**
  * Roles that mean a person works pets on the floor.
  *
- * ADMIN is deliberately absent: it grants access to the admin panel, nothing
- * more. An account holding only ADMIN is a service account and is never
- * offered for, or accepted as, an assignment.
+ * ADMIN and MANAGER are deliberately absent: they grant access to the admin
+ * panel, nothing more. An account holding only those is a service account and
+ * is never offered for, or accepted as, an assignment.
  */
 export const FLOOR_ROLES = ["GROOMER", "BATHER"] as const;
 

@@ -1,5 +1,5 @@
 import { auth, signOut } from "@/lib/auth";
-import { getStaffRoles } from "@/lib/staff-roles";
+import { canManage, getStaffRoles } from "@/lib/staff-roles";
 import { isFloorStaff } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
@@ -12,7 +12,8 @@ import Link from "next/link";
 /**
  * One back office, one shell. Staff and admin screens are the same product to
  * the person using them, so they share a sidebar: the floor links everyone
- * gets, then the admin group below a divider for whoever holds ADMIN.
+ * gets, then the shop group for whoever runs the shop (ADMIN or MANAGER), and
+ * the technical group below it for ADMIN alone.
  *
  * Two shapes, one layout: a fixed sidebar on a shop terminal, and a top bar
  * with a drawer on a phone — groomers set their presence from the floor, and
@@ -36,7 +37,6 @@ const NAV = [
 ];
 
 const ADMIN_NAV = [
-  { href: "/admin", label: "Overview" },
   { href: "/admin/services", label: "Services & Pricing" },
   { href: "/admin/pricing", label: "Pricing Tiers" },
   { href: "/admin/staff", label: "Staff" },
@@ -44,9 +44,19 @@ const ADMIN_NAV = [
   { href: "/admin/stations", label: "Stations" },
   { href: "/admin/breeds", label: "Breed Guide" },
   { href: "/admin/marketing", label: "Marketing" },
+  { href: "/admin/reports", label: "Reports" },
   { href: "/admin/appearance", label: "Appearance" },
   { href: "/admin/settings", label: "Shop Settings" },
   { href: "/admin/waiver", label: "Liability Waiver" },
+];
+
+/**
+ * The technical screens. A shop manager runs everything above; system status
+ * and the notification credentials stay with ADMIN, and both pages re-check
+ * for themselves — hiding a link is presentation, never the gate.
+ */
+const TECHNICAL_NAV = [
+  { href: "/admin", label: "System Status" },
   { href: "/admin/notifications", label: "Notifications" },
 ];
 
@@ -63,6 +73,7 @@ export default async function BackOfficeShell({ children }: { children: React.Re
     getConfig(),
   ]);
   const isAdmin = roles.includes("ADMIN");
+  const canManageShop = canManage(roles);
   // Presence describes someone who takes pets. An admin-only account never
   // does, so it gets no status and no shift page; an admin who also grooms
   // gets both, because the roles stack.
@@ -80,13 +91,30 @@ export default async function BackOfficeShell({ children }: { children: React.Re
           {item.label}
         </Link>
       ))}
+      {canManageShop && (
+        <>
+          <hr className="border-stone-700 mt-3 mb-1" />
+          <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-stone-400 uppercase">
+            Shop
+          </p>
+          {ADMIN_NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="block px-3 py-2 rounded-lg hover:bg-stone-700 transition-colors"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </>
+      )}
       {isAdmin && (
         <>
           <hr className="border-stone-700 mt-3 mb-1" />
           <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-stone-400 uppercase">
             Admin
           </p>
-          {ADMIN_NAV.map((item) => (
+          {TECHNICAL_NAV.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -152,7 +180,7 @@ export default async function BackOfficeShell({ children }: { children: React.Re
         </div>
       </aside>
 
-      <main id="main-content" className="flex-1 md:ml-48 p-3 md:p-4">{children}</main>
+      <main id="main-content" className="flex-1 md:ml-48 p-3 md:p-4 flex flex-col">{children}</main>
     </div>
   );
 }

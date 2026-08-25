@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireManager } from "@/lib/auth-guards";
 import Link from "next/link";
 import { getConfig } from "@/lib/config";
 import { formatRole, roleBadgeClass } from "@/lib/utils";
 import { setDefaultCommission } from "./actions";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -14,7 +15,7 @@ export const metadata = { title: "Staff" };
 async function toggleStaffActive(formData: FormData) {
   "use server";
 
-  await requireAdmin();
+  await requireManager();
 
   const id = formData.get("id") as string;
   const currentActive = formData.get("currentActive") === "true";
@@ -64,43 +65,44 @@ export default async function StaffPage({ searchParams }: PageProps) {
   const activeCount = staffList.filter((s) => s.isActive).length;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-stone-900">Staff</h1>
-          <p className="text-sm text-stone-500 mt-1">
-            {activeCount} of {staffList.length} staff members active · default commission{" "}
-            {config.defaultCommissionPercent}%
-          </p>
-        </div>
+    <PageShell
+      title="Staff"
+      subtitle={
+        <>
+          {activeCount} of {staffList.length} staff members active · default commission{" "}
+          {config.defaultCommissionPercent}%
+        </>
+      }
+      actions={
         <Link
           href="/admin/staff/new"
           className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors"
         >
           + Add Staff
         </Link>
-      </div>
+      }
+    >
 
       {(searchParams.created || searchParams.saved) && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 text-green-800 px-3 py-2 text-sm font-medium">
           {searchParams.created ? `${searchParams.created} added.` : `${searchParams.saved} saved.`}
-        </div>
+        </p>
       )}
       {searchParams.commission === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 text-green-800 px-3 py-2 text-sm font-medium">
           Default commission updated.
-        </div>
+        </p>
       )}
       {searchParams.error === "bad_commission" && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 text-red-800 px-3 py-2 text-sm font-medium">
           Commission has to be between 0 and 100.
-        </div>
+        </p>
       )}
 
       {/* Pay basis for anyone without their own rate */}
       <form
         action={setDefaultCommission}
-        className="bg-white border border-stone-200 rounded-xl px-3 py-2 flex flex-wrap items-center gap-3"
+        className="border-t border-stone-100 bg-stone-50 px-3 py-2 flex flex-wrap items-center gap-3"
       >
         <span className="text-sm font-semibold text-stone-800">Default commission</span>
         <span className="flex items-center gap-2">
@@ -124,7 +126,7 @@ export default async function StaffPage({ searchParams }: PageProps) {
         </span>
       </form>
 
-      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+      <PageSection grow scroll padded={false}>
         {staffList.length === 0 ? (
           <div className="py-8 text-center text-stone-400 text-sm">
             No staff members found.{" "}
@@ -230,7 +232,7 @@ export default async function StaffPage({ searchParams }: PageProps) {
             </tbody>
           </table>
         )}
-      </div>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

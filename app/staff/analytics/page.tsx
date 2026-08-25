@@ -4,6 +4,7 @@ import { formatRole, formatServiceType } from "@/lib/utils";
 import { shopInsights } from "@/lib/insights";
 import InsightList from "@/components/InsightList";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -46,35 +47,44 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
   );
   const peakServices = shop.serviceMix.slice(0, 5);
   const mixTotal = shop.serviceMix.reduce((n, row) => n + row.count, 0);
+  const outcomeTotal = Math.max(shop.finished + shop.cancelled + shop.noShows, 1);
+  const outcomes = [
+    { label: "Finished", value: shop.finished, color: "bg-emerald-500", text: "text-emerald-700" },
+    { label: "Cancelled", value: shop.cancelled, color: "bg-rose-500", text: "text-rose-700" },
+    { label: "No-show", value: shop.noShows, color: "bg-amber-500", text: "text-amber-700" },
+  ].filter((outcome) => outcome.value > 0);
+  const mixColors = ["bg-sky-500", "bg-violet-500", "bg-emerald-500", "bg-rose-500", "bg-amber-500"];
 
   const headline = [
-    { label: "Finished", value: shop.finished, hint: `${shop.booked} booked` },
+    { label: "Finished", value: shop.finished, hint: `${shop.booked} booked`, tone: "border-emerald-200 bg-emerald-50/60", valueTone: "text-emerald-700" },
     {
       label: "Walk-ins",
       value: shop.walkIns,
       hint: `${shop.scheduledAppointments} pre-booked`,
+      tone: "border-sky-200 bg-sky-50/60",
+      valueTone: "text-sky-700",
     },
     {
       label: "No-show rate",
       value: percent(shop.noShowRate),
       hint: `${shop.noShows} no-shows, ${shop.cancelled} cancelled`,
+      tone: "border-amber-200 bg-amber-50/60",
+      valueTone: "text-amber-700",
     },
     {
       label: "Avg turnaround",
       value: shop.avgTurnaroundMins != null ? `${shop.avgTurnaroundMins} min` : "—",
       hint: "check-in to finished",
+      tone: "border-violet-200 bg-violet-50/60",
+      valueTone: "text-violet-700",
     },
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-bold text-stone-900">Analytics</h1>
-          <p className="text-sm text-stone-500 mt-1">
-            Last {rangeDays} days, measured from appointments and their status history.
-          </p>
-        </div>
+    <PageShell
+      title="Analytics"
+      subtitle={`Last ${rangeDays} days, measured from appointments and their status history.`}
+      actions={
         <div className="flex gap-1 text-xs">
           {RANGES.map((days) => (
             <Link
@@ -90,30 +100,27 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
             </Link>
           ))}
         </div>
-      </div>
-
+      }
+    >
       {/* What the numbers are saying */}
-      <section>
-        <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-2">
-          Insights
-        </h2>
+      <PageSection title="Insights">
         <InsightList insights={insights} />
-      </section>
+      </PageSection>
 
       {/* Headline numbers */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {headline.map(({ label, value, hint }) => (
-          <div key={label} className="bg-white border border-stone-200 rounded-xl p-4">
-            <p className="text-xl font-black text-stone-900">{value}</p>
+      <PageSection tone="muted" bodyClassName="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {headline.map(({ label, value, hint, tone, valueTone }) => (
+          <div key={label} className={`border rounded-xl p-4 ${tone}`}>
+            <p className={`text-xl font-black ${valueTone}`}>{value}</p>
             <p className="text-sm text-stone-600">{label}</p>
             <p className="text-xs text-stone-400">{hint}</p>
           </div>
         ))}
-      </div>
+      </PageSection>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Volume */}
-        <section className="bg-white border border-stone-200 rounded-xl p-4">
+        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             Finished per day
           </h2>
@@ -128,7 +135,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
                     <div
                       key={day.dayKey}
                       title={`${day.dayKey}: ${day.finished}`}
-                      className="flex-1 bg-amber-500/80 hover:bg-amber-600 rounded-t transition-colors"
+                      className="flex-1 rounded-t bg-gradient-to-t from-amber-500 via-orange-400 to-rose-400 transition-opacity hover:opacity-80"
                       style={{ height: `${Math.max((day.finished / peak) * 100, 4)}%` }}
                     />
                   );
@@ -138,12 +145,15 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
                 Busiest day {busiestDay?.dayKey} with {busiestDay?.finished} finished ·{" "}
                 {(shop.finished / rangeDays).toFixed(1)} per day on average
               </p>
+              <ul className="sr-only">
+                {shop.perDay.map((day) => <li key={day.dayKey}>{day.dayKey}: {day.finished} finished</li>)}
+              </ul>
             </>
           )}
         </section>
 
         {/* Money and mix */}
-        <section className="bg-white border border-stone-200 rounded-xl p-4">
+        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             Service mix
           </h2>
@@ -151,7 +161,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
             <p className="text-sm text-stone-400">No services booked in this range.</p>
           ) : (
             <ul className="space-y-2">
-              {peakServices.map((row) => (
+              {peakServices.map((row, index) => (
                 <li key={row.serviceType} className="text-sm">
                   <div className="flex justify-between text-stone-700">
                     <span>{formatServiceType(row.serviceType)}</span>
@@ -159,7 +169,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
                   </div>
                   <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden mt-1">
                     <div
-                      className="h-full bg-stone-400"
+                      className={`h-full rounded-full ${mixColors[index % mixColors.length]}`}
                       style={{ width: `${mixTotal === 0 ? 0 : (row.count / mixTotal) * 100}%` }}
                     />
                   </div>
@@ -185,10 +195,33 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
             </p>
           </div>
         </section>
-      </div>
+      </PageSection>
+
+      {/* Appointment outcomes */}
+      <PageSection title="Appointment outcomes" hint={`Last ${rangeDays} days`}>
+        {outcomes.length === 0 ? (
+          <p className="mt-3 text-sm text-stone-400">No appointment outcomes in this range yet.</p>
+        ) : (
+          <>
+            <div className="mt-4 flex h-4 overflow-hidden rounded-full bg-stone-100" aria-hidden="true">
+              {outcomes.map((outcome) => (
+                <div key={outcome.label} className={outcome.color} style={{ width: `${(outcome.value / outcomeTotal) * 100}%` }} />
+              ))}
+            </div>
+            <ul className="mt-3 grid gap-2 sm:grid-cols-3">
+              {outcomes.map((outcome) => (
+                <li key={outcome.label} className="flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2 text-stone-600"><span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${outcome.color}`} />{outcome.label}</span>
+                  <span className={`font-black ${outcome.text}`}>{outcome.value} <span className="text-xs font-medium">{percent(outcome.value / outcomeTotal)}</span></span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </PageSection>
 
       {/* Customers */}
-      <section className="bg-white border border-stone-200 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <PageSection tone="muted" bodyClassName="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div>
           <p className="text-xl font-black text-stone-900">{shop.newCustomers}</p>
           <p className="text-xs text-stone-500">New customers</p>
@@ -205,14 +238,11 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           <p className="text-xl font-black text-stone-900">{shop.cancelled}</p>
           <p className="text-xs text-stone-500">Cancelled</p>
         </div>
-      </section>
+      </PageSection>
 
       {/* Leaderboard */}
-      <section>
-        <div className="flex items-baseline justify-between gap-3 flex-wrap mb-2">
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">
-            Groomer leaderboard
-          </h2>
+      <PageSection title="Groomer leaderboard">
+        <div className="flex items-baseline justify-end gap-3 flex-wrap mb-2">
           <p className="text-xs text-stone-500">
             Estimated commission ·{" "}
             <span className="font-semibold text-stone-800">
@@ -229,11 +259,11 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           </p>
         </div>
         {ranked.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+          <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4 text-center text-stone-400 text-sm">
             No finished visits credited to a groomer yet.
           </div>
         ) : (
-          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <div className="border border-stone-200 rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-stone-50 text-stone-500 text-[10px] uppercase tracking-widest">
@@ -317,7 +347,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           groomer&apos;s commission on the list price of the services they finished: a floor, not a
           payroll figure, since real tickets move with pet size and surcharges.
         </p>
-      </section>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

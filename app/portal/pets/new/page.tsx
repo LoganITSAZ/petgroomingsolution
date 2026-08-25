@@ -9,13 +9,13 @@ export const metadata = { title: "Add a pet" };
 
 export default async function NewPetPage() {
   const session = await auth();
-  if (!session?.user) redirect("/login?type=customer");
+  if (!session?.user || session.user.userType !== "customer") redirect("/login?type=customer");
 
   async function createPet(formData: FormData) {
     "use server";
 
     const session = await auth();
-    if (!session?.user) redirect("/login?type=customer");
+    if (!session?.user || session.user.userType !== "customer") redirect("/login?type=customer");
     const customerId = session.user.id;
 
     const name = formData.get("name") as string;

@@ -5,6 +5,7 @@ import { livePromotionsByService } from "@/lib/promotions";
 import { auth } from "@/lib/auth";
 import { currentStaffIsAdmin } from "@/lib/staff-roles";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -57,38 +58,39 @@ export default async function StaffServicesPage() {
   const promoCount = Array.from(promotions.values()).reduce((n, list) => n + list.length, 0);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-black text-stone-900">Services</h1>
-          <p className="text-sm text-stone-500 mt-1">
-            {services.length} service{services.length !== 1 ? "s" : ""} offered ·{" "}
-            {walkIns.length} available as walk-ins
-            {promoCount > 0 && ` · ${promoCount} running promotion${promoCount !== 1 ? "s" : ""}`}
-            {" · tap one to read it"}
-          </p>
-        </div>
-        {isAdmin && (
+    <PageShell
+      title="Services"
+      subtitle={
+        <>
+          {services.length} service{services.length !== 1 ? "s" : ""} offered ·{" "}
+          {walkIns.length} available as walk-ins
+          {promoCount > 0 && ` · ${promoCount} running promotion${promoCount !== 1 ? "s" : ""}`}
+          {" · tap one to read it"}
+        </>
+      }
+      actions={
+        isAdmin ? (
           <Link
             href="/admin/services"
             className="text-sm text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
           >
             Edit pricing →
           </Link>
-        )}
-      </div>
-
+        ) : null
+      }
+    >
       {services.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-6 text-center text-stone-400 text-sm">
+        <PageSection grow className="text-center text-stone-400 text-sm">
           No services are listed yet.
-        </div>
+        </PageSection>
       ) : (
         groups.map((group) => (
-          <section key={group.heading}>
-            <h2 className="font-bold text-stone-700 mb-1.5 text-xs uppercase tracking-widest">
-              {group.heading}
-            </h2>
-            <div className="bg-white border border-stone-200 rounded-xl divide-y divide-stone-100">
+          <PageSection
+            key={group.heading}
+            title={group.heading}
+            padded={false}
+            bodyClassName="divide-y divide-stone-100 border-t border-stone-100 mt-2"
+          >
               {group.items.map((service) => {
                 const offers = promotions.get(service.id) ?? [];
                 const booked = bookedByService.get(service.id) ?? 0;
@@ -195,17 +197,16 @@ export default async function StaffServicesPage() {
                   </details>
                 );
               })}
-            </div>
-          </section>
+          </PageSection>
         ))
       )}
 
       {surcharges.length > 0 && (
-        <section>
-          <h2 className="font-bold text-stone-700 mb-1.5 text-xs uppercase tracking-widest">
-            Additional fees
-          </h2>
-          <div className="bg-white border border-stone-200 rounded-xl divide-y divide-stone-100">
+        <PageSection
+          title="Additional fees"
+          padded={false}
+          bodyClassName="divide-y divide-stone-100 border-t border-stone-100 mt-2"
+        >
             {surcharges.map((surcharge) => (
               <div key={surcharge.id} className="px-3 py-2 flex items-center justify-between gap-3">
                 <span className="text-stone-700">
@@ -221,9 +222,8 @@ export default async function StaffServicesPage() {
                 </span>
               </div>
             ))}
-          </div>
-        </section>
+        </PageSection>
       )}
-    </div>
+    </PageShell>
   );
 }

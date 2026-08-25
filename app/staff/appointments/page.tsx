@@ -11,7 +11,12 @@ import {
 } from "@/lib/utils";
 import { checkInWithKennel, moveStatus } from "./actions";
 import CheckInDialog from "@/components/CheckInDialog";
-import { KENNELABLE_STATUSES, compartmentCapacity } from "@/lib/kennels";
+import {
+  KENNELABLE_STATUSES,
+  compartmentCapacity,
+  compartmentRoom,
+  householdCompartmentLimit,
+} from "@/lib/kennels";
 import {
   ARRIVAL_CLASS,
   ARRIVAL_LABEL,
@@ -22,6 +27,7 @@ import {
 } from "@/lib/arrivals";
 import { PICKUP_LEVEL_CLASS, PICKUP_LEVEL_LABEL, formatWait, pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
+import { PageShell, PageSection, Panel, StatStrip } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -55,25 +61,10 @@ const IN_SHOP: AppointmentStatus[] = [
 
 const VIEWS = {
   day: "Day",
-  week: "Next 7 days",
-  upcoming: "All upcoming",
+  week: "7 Day",
+  month: "30 Day",
 } as const;
 type View = keyof typeof VIEWS;
-
-function AppointmentSummaryCard({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-white border border-stone-200 rounded-lg px-3 py-2">
-      <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1">{title}</h2>
-      {children}
-    </div>
-  );
-}
 
 const GROUPS = {
   active: "Active",
@@ -139,6 +130,7 @@ interface PageProps {
 
 export default async function StaffAppointmentsPage({ searchParams }: PageProps) {
   const todayKey = shopDayKey();
+  const tomorrowKey = shiftDay(todayKey, 1);
 
   const filters: Filters = {
     view: (searchParams.view as View) in VIEWS ? (searchParams.view as View) : "day",
@@ -158,7 +150,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
       ? { gte: dayStart, lt: dayEnd }
       : filters.view === "week"
         ? { gte: dayStart, lt: new Date(dayStart.getTime() + 7 * 86400000) }
-        : { gte: dayStart };
+        : { gte: dayStart, lt: new Date(dayStart.getTime() + 30 * 86400000) };
 
   const statuses = GROUP_FILTER[filters.group];
 
@@ -180,8 +172,18 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
       : {}),
   };
 
-  const [appointments, groomers, stations, kennels, perCompartment, arrivals, counts, operationalAppointments, pickupList] =
-    await Promise.all([
+  const [
+    appointments,
+    groomers,
+    stations,
+    kennels,
+    perCompartment,
+    householdMax,
+    arrivals,
+    counts,
+    operationalAppointments,
+    pickupList,
+  ] = await Promise.all([
     prisma.appointment.findMany({
       where,
       include: {
@@ -211,11 +213,16 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
         id: true,
         label: true,
         station: { select: { name: true } },
-        _count: { select: { appointments: { where: { status: { in: KENNELABLE_STATUSES } } } } },
+        // Who is inside decides whether a household may share this door.
+        appointments: {
+          where: { status: { in: KENNELABLE_STATUSES } },
+          select: { customerId: true },
+        },
       },
       orderBy: [{ station: { name: "asc" } }, { row: "asc" }, { column: "asc" }],
     }),
     compartmentCapacity(),
+    householdCompartmentLimit(),
     arrivalThresholds(),
     prisma.appointment.groupBy({
       by: ["status"],
@@ -259,16 +266,31 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
     (appointment) => IN_SHOP.includes(appointment.status) && !appointment.stationId
   );
 
-  // Compartments with room, offered when a pet arrives.
-  const openKennels = kennels
-    .filter((kennel) => kennel._count.appointments < perCompartment)
-    .map((kennel) => ({
-      id: kennel.id,
-      label: kennel.label,
-      stationName: kennel.station.name,
-      inside: kennel._count.appointments,
-      capacity: perCompartment,
-    }));
+  /*
+   * Compartments with room, offered when a pet arrives. Room is per customer,
+   * not per door: a door already holding this household's dogs still has space
+   * for another of theirs, and none for anyone else's.
+   */
+  const kennelChoicesFor = (customerId: string) =>
+    kennels
+      .map((kennel) => ({
+        kennel,
+        room: compartmentRoom(
+          kennel.appointments.map((occupant) => occupant.customerId),
+          customerId,
+          perCompartment,
+          householdMax
+        ),
+      }))
+      .filter(({ room }) => room.ok)
+      .map(({ kennel, room }) => ({
+        id: kennel.id,
+        label: kennel.label,
+        stationName: kennel.station.name,
+        inside: room.inside,
+        capacity: room.limit,
+        sharedHousehold: room.sharedHousehold,
+      }));
   // Filters stay collapsed until asked for, but never hide the fact that some
   // are applied.
   const activeFilters = [
@@ -281,154 +303,171 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
   const selectClass =
     "border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-stone-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400";
 
+  /*
+   * Today and Tomorrow are the same day view on two dates, so the arrows keep
+   * working from either — a separate view key would only duplicate them.
+   */
+  const tabs: { label: string; patch: Partial<Filters>; active: boolean }[] = [
+    {
+      label: "Today",
+      patch: { view: "day", date: todayKey },
+      active: filters.view === "day" && filters.date === todayKey,
+    },
+    {
+      label: "Tomorrow",
+      patch: { view: "day", date: tomorrowKey },
+      active: filters.view === "day" && filters.date === tomorrowKey,
+    },
+    { label: VIEWS.week, patch: { view: "week" }, active: filters.view === "week" },
+    { label: VIEWS.month, patch: { view: "month" }, active: filters.view === "month" },
+  ];
+
+  const viewTabs = (
+    <div className="flex items-center gap-2">
+      {tabs.map((tab) => (
+        <Link
+          key={tab.label}
+          href={`/staff/appointments${queryString(filters, tab.patch)}`}
+          className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+            tab.active
+              ? "bg-stone-800 text-white"
+              : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+          }`}
+        >
+          {tab.label}
+        </Link>
+      ))}
+      <Link
+        href="/staff/appointments/new"
+        className="bg-amber-700 hover:bg-amber-800 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+      >
+        + New
+      </Link>
+    </div>
+  );
+
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-black text-stone-900">Appointments</h1>
-          <span className="text-sm text-stone-500">{appointments.length} shown</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {(Object.keys(VIEWS) as View[]).map((view) => (
-            <Link
-              key={view}
-              href={`/staff/appointments${queryString(filters, { view })}`}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
-                filters.view === view
-                  ? "bg-stone-800 text-white"
-                  : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-              }`}
-            >
-              {VIEWS[view]}
-            </Link>
-          ))}
-          <Link
-            href="/staff/appointments/new"
-            className="bg-amber-700 hover:bg-amber-800 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
-          >
-            + New
-          </Link>
-        </div>
-      </div>
-
-      {/* Day navigation: arrows at the edges, the day itself centred */}
-      <div className="bg-white border border-stone-200 rounded-xl px-2 py-1.5 flex items-center">
-        {filters.view === "day" ? (
-          <>
-            <Link
-              href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, -1) })}`}
-              aria-label="Previous day"
-              className="px-3 py-1 rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-800"
-            >
-              ←
-            </Link>
-            <span className="flex-1 text-center text-sm font-semibold text-stone-800">
-              {filters.date === todayKey ? (
-                <>
-                  Today —{" "}
-                  {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
-                </>
-              ) : (
-                <Link
-                  href={`/staff/appointments${queryString(filters, { date: todayKey })}`}
-                  title="Back to today"
-                  className="hover:text-amber-700"
-                >
-                  {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
-                </Link>
-              )}
-            </span>
-            <Link
-              href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, 1) })}`}
-              aria-label="Next day"
-              className="px-3 py-1 rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-800"
-            >
-              →
-            </Link>
-          </>
-        ) : (
-          <span className="flex-1 text-center text-sm font-semibold text-stone-800">
-            {VIEWS[filters.view]} from{" "}
-            {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
-          </span>
-        )}
-      </div>
-
-      {/* Filters — collapsed by default, opened when any are applied */}
-      <details open={activeFilters > 0} className="bg-white border border-stone-200 rounded-xl">
-        <summary className="px-3 py-2 cursor-pointer text-sm font-semibold text-stone-700 flex items-center gap-2">
-          Filters
-          {activeFilters > 0 && (
-            <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-              {activeFilters}
+    /*
+      One card, not three. The day being read, the filters that narrow it and
+      the counts for the range are a single control — split across separate
+      cards they read as unrelated things floating on the page.
+    */
+    <PageShell title="Appointments" subtitle={`${appointments.length} shown`}>
+        {/* The day being read and the views that change it, on one line */}
+        <div className="px-2 py-1.5 flex items-center gap-2 flex-wrap">
+          <div className="flex flex-1 items-center gap-1">
+          {filters.view === "day" ? (
+            <>
+              <Link
+                href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, -1) })}`}
+                aria-label="Previous day"
+                className="px-2 py-1 rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+              >
+                ←
+              </Link>
+              <span className="text-sm font-semibold text-stone-800">
+                {filters.date === todayKey ? (
+                  <>
+                    Today —{" "}
+                    {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
+                  </>
+                ) : (
+                  <Link
+                    href={`/staff/appointments${queryString(filters, { date: todayKey })}`}
+                    title="Back to today"
+                    className="hover:text-amber-700"
+                  >
+                    {filters.date === tomorrowKey && "Tomorrow — "}
+                    {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
+                  </Link>
+                )}
+              </span>
+              <Link
+                href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, 1) })}`}
+                aria-label="Next day"
+                className="px-2 py-1 rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+              >
+                →
+              </Link>
+            </>
+          ) : (
+            <span className="flex-1 text-sm font-semibold text-stone-800">
+              {VIEWS[filters.view]} from{" "}
+              {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
             </span>
           )}
-        </summary>
-        <form method="GET" className="px-3 pb-3 pt-1 border-t border-stone-100 flex flex-wrap items-center gap-2">
-        <input type="hidden" name="view" value={filters.view} />
-        <input
-          name="q"
-          type="search"
-          aria-label="Search pet, owner or phone"
-          defaultValue={filters.q}
-          placeholder="Pet, owner or phone…"
-          className={`${selectClass} w-52`}
-        />
-        <input name="date" type="date" aria-label="Filter by date" defaultValue={filters.date} className={selectClass} />
-        <select name="group" aria-label="Group by" defaultValue={filters.group} className={selectClass}>
-          {Object.entries(GROUPS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select name="staffId" aria-label="Filter by groomer" defaultValue={filters.staffId} className={selectClass}>
-          <option value="">Any groomer</option>
-          {groomers.map((groomer) => (
-            <option key={groomer.id} value={groomer.id}>
-              {groomer.name}
-            </option>
-          ))}
-        </select>
-        <select name="stationId" aria-label="Filter by station" defaultValue={filters.stationId} className={selectClass}>
-          <option value="">Any station</option>
-          {stations.map((station) => (
-            <option key={station.id} value={station.id}>
-              {station.name}
-            </option>
-          ))}
-        </select>
-        <select name="type" aria-label="Filter by visit type" defaultValue={filters.type} className={selectClass}>
-          <option value="">Any type</option>
-          <option value={AppointmentType.APPOINTMENT}>Booked</option>
-          <option value={AppointmentType.WALK_IN}>Walk-in</option>
-        </select>
-        <button
-          type="submit"
-          className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-1.5 rounded-lg text-sm font-semibold"
-        >
-          Apply
-        </button>
-        {listQuery && (
-          <Link href="/staff/appointments" className="text-xs text-stone-400 hover:text-stone-600 underline">
-            Reset
-          </Link>
-        )}
-        </form>
-      </details>
+          </div>
+          {viewTabs}
+        </div>
 
-      {/* Counts for the range, regardless of the current filter */}
-      <div className="flex flex-wrap gap-x-5 gap-y-0.5 text-sm text-stone-500 px-1">
-        {summary.map(({ label, value }) => (
-          <span key={label}>
-            <span className="font-bold text-stone-800">{value}</span> {label.toLowerCase()}
-          </span>
-        ))}
-      </div>
+        {/* Filters — collapsed by default, opened when any are applied */}
+        <details open={activeFilters > 0} className="border-t border-stone-100">
+          <summary className="px-3 py-2 cursor-pointer text-sm font-semibold text-stone-700 flex items-center gap-2">
+            Filters
+            {activeFilters > 0 && (
+              <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {activeFilters}
+              </span>
+            )}
+          </summary>
+          <form method="GET" className="px-3 pb-3 pt-1 border-t border-stone-100 flex flex-wrap items-center gap-2">
+            <input type="hidden" name="view" value={filters.view} />
+            <input
+              name="q"
+              type="search"
+              aria-label="Search pet, owner or phone"
+              defaultValue={filters.q}
+              placeholder="Pet, owner or phone…"
+              className={`${selectClass} w-52`}
+            />
+            <input name="date" type="date" aria-label="Filter by date" defaultValue={filters.date} className={selectClass} />
+            <select name="group" aria-label="Group by" defaultValue={filters.group} className={selectClass}>
+              {Object.entries(GROUPS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <select name="staffId" aria-label="Filter by groomer" defaultValue={filters.staffId} className={selectClass}>
+              <option value="">Any groomer</option>
+              {groomers.map((groomer) => (
+                <option key={groomer.id} value={groomer.id}>
+                  {groomer.name}
+                </option>
+              ))}
+            </select>
+            <select name="stationId" aria-label="Filter by station" defaultValue={filters.stationId} className={selectClass}>
+              <option value="">Any station</option>
+              {stations.map((station) => (
+                <option key={station.id} value={station.id}>
+                  {station.name}
+                </option>
+              ))}
+            </select>
+            <select name="type" aria-label="Filter by visit type" defaultValue={filters.type} className={selectClass}>
+              <option value="">Any type</option>
+              <option value={AppointmentType.APPOINTMENT}>Booked</option>
+              <option value={AppointmentType.WALK_IN}>Walk-in</option>
+            </select>
+            <button
+              type="submit"
+              className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-1.5 rounded-lg text-sm font-semibold"
+            >
+              Apply
+            </button>
+            {listQuery && (
+              <Link href="/staff/appointments" className="text-xs text-stone-400 hover:text-stone-600 underline">
+                Reset
+              </Link>
+            )}
+          </form>
+        </details>
 
-      <section className="grid gap-2 lg:grid-cols-3">
-        <AppointmentSummaryCard title={`Waiting for pickup (${pickupList.pets.length})`}>
+        {/* Counts for the range, regardless of the current filter */}
+        <StatStrip stats={summary} />
+
+        <PageSection className="grid gap-2 lg:grid-cols-3">
+        <Panel title={`Waiting for pickup (${pickupList.pets.length})`}>
           {pickupList.pets.length === 0 ? (
             <p className="text-sm text-stone-400">Nobody waiting.</p>
           ) : (
@@ -445,39 +484,38 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
               ))}
             </ul>
           )}
-        </AppointmentSummaryCard>
-        <AppointmentSummaryCard title={`In the shop, no station (${noStation.length})`}>
+        </Panel>
+        <Panel title={`In the shop, no station (${noStation.length})`}>
           {noStation.length === 0 ? <p className="text-sm text-stone-400">Everyone is at a station.</p> : (
             <ul className="space-y-0.5 text-sm">
               {noStation.map((appointment) => <li key={appointment.id}><Link href={`/staff/appointments/${appointment.id}`} className="font-semibold hover:text-amber-700">{appointment.pet.name}</Link></li>)}
             </ul>
           )}
-        </AppointmentSummaryCard>
-        <AppointmentSummaryCard title={`Arriving next (${arrivingNext.length})`}>
+        </Panel>
+        <Panel title={`Arriving next (${arrivingNext.length})`}>
           {arrivingNext.length === 0 ? <p className="text-sm text-stone-400">Nothing else booked today.</p> : (
             <ul className="space-y-0.5 text-sm">
               {arrivingNext.map((appointment) => <li key={appointment.id}><Link href={`/staff/appointments/${appointment.id}`} className="flex items-center justify-between gap-2 hover:text-amber-700"><span className="font-semibold truncate">{appointment.pet.name}</span><span className="shrink-0 text-stone-500">{formatShopTime(appointment.scheduledAt)}</span></Link></li>)}
             </ul>
           )}
-        </AppointmentSummaryCard>
-      </section>
+        </Panel>
+        </PageSection>
 
-      {searchParams.error === "not_found" && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
-          That appointment no longer exists.
-        </div>
-      )}
+        {searchParams.error === "not_found" && (
+          <div className="mx-3 mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-red-800 text-sm font-medium">
+            That appointment no longer exists.
+          </div>
+        )}
 
-      {/* List */}
-      {appointments.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
-          Nothing matches those filters.
-        </div>
-      ) : (
-        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
+        {/* List — takes whatever height is left and scrolls inside the card */}
+        {appointments.length === 0 ? (
+          <PageSection grow className="text-center text-stone-400 text-sm">
+            Nothing matches those filters.
+          </PageSection>
+        ) : (
+          <PageSection grow scroll padded={false}>
             <table className="w-full text-sm text-center">
-              <thead className="bg-stone-50 text-stone-500 text-[10px] uppercase tracking-widest">
+              <thead className="bg-stone-50 text-stone-500 text-[10px] uppercase tracking-widest sticky top-0 z-10">
                 <tr>
                   <th scope="col" className="px-3 py-2">Status</th>
                   <th scope="col" className="px-3 py-2">When</th>
@@ -580,7 +618,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
                             appointmentId={appt.id}
                             petName={appt.pet.name}
                             ownerName={`${appt.customer.firstName} ${appt.customer.lastName}`}
-                            kennels={openKennels}
+                            kennels={kennelChoicesFor(appt.customer.id)}
                             listQuery={listQuery}
                             needsKennel={appt.needsKennel}
                           />
@@ -606,14 +644,13 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
                 })}
               </tbody>
             </table>
-          </div>
-          {appointments.length === 300 && (
-            <p className="px-3 py-2 border-t border-stone-100 text-xs text-stone-400">
-              Showing the first 300 — narrow the range or filters to see more.
-            </p>
-          )}
-        </div>
-      )}
-    </div>
+          </PageSection>
+        )}
+        {appointments.length === 300 && (
+          <p className="px-3 py-2 border-t border-stone-100 text-xs text-stone-400">
+            Showing the first 300 — narrow the range or filters to see more.
+          </p>
+        )}
+    </PageShell>
   );
 }

@@ -67,6 +67,10 @@ model SystemConfig {
   // Groom tables and bathing stations always hold exactly one pet; only a
   // kennel compartment can be shared.
   kennelCapacityPerCompartment Int @default(1)
+  // Pets from ONE household may share a door beyond the rule above: a family
+  // booking several small dogs is kennelled together on purpose. Unrelated
+  // pets never exceed kennelCapacityPerCompartment.
+  kennelHouseholdMaxPerCompartment Int @default(5)
 
   // Scheduling: the week past which scheduled hours read as overtime.
   overtimeWeeklyHours Int @default(40)
@@ -176,7 +180,8 @@ model StaffPresenceEvent {
 }
 
 enum StaffRole {
-  ADMIN // full access, including the admin panel
+  ADMIN // full access, including the technical screens
+  MANAGER // runs the shop: everything in the admin panel except the technical screens
   GROOMER // grooms pets
   BATHER // bathing and prep
 }

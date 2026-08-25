@@ -7,7 +7,7 @@ import {
   broadcastKennelBoard,
   syncKennelGrid,
 } from "@/lib/kennels";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireManager } from "@/lib/auth-guards";
 import { KENNELABLE_STATUSES } from "@/lib/kennels";
 import { StaffRole, StationRole } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -73,7 +73,7 @@ function parseStation(formData: FormData): ParsedStation | { error: string } {
 }
 
 export async function createStation(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const parsed = parseStation(formData);
   if ("error" in parsed) redirect(`/admin/stations/new?error=${parsed.error}`);
@@ -90,7 +90,7 @@ export async function createStation(formData: FormData): Promise<void> {
 }
 
 export async function updateStation(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const id = (formData.get("id") as string | null) ?? "";
   const existing = await prisma.station.findUnique({
@@ -144,7 +144,7 @@ export async function updateStation(formData: FormData): Promise<void> {
  * kennel bank is the same size as the others.
  */
 export async function saveCapacityRules(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const raw = ((formData.get("kennelCapacityPerCompartment") as string | null) ?? "").trim();
   const perCompartment = Number(raw);
@@ -152,9 +152,27 @@ export async function saveCapacityRules(formData: FormData): Promise<void> {
     redirect("/admin/stations?error=invalid_capacity");
   }
 
+  /*
+   * The household allowance is what a family's dogs may share, so it is only
+   * ever equal to or larger than the general rule — a smaller number would be
+   * a setting that can never apply.
+   */
+  const householdRaw = ((formData.get("kennelHouseholdMaxPerCompartment") as string | null) ?? "").trim();
+  const householdMax = Number(householdRaw);
+  if (
+    !Number.isInteger(householdMax) ||
+    householdMax < perCompartment ||
+    householdMax > 8
+  ) {
+    redirect("/admin/stations?error=invalid_household");
+  }
+
   await prisma.systemConfig.update({
     where: { id: "global" },
-    data: { kennelCapacityPerCompartment: perCompartment },
+    data: {
+      kennelCapacityPerCompartment: perCompartment,
+      kennelHouseholdMaxPerCompartment: householdMax,
+    },
   });
 
   revalidatePath("/admin/stations");

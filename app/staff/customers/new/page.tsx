@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 import { CoatType, Species, StaffRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatCoatType, formatSpecies } from "@/lib/utils";
@@ -35,24 +36,20 @@ export default async function NewCustomerPage({
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
 
   return (
-    <div className="max-w-2xl space-y-3">
-      <Link
-        href="/staff/customers"
-        className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800"
-      >
-        ← Back to Customers
-      </Link>
-
-      <h1 className="text-xl font-black text-stone-900">New Customer</h1>
+    <PageShell
+      back={{ href: "/staff/customers", label: "Back to Customers" }}
+      title="New Customer"
+      className="max-w-2xl flex-none"
+    >
 
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
-        </div>
+        </p>
       )}
 
-      <form action={createCustomer} encType="multipart/form-data" className="space-y-3">
-        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+      <form action={createCustomer} encType="multipart/form-data">
+        <PageSection bodyClassName="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="text-sm">
               <span className="block text-stone-600 mb-1">
@@ -118,9 +115,9 @@ export default async function NewCustomerPage({
               </span>
             </label>
           </div>
-        </div>
+        </PageSection>
 
-        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+        <PageSection bodyClassName="space-y-3">
           <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">
             Approved alternate (optional)
           </p>
@@ -141,9 +138,9 @@ export default async function NewCustomerPage({
               <input name="altContactEmail" type="email" className={fieldClass} />
             </label>
           </div>
-        </div>
+        </PageSection>
 
-        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
+        <PageSection bodyClassName="space-y-3">
           <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">
             First pet (optional)
           </p>
@@ -195,9 +192,9 @@ export default async function NewCustomerPage({
               />
             </label>
           </div>
-        </div>
+        </PageSection>
 
-        <div className="flex justify-end gap-3">
+        <PageSection tone="muted" bodyClassName="flex justify-end gap-3">
           <Link
             href="/staff/customers"
             className="px-4 py-2 rounded-lg text-sm font-semibold text-stone-600 hover:bg-stone-100"
@@ -210,8 +207,8 @@ export default async function NewCustomerPage({
           >
             Create Customer
           </button>
-        </div>
+        </PageSection>
       </form>
-    </div>
+    </PageShell>
   );
 }

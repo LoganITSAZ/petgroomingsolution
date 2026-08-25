@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireManager } from "@/lib/auth-guards";
 import {
   parseDollarsToCents,
   roundToStep,
@@ -118,7 +118,7 @@ function parseService(formData: FormData): ServiceInput | { error: string } {
 }
 
 export async function createService(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
   const parsed = parseService(formData);
   if ("error" in parsed) done(`?error=${parsed.error}`);
 
@@ -130,7 +130,7 @@ export async function createService(formData: FormData): Promise<void> {
 }
 
 export async function updateService(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
   const id = (formData.get("id") as string | null) ?? "";
   const parsed = parseService(formData);
   if ("error" in parsed) done(`?error=${parsed.error}`);
@@ -143,7 +143,7 @@ export async function updateService(formData: FormData): Promise<void> {
 }
 
 export async function deleteService(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
   const id = (formData.get("id") as string | null) ?? "";
 
   const booked = await prisma.appointmentService.count({ where: { serviceId: id } });
@@ -158,7 +158,7 @@ export async function deleteService(formData: FormData): Promise<void> {
 }
 
 export async function saveSurcharge(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const id = ((formData.get("id") as string | null) ?? "").trim();
   const label = ((formData.get("label") as string | null) ?? "").trim();
@@ -182,7 +182,7 @@ export async function saveSurcharge(formData: FormData): Promise<void> {
 }
 
 export async function deleteSurcharge(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
   const id = (formData.get("id") as string | null) ?? "";
   await prisma.surcharge.delete({ where: { id } });
   done("?deleted=1");
@@ -193,7 +193,7 @@ export async function deleteSurcharge(formData: FormData): Promise<void> {
  * base pricing: one number reprices the shop, and the size ladders follow.
  */
 export async function adjustBasePrices(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const raw = ((formData.get("percent") as string | null) ?? "").trim().replace(/%$/, "");
   const percent = Number(raw);

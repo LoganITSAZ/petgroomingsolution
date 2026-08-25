@@ -1,13 +1,13 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireManager } from "@/lib/auth-guards";
 import { THEME_PRESETS, hexToRgbTriplet } from "@/lib/themes";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export async function saveAppearance(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const preset = ((formData.get("themePreset") as string | null) ?? "default").trim();
   if (!THEME_PRESETS.some((theme) => theme.id === preset)) {

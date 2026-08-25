@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireManager } from "@/lib/auth-guards";
 import { StaffRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
@@ -61,7 +61,7 @@ function parseStaff(formData: FormData): StaffInput | { error: string } {
 }
 
 export async function createStaff(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const parsed = parseStaff(formData);
   if ("error" in parsed) redirect(`/admin/staff/new?error=${parsed.error}`);
@@ -80,7 +80,7 @@ export async function createStaff(formData: FormData): Promise<void> {
 }
 
 export async function updateStaff(formData: FormData): Promise<void> {
-  const adminId = await requireAdmin();
+  const adminId = await requireManager();
 
   const id = (formData.get("id") as string | null) ?? "";
   const parsed = parseStaff(formData);
@@ -114,7 +114,7 @@ export async function updateStaff(formData: FormData): Promise<void> {
 
 /** Shop-wide fallback used by anyone without their own rate. */
 export async function setDefaultCommission(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const raw = ((formData.get("defaultCommissionPercent") as string | null) ?? "")
     .trim()

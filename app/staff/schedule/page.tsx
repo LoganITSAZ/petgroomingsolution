@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { StaffRole } from "@prisma/client";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 import { auth } from "@/lib/auth";
 import { currentStaffIsAdmin } from "@/lib/staff-roles";
 import { getConfig } from "@/lib/config";
@@ -70,27 +71,27 @@ export default async function StaffSchedulePage({ searchParams }: PageProps) {
   const nextWeek = shopDayKey(new Date(weekStart.getTime() + 7 * DAY_MS));
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-bold text-stone-900">Schedule</h1>
-          <p className="text-sm text-stone-500 mt-1">
-            Who is on this week, across {staff.length} groomer{staff.length === 1 ? "" : "s"} and
-            bathers.
-            {isAdmin && (
-              <>
-                {" "}
-                <Link
-                  href={`/admin/schedule?week=${shopDayKey(weekStart)}`}
-                  className="text-amber-700 hover:text-amber-900 underline"
-                >
-                  Edit this week
-                </Link>
-              </>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <PageShell
+      title="Schedule"
+      subtitle={
+        <>
+          Who is on this week, across {staff.length} groomer{staff.length === 1 ? "" : "s"} and
+          bathers.
+          {isAdmin && (
+            <>
+              {" "}
+              <Link
+                href={`/admin/schedule?week=${shopDayKey(weekStart)}`}
+                className="text-amber-700 hover:text-amber-900 underline"
+              >
+                Edit this week
+              </Link>
+            </>
+          )}
+        </>
+      }
+      actions={
+        <>
           <Link
             href={`/staff/schedule?week=${prevWeek}`}
             aria-label="Previous week"
@@ -109,12 +110,12 @@ export default async function StaffSchedulePage({ searchParams }: PageProps) {
           >
             →
           </Link>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {/* Your own week first — it is why most people open this page. */}
       {mine && (
-        <div className="bg-white border border-stone-200 rounded-xl p-3">
+        <PageSection tone="muted">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">Your week</p>
@@ -144,15 +145,15 @@ export default async function StaffSchedulePage({ searchParams }: PageProps) {
               ))}
             </ul>
           )}
-        </div>
+        </PageSection>
       )}
 
       {staff.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-6 text-center text-stone-400 text-sm">
+        <PageSection grow className="text-center text-stone-400 text-sm">
           Nobody is on the rota yet.
-        </div>
+        </PageSection>
       ) : (
-        <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
+        <PageSection grow scroll padded={false} bodyClassName="overflow-x-auto">
           <table className="w-full text-sm">
             <caption className="sr-only">
               Shifts for the week of {formatShopDate(weekStart, { month: "long", day: "numeric" })}
@@ -237,13 +238,13 @@ export default async function StaffSchedulePage({ searchParams }: PageProps) {
               })}
             </tbody>
           </table>
-        </div>
+        </PageSection>
       )}
 
-      <p className="text-xs text-stone-500">
+      <p className="border-t border-stone-100 px-3 py-2 text-xs text-stone-500">
         Hours are what is scheduled, not what was worked — a week reads as overtime past{" "}
         {config.overtimeWeeklyHours}h, set in Shop Settings.
       </p>
-    </div>
+    </PageShell>
   );
 }

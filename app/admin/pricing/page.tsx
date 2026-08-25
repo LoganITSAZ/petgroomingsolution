@@ -3,6 +3,7 @@ import { describeRate, listPricingTiers, quoteFor, tierCustomerCounts } from "@/
 import { formatCents } from "@/lib/pricing";
 import { deletePricingTier, savePricingTier } from "./actions";
 import TierFields from "./TierFields";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -37,10 +38,10 @@ export default async function PricingTiersPage({ searchParams }: PageProps) {
   const assigned = Array.from(counts.values()).reduce((sum, n) => sum + n, 0);
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-xl font-bold text-stone-900">Pricing Tiers</h1>
-        <p className="text-sm text-stone-500 mt-1">
+    <PageShell
+      title="Pricing Tiers"
+      subtitle={
+        <>
           Rates below the published price, for legacy customers and anyone else the shop has agreed
           a number with. {tiers.length} rate{tiers.length !== 1 ? "s" : ""}, {assigned} customer
           {assigned !== 1 ? "s" : ""} assigned. Put a customer on one from their{" "}
@@ -48,35 +49,36 @@ export default async function PricingTiersPage({ searchParams }: PageProps) {
             profile
           </Link>
           .
-        </p>
-      </div>
+        </>
+      }
+    >
 
       {searchParams.saved && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Saved {searchParams.saved}.
-        </div>
+        </p>
       )}
       {searchParams.deleted != null && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Rate removed.{" "}
           {Number(searchParams.deleted) > 0
             ? `${searchParams.deleted} customer${Number(searchParams.deleted) !== 1 ? "s are" : " is"} back on list prices. Visits already quoted keep the price they were given.`
             : "Nobody was on it."}
-        </div>
+        </p>
       )}
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
-        </div>
+        </p>
       )}
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-sm text-amber-800">
+      <p className="border-t border-stone-100 bg-amber-50 px-3 py-2 text-sm text-amber-800">
         A rate comes off the visit total at the moment it is quoted, and that figure is stored on
         the visit. Editing a rate changes what is quoted from now on — it never reprices a visit
         already booked. Groomer commission still pays on the list price.
-      </div>
+      </p>
 
-      <details className="bg-white border border-stone-200 rounded-xl">
+      <details className="border-t border-stone-100">
         <summary className="px-3 py-2 cursor-pointer text-sm font-semibold text-stone-800">
           + Add a rate
         </summary>
@@ -94,11 +96,11 @@ export default async function PricingTiersPage({ searchParams }: PageProps) {
       </details>
 
       {tiers.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-6 text-center text-stone-400 text-sm">
+        <PageSection grow className="text-center text-stone-400 text-sm">
           No special rates yet. Every customer is charged the published price.
-        </div>
+        </PageSection>
       ) : (
-        <div className="bg-white border border-stone-200 rounded-xl divide-y divide-stone-100">
+        <PageSection grow scroll padded={false} bodyClassName="divide-y divide-stone-100">
           {tiers.map((tier) => {
             const onTier = counts.get(tier.id) ?? 0;
             const example = quoteFor(EXAMPLE_LIST_CENTS, tier);
@@ -156,8 +158,8 @@ export default async function PricingTiersPage({ searchParams }: PageProps) {
               </details>
             );
           })}
-        </div>
+        </PageSection>
       )}
-    </div>
+    </PageShell>
   );
 }

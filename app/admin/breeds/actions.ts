@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireManager } from "@/lib/auth-guards";
 import { CoatType, Species } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -14,7 +14,7 @@ function done(params: string): never {
 
 /** Add or update one breed's reference card. */
 export async function saveBreedGuide(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
 
   const id = ((formData.get("id") as string | null) ?? "").trim();
   const breed = ((formData.get("breed") as string | null) ?? "").trim();
@@ -56,7 +56,7 @@ export async function saveBreedGuide(formData: FormData): Promise<void> {
 }
 
 export async function deleteBreedGuide(formData: FormData): Promise<void> {
-  await requireAdmin();
+  await requireManager();
   const id = (formData.get("id") as string | null) ?? "";
   await prisma.breedGuide.delete({ where: { id } });
   done("?deleted=1");

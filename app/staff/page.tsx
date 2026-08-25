@@ -6,16 +6,16 @@ import {
 } from "@/lib/utils";
 import { AppointmentStatus, StaffRole, StationRole } from "@prisma/client";
 import { stationCapacity } from "@/lib/stations";
+import { getShopAnalytics } from "@/lib/analytics";
 import { KENNELABLE_STATUSES, capacityConflicts, kennelDemand } from "@/lib/kennels";
-import { shopInsights } from "@/lib/insights";
 import { ALERT_DOT, serviceAlerts } from "@/lib/alerts";
 import { assignmentSuggestions, floorBlockers } from "@/lib/recommendations";
 import { PRESENCE_CLASS, PRESENCE_LABEL, floorRoster } from "@/lib/presence";
 import { describeShifts, isOnShiftNow, scheduleGaps, todaysShifts } from "@/lib/schedule";
 import { applySuggestion } from "./presence-actions";
-import InsightList from "@/components/InsightList";
 import { pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -29,6 +29,9 @@ export const metadata = { title: "Dashboard" };
  */
 
 // Statuses that mean the pet is in the shop and being worked on.
+/** The dashboard snapshot window — short enough that the floor recognises it. */
+const SNAPSHOT_DAYS = 3;
+
 const ON_FLOOR: AppointmentStatus[] = [
   AppointmentStatus.CHECKED_IN,
   AppointmentStatus.IN_PROGRESS,
@@ -74,7 +77,7 @@ export default async function StaffDashboard({
     groomers,
     kennels,
     conflicts,
-    insights,
+    snapshot,
     suggestions,
     blockers,
     roster,
@@ -132,7 +135,9 @@ export default async function StaffDashboard({
     }),
     kennelDemand(start, end),
     capacityConflicts(start, end),
-    shopInsights(),
+    // The dashboard reads the last three days, not the last month: this is a
+    // floor screen, and the shape of the week just gone is what it can act on.
+    getShopAnalytics(SNAPSHOT_DAYS),
     assignmentSuggestions(),
     floorBlockers(),
     floorRoster(),
@@ -202,6 +207,34 @@ export default async function StaffDashboard({
             ? { label: "Busy", tone: "text-amber-700", bar: "bg-amber-400" }
             : { label: "Open", tone: "text-green-700", bar: "bg-green-500" };
 
+  /*
+   * The same figures /staff/analytics leads with, over three days rather than
+   * thirty. Derived there, not recomputed here, so the two screens can never
+   * disagree about what "finished" means.
+   */
+  const snapshotFigures = [
+    {
+      label: "Finished",
+      value: snapshot.finished,
+      hint: `${snapshot.booked} booked`,
+    },
+    {
+      label: "Walk-ins",
+      value: snapshot.walkIns,
+      hint: `${snapshot.scheduledAppointments} pre-booked`,
+    },
+    {
+      label: "No-show rate",
+      value: `${Math.round(snapshot.noShowRate * 100)}%`,
+      hint: `${snapshot.noShows} no-show, ${snapshot.cancelled} cancelled`,
+    },
+    {
+      label: "Avg turnaround",
+      value: snapshot.avgTurnaroundMins != null ? `${snapshot.avgTurnaroundMins} min` : "—",
+      hint: "check-in to finished",
+    },
+  ];
+
   const counts = [
     { label: "scheduled", value: scheduled.length },
     { label: "in the shop", value: onFloor.length },
@@ -213,15 +246,15 @@ export default async function StaffDashboard({
   ];
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="bg-white border border-stone-200 rounded-xl px-3 py-2">
+    <PageShell
+      title={formatShopDate(now, { weekday: "long", month: "long", day: "numeric" })}
+      subtitle={`${active.length} on the books`}
+    >
+      {/* The day at a glance: what is booked, what needs chasing, how full */}
+      <PageSection tone="muted">
         <div className="flex items-start justify-between gap-6 flex-wrap">
-          <div className="min-w-0">
-            <h1 className="text-lg font-black text-stone-900">
-              {formatShopDate(now, { weekday: "long", month: "long", day: "numeric" })}
-            </h1>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-sm text-stone-500 mt-1">
+          <div className="flex-1 min-w-[20rem]">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-sm text-stone-500">
               <span>{active.length} on the books</span>
               {counts.map(({ label, value }) => (
                 <span key={label}>
@@ -234,6 +267,37 @@ export default async function StaffDashboard({
               <Link href="/staff/appointments" className="text-stone-400 hover:text-stone-700 underline">
                 full schedule
               </Link>
+            </div>
+
+            {/*
+              Today's counts read against the days behind them: the same
+              arithmetic /staff/analytics runs, over three days, so the floor
+              can tell an odd morning from a pattern without leaving the page.
+            */}
+            <div className="mt-2 pt-2 border-t border-stone-200/70">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">
+                  Insights ({SNAPSHOT_DAYS} Day)
+                </h2>
+                <Link
+                  href="/staff/analytics"
+                  className="text-xs text-stone-400 hover:text-stone-700 underline"
+                >
+                  full analytics
+                </Link>
+              </div>
+              <dl className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {snapshotFigures.map(({ label, value, hint }) => (
+                  <div
+                    key={label}
+                    className="border border-stone-200 rounded-lg bg-white px-3 py-2"
+                  >
+                    <dd className="text-lg font-black text-stone-900 leading-tight">{value}</dd>
+                    <dt className="text-xs text-stone-600">{label}</dt>
+                    <p className="text-[11px] text-stone-400">{hint}</p>
+                  </div>
+                ))}
+              </dl>
             </div>
           </div>
 
@@ -376,45 +440,37 @@ export default async function StaffDashboard({
               .join(", ")}
           </p>
         )}
-
-      </div>
+      </PageSection>
 
       {searchParams.assigned === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Assigned.
-        </div>
+        </p>
       )}
       {searchParams.error === "suggestion_stale" && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-amber-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-amber-50 px-3 py-2 text-amber-800 text-sm font-medium">
           The floor moved before that could be applied — here is the current picture.
-        </div>
+        </p>
       )}
       {searchParams.error === "not_floor_staff" && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-amber-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-amber-50 px-3 py-2 text-amber-800 text-sm font-medium">
           Floor status is for groomers and bathers — an admin-only account does not take pets.
-        </div>
+        </p>
       )}
       {searchParams.error === "role_not_allowed" && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           That station is limited to roles this person does not hold.
-        </div>
+        </p>
       )}
 
       {/* What to do with the open stations, right now */}
       {(suggestions.length > 0 || blockers.blocked) && (
-        <section>
-          <div className="flex items-baseline justify-between mb-1.5">
-            <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">
-              Next moves
-            </h2>
-            <span className="text-xs text-stone-400">
-              {blockers.readyStaff} ready · {blockers.waitingPets} waiting ·{" "}
-              {blockers.openStations} station{blockers.openStations === 1 ? "" : "s"} open
-            </span>
-          </div>
-
+        <PageSection
+          title="Next moves"
+          hint={`${blockers.readyStaff} ready · ${blockers.waitingPets} waiting · ${blockers.openStations} station${blockers.openStations === 1 ? "" : "s"} open`}
+        >
           {suggestions.length === 0 ? (
-            <p className="text-sm text-stone-500 bg-white border border-stone-200 rounded-lg px-3 py-2">
+            <p className="text-sm text-stone-500 border border-stone-200 rounded-lg bg-stone-50/60 px-3 py-2">
               {blockers.blocked}
             </p>
           ) : (
@@ -452,27 +508,14 @@ export default async function StaffDashboard({
               ))}
             </div>
           )}
-        </section>
+        </PageSection>
       )}
 
-      {/* What the day's data is flagging */}
-      {insights.length > 0 && (
-        <section>
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1.5">
-            Worth knowing
-          </h2>
-          <InsightList insights={insights.slice(0, 3)} compact />
-        </section>
-      )}
 
       {/* Kennel space about to run out */}
       {(conflicts.shortfall > 0 || conflicts.overstaying.length > 0) && (
-        <section
-          className={`rounded-xl px-3 py-2 border ${
-            conflicts.shortfall > 0
-              ? "bg-red-50 border-red-200"
-              : "bg-amber-50 border-amber-200"
-          }`}
+        <PageSection
+          className={conflicts.shortfall > 0 ? "bg-red-50" : "bg-amber-50"}
         >
           <h2
             className={`font-bold text-xs uppercase tracking-widest ${
@@ -515,11 +558,11 @@ export default async function StaffDashboard({
               ))}
             </ul>
           )}
-        </section>
+        </PageSection>
       )}
 
       {/* The board — one vertical column for each kind of station */}
-      <div className="grid gap-4 lg:grid-cols-3 items-start">
+      <PageSection grow scroll bodyClassName="grid gap-4 lg:grid-cols-3 items-start">
         {[StationRole.GROOMER, StationRole.BATHING].map((role) => {
         const list = workStations.filter((s) => s.role === role);
         if (list.length === 0) return null;
@@ -715,8 +758,7 @@ export default async function StaffDashboard({
           </div>
           </section>
         )}
-      </div>
-
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

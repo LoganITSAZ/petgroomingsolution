@@ -1,8 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 import { StationRole } from "@prisma/client";
-import { KENNELABLE_STATUSES, getKennelBoard, kennelDemand } from "@/lib/kennels";
+import {
+  KENNELABLE_STATUSES,
+  compartmentRoom,
+  getKennelBoard,
+  householdCompartmentLimit,
+  kennelDemand,
+} from "@/lib/kennels";
 import { OCCUPYING_STATUSES, stationCapacity } from "@/lib/stations";
 import PhotoStack from "@/components/PhotoStack";
 import { photoUrl } from "@/lib/photos";
@@ -50,7 +57,8 @@ const NOTICES: Record<string, string> = {
 
 const ERRORS: Record<string, string> = {
   no_pet_selected: "Pick a pet before assigning a kennel.",
-  kennel_occupied: "That kennel already holds a pet.",
+  kennel_occupied:
+    "That kennel is full. A compartment only takes more than the shop's rule when every pet inside is from the same household.",
   kennel_out_of_service: "That kennel is out of service.",
   appointment_not_found: "That visit no longer exists.",
   not_in_shop: "That pet is not checked in, so it cannot be kennelled.",
@@ -70,7 +78,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
   const isKennel = station.role === StationRole.KENNEL;
   const { start, end } = shopDayRange();
 
-  const [kennels, assignable, occupants, todayHere] = await Promise.all([
+  const [kennels, assignable, occupants, todayHere, householdMax] = await Promise.all([
     isKennel ? getKennelBoard(station.id) : Promise.resolve([]),
     isKennel
       ? prisma.appointment.findMany({
@@ -112,6 +120,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
       },
       orderBy: { scheduledAt: "asc" },
     }),
+    householdCompartmentLimit(),
   ]);
 
   // Breed reference for whoever is standing at this station.
@@ -126,28 +135,23 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
     : { capacity: 0, occupied: 0, reserved: 0, free: 0, perCompartment: 1 };
 
   return (
-    <div className="space-y-6 max-w-5xl">
-      <Link
-        href="/staff/stations"
-        className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 transition-colors"
-      >
-        ← Back to Stations
-      </Link>
-
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-black text-stone-900">{station.name}</h1>
-          <p className="text-sm text-stone-500 mt-1">
-            {ROLE_LABEL[station.role]}
-            {!isKennel && ` · ${occupants.length}/${capacity} pets`}
-            {station.allowedRoles.length > 0 &&
-              ` · ${station.allowedRoles.map(formatRole).join(" or ")} only`}
-            {!station.isActive && " · inactive"}
-            {isKennel && ` · ${occupiedCount}/${kennels.length * demand.perCompartment} occupied`}
-            {isKennel && demand.reserved > 0 && ` · ${demand.reserved} still expected today`}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+    <PageShell
+      back={{ href: "/staff/stations", label: "Back to Stations" }}
+      title={station.name}
+      className="max-w-5xl w-full"
+      subtitle={
+        <>
+          {ROLE_LABEL[station.role]}
+          {!isKennel && ` · ${occupants.length}/${capacity} pets`}
+          {station.allowedRoles.length > 0 &&
+            ` · ${station.allowedRoles.map(formatRole).join(" or ")} only`}
+          {!station.isActive && " · inactive"}
+          {isKennel && ` · ${occupiedCount}/${kennels.length * demand.perCompartment} occupied`}
+          {isKennel && demand.reserved > 0 && ` · ${demand.reserved} still expected today`}
+        </>
+      }
+      actions={
+        <>
           {isAdmin && (
             <Link
               href={`/admin/stations/${station.id}/edit`}
@@ -162,36 +166,56 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
           >
             Open touchscreen display
           </Link>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {notice && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-3 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           {NOTICES[notice]}
-        </div>
+        </p>
       )}
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-3 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
-        </div>
+        </p>
       )}
 
       {/* Kennel grid */}
       {isKennel ? (
         kennels.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+          <PageSection className="text-center text-stone-400 text-sm">
             This unit has no kennels yet. An admin sets the layout on the station&apos;s edit page.
-          </div>
+          </PageSection>
         ) : (
-          <div
-            className="grid gap-3"
-            style={{
+          <PageSection
+            bodyClassName="grid gap-3"
+            bodyStyle={{
               gridTemplateColumns: `repeat(${station.kennelColumns ?? 1}, minmax(11rem, 1fr))`,
             }}
           >
             {kennels.map((kennel) => {
               const inside = kennel.appointments;
-              const full = inside.length >= demand.perCompartment;
+              const occupantCustomerIds = inside.map((appt) => appt.customerId);
+              /*
+               * Who may go in here is a per-pet question: a door holding one
+               * household's dogs still has room for another of theirs, and
+               * none for anybody else's.
+               */
+              const canJoin = assignable.filter(
+                (appt) =>
+                  compartmentRoom(
+                    occupantCustomerIds,
+                    appt.customerId,
+                    demand.perCompartment,
+                    householdMax
+                  ).ok
+              );
+              const household =
+                inside.length > 0 &&
+                occupantCustomerIds.every((id) => id === occupantCustomerIds[0]);
+              const shown = household ? householdMax : demand.perCompartment;
+              const full = inside.length >= shown;
 
               return (
                 <div
@@ -212,7 +236,10 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                       </span>
                     ) : (
                       <span className="text-[10px] font-bold text-stone-400 uppercase">
-                        {inside.length}/{demand.perCompartment}
+                        {inside.length}/{shown}
+                        {household && inside.length > demand.perCompartment && (
+                          <span className="ml-1 text-emerald-700">same home</span>
+                        )}
                       </span>
                     )}
                   </div>
@@ -250,7 +277,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                         className="w-full border border-stone-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
                       >
                         <option value="">Select a pet…</option>
-                        {assignable.map((appt) => (
+                        {canJoin.map((appt) => (
                           <option key={appt.id} value={appt.id}>
                             {appt.pet.name} ({appt.customer.lastName})
                           </option>
@@ -258,7 +285,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                       </select>
                       <button
                         type="submit"
-                        disabled={assignable.length === 0}
+                        disabled={canJoin.length === 0}
                         className="w-full bg-emerald-700 hover:bg-emerald-800 disabled:bg-stone-200 disabled:text-stone-400 text-white rounded-lg py-1.5 text-xs font-semibold transition-colors"
                       >
                         Put in kennel
@@ -290,11 +317,11 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                 </div>
               );
             })}
-          </div>
+          </PageSection>
         )
       ) : (
         /* Work station — one card per pet it is holding */
-        <div className="bg-white border border-stone-200 rounded-xl p-4">
+        <PageSection>
           <div className="flex items-baseline justify-between gap-3 mb-2">
             <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest">
               At this station now
@@ -503,20 +530,17 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
               })}
             </ul>
           )}
-        </div>
+        </PageSection>
       )}
 
       {/* Today at this station */}
-      <section>
-        <h2 className="font-bold text-stone-700 mb-3 text-sm uppercase tracking-widest">
-          Today at this station ({todayHere.length})
-        </h2>
+      <PageSection title={`Today at this station (${todayHere.length})`}>
         {todayHere.length === 0 ? (
           <p className="text-stone-400 text-sm">
             Nothing scheduled here for {formatShopDate(new Date())}.
           </p>
         ) : (
-          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <div className="border border-stone-200 rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-stone-50 text-stone-500 text-xs uppercase tracking-widest">
                 <tr>
@@ -560,7 +584,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
             </table>
           </div>
         )}
-      </section>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

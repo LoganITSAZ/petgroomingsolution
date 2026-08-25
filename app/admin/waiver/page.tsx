@@ -2,10 +2,11 @@ import { getConfig } from "@/lib/config";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireManager } from "@/lib/auth-guards";
 import { nextAvailableVersion, recordRevision } from "@/lib/waiver";
 import { formatShopDate } from "@/lib/utils";
 import VersionField from "./VersionField";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -22,7 +23,7 @@ export const metadata = { title: "Waiver" };
 async function saveWaiver(formData: FormData) {
   "use server";
 
-  const staffId = await requireAdmin();
+  const staffId = await requireManager();
 
   const featureWaiverRequired = formData.get("featureWaiverRequired") === "on";
   const waiverText = ((formData.get("waiverText") as string | null) ?? "").trim();
@@ -76,7 +77,7 @@ async function saveWaiver(formData: FormData) {
 async function restoreRevision(formData: FormData) {
   "use server";
 
-  await requireAdmin();
+  await requireManager();
 
   const version = ((formData.get("version") as string | null) ?? "").trim();
   const revision = await prisma.waiverRevision.findUnique({ where: { version } });
@@ -151,17 +152,13 @@ export default async function WaiverPage({ searchParams }: PageProps) {
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-xl font-bold text-stone-900">Liability Waiver</h1>
-        <p className="text-sm text-stone-500 mt-1">
-          The single place to turn the waiver on or off, edit its text, set its version, and see
-          who has accepted it.
-        </p>
-      </div>
+    <PageShell
+      title="Liability Waiver"
+      subtitle="The single place to turn the waiver on or off, edit its text, set its version, and see who has accepted it."
+    >
 
       {searchParams.saved === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Waiver saved as version {searchParams.version}.
           {searchParams.bumped === "1" && (
             <span className="font-normal">
@@ -170,27 +167,24 @@ export default async function WaiverPage({ searchParams }: PageProps) {
               it again.
             </span>
           )}
-        </div>
+        </p>
       )}
 
       {searchParams.restored && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Restored version {searchParams.restored}. Customers who already accepted that exact
           version stay accepted.
-        </div>
+        </p>
       )}
 
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage} Nothing was saved.
-        </div>
+        </p>
       )}
 
       {/* Acceptance status — live figures, not a projection */}
-      <div className="bg-white border border-stone-200 rounded-xl p-4">
-        <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-3">
-          Acceptance Status
-        </h2>
+      <PageSection title="Acceptance Status">
         {config.featureWaiverRequired ? (
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -285,14 +279,11 @@ export default async function WaiverPage({ searchParams }: PageProps) {
             </ul>
           </div>
         )}
-      </div>
+      </PageSection>
 
       <form action={saveWaiver}>
         {/* Requirement switch */}
-        <div className="bg-white border border-stone-200 rounded-xl p-4">
-          <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-2">
-            Requirement
-          </h2>
+        <PageSection title="Requirement">
           <div className="flex items-start gap-3 py-4">
             <div className="flex-1">
               <p className="text-sm font-medium text-stone-800">Waiver Required</p>
@@ -311,10 +302,10 @@ export default async function WaiverPage({ searchParams }: PageProps) {
               <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-700" />
             </label>
           </div>
-        </div>
+        </PageSection>
 
         {/* Version change warning */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex gap-3 mt-3">
+        <div className="border-t border-stone-100 bg-amber-50 px-3 py-2 flex gap-3">
           <svg
             className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0"
             fill="none"
@@ -338,10 +329,7 @@ export default async function WaiverPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-5 mt-3">
-          <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3">
-            Waiver Document
-          </h2>
+        <PageSection title="Waiver Document" bodyClassName="space-y-5">
 
           <VersionField
             currentVersion={currentVersion ?? "1.0"}
@@ -366,11 +354,10 @@ export default async function WaiverPage({ searchParams }: PageProps) {
               </p>
             </div>
           </div>
-        </div>
+        </PageSection>
 
         {/* How acceptance works */}
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 mt-3">
-          <h3 className="text-sm font-semibold text-stone-700 mb-1">About waiver acceptance</h3>
+        <PageSection tone="muted" title="About waiver acceptance">
           <ul className="text-sm text-stone-500 space-y-1 list-disc list-inside">
             <li>Customers accept the waiver once per version, at registration or after a version change.</li>
             <li>Each acceptance is stored with a timestamp, the accepted version, and the signing IP.</li>
@@ -378,17 +365,17 @@ export default async function WaiverPage({ searchParams }: PageProps) {
             <li>Requiring the waiver with empty text is rejected — customers would have nothing to sign.</li>
             <li>Every published version is kept, so an earlier document can be restored under its original number.</li>
           </ul>
-        </div>
+        </PageSection>
 
-        <div className="flex justify-end pt-4">
+        <PageSection tone="muted" bodyClassName="flex justify-end">
           <button
             type="submit"
             className="bg-amber-700 hover:bg-amber-800 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
           >
             Save Waiver
           </button>
-        </div>
+        </PageSection>
       </form>
-    </div>
+    </PageShell>
   );
 }

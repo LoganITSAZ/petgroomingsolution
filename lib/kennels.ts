@@ -12,6 +12,11 @@ import { pickupThresholds } from "@/lib/pickups";
  * How many pets fit behind one door is a shop-wide rule
  * (`SystemConfig.kennelCapacityPerCompartment`), not a per-unit setting:
  * compartments in a bank are the same size as each other.
+ *
+ * The one exception is a household. Dogs booked in together from the same home
+ * are kennelled together on purpose — several small dogs behind one door — so
+ * `SystemConfig.kennelHouseholdMaxPerCompartment` is a second, higher limit
+ * that applies only while every pet inside belongs to the same customer.
  */
 
 export const MAX_KENNEL_ROWS = 26; // one letter per row
@@ -36,6 +41,57 @@ export const KENNELABLE_STATUSES: AppointmentStatus[] = [
 export async function compartmentCapacity(): Promise<number> {
   const config = await getConfig();
   return Math.max(1, config.kennelCapacityPerCompartment);
+}
+
+/**
+ * How many pets from ONE household may share a compartment.
+ *
+ * The shop-wide rule is written for unrelated dogs, which is why it is usually
+ * one. A family that brings four small dogs in together is kennelled together
+ * on purpose, so a door may hold more than the rule allows as long as every
+ * pet behind it belongs to the same customer. Never below the general rule —
+ * a household is not a reason to fit fewer.
+ */
+export async function householdCompartmentLimit(): Promise<number> {
+  const config = await getConfig();
+  return Math.max(
+    Math.max(1, config.kennelCapacityPerCompartment),
+    config.kennelHouseholdMaxPerCompartment
+  );
+}
+
+export interface CompartmentRoom {
+  ok: boolean;
+  /** The limit that applied — the household one only when sharing. */
+  limit: number;
+  /** True when the limit in play is the household allowance. */
+  sharedHousehold: boolean;
+  inside: number;
+}
+
+/**
+ * The whole capacity rule for one door, with no database in it.
+ *
+ * `occupantCustomerIds` is who is already inside; `customerId` is the pet
+ * asking for the space. Same household means *every* pet inside belongs to
+ * that same customer — one unrelated dog in the door drops it back to the
+ * general rule, because the extra room was never about the door's size.
+ */
+export function compartmentRoom(
+  occupantCustomerIds: string[],
+  customerId: string | null,
+  perCompartment: number,
+  householdMax: number
+): CompartmentRoom {
+  const general = Math.max(1, perCompartment);
+  const household = Math.max(general, householdMax);
+  const inside = occupantCustomerIds.length;
+
+  const sharedHousehold =
+    inside > 0 && customerId != null && occupantCustomerIds.every((id) => id === customerId);
+  const limit = sharedHousehold ? household : general;
+
+  return { ok: inside < limit, limit, sharedHousehold, inside };
 }
 
 export interface GridSyncResult {
@@ -126,22 +182,50 @@ export async function getKennelStations() {
   );
 }
 
+/**
+ * Whether one more pet fits behind a given door.
+ *
+ * Pass the appointment being placed: who its owner is decides whether the
+ * household allowance applies, so the answer is about that pet, not the door
+ * in the abstract.
+ */
+export async function kennelRoomFor(
+  kennelId: string,
+  appointmentId?: string
+): Promise<CompartmentRoom> {
+  const [perCompartment, householdMax, occupants, moving] = await Promise.all([
+    compartmentCapacity(),
+    householdCompartmentLimit(),
+    prisma.appointment.findMany({
+      where: {
+        kennelId,
+        status: { in: KENNELABLE_STATUSES },
+        ...(appointmentId ? { NOT: { id: appointmentId } } : {}),
+      },
+      select: { customerId: true },
+    }),
+    appointmentId
+      ? prisma.appointment.findUnique({
+          where: { id: appointmentId },
+          select: { customerId: true },
+        })
+      : null,
+  ]);
+
+  return compartmentRoom(
+    occupants.map((occupant) => occupant.customerId),
+    moving?.customerId ?? null,
+    perCompartment,
+    householdMax
+  );
+}
+
 /** Whether one more pet fits behind a given door. */
 export async function kennelHasRoom(
   kennelId: string,
   exceptAppointmentId?: string
 ): Promise<boolean> {
-  const [capacity, inside] = await Promise.all([
-    compartmentCapacity(),
-    prisma.appointment.count({
-      where: {
-        kennelId,
-        status: { in: KENNELABLE_STATUSES },
-        ...(exceptAppointmentId ? { NOT: { id: exceptAppointmentId } } : {}),
-      },
-    }),
-  ]);
-  return inside < capacity;
+  return (await kennelRoomFor(kennelId, exceptAppointmentId)).ok;
 }
 
 /**
@@ -208,6 +292,11 @@ export async function kennelDemand(
     }),
   ]);
 
+  /*
+   * Capacity is deliberately the general rule, not the household allowance:
+   * sharing depends on who turns up together, so it is headroom on the day and
+   * never a space the shop can promise in advance.
+   */
   const capacity = doors * perCompartment;
   return {
     capacity,

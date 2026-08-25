@@ -4,6 +4,9 @@ import { stationSubscriberCounts } from "@/lib/station-events";
 import { formatShopDate, formatShopTime, SHOP_TIMEZONE } from "@/lib/utils";
 import pkg from "@/package.json";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
+import { currentStaffIsAdmin } from "@/lib/staff-roles";
+import { redirect } from "next/navigation";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -73,6 +76,9 @@ function Row({
 }
 
 export default async function AdminOverview() {
+  // Technical screen: a shop manager runs the shop, an admin runs the system.
+  if (!(await currentStaffIsAdmin())) redirect("/staff");
+
   const now = new Date();
 
   // ── Database probe ────────────────────────────────────────────
@@ -188,35 +194,31 @@ export default async function AdminOverview() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-xl font-black text-stone-900">System Status</h1>
-        <p className="text-stone-500 text-sm mt-1">
-          Read live at {formatShopTime(now)} on {formatShopDate(now)} ({SHOP_TIMEZONE}).
-        </p>
-      </div>
-
+    <PageShell
+      title="System Status"
+      subtitle={`Read live at ${formatShopTime(now)} on ${formatShopDate(now)} (${SHOP_TIMEZONE}).`}
+    >
       {!dbOnline && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">
+        <div className="border-t border-stone-100 bg-red-50 px-3 py-2">
           <p className="text-sm font-semibold text-red-800">Database unreachable</p>
           <p className="text-sm text-red-700 mt-1 break-all">{dbError}</p>
         </div>
       )}
 
       {/* Headline tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <PageSection tone="muted" bodyClassName="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {tiles.map(({ label, value, tone, sub }) => (
-          <div key={label} className="bg-white border border-stone-200 rounded-xl p-4">
+          <div key={label} className="border border-stone-200 rounded-lg bg-white p-4">
             <p className={`text-2xl font-black ${tone}`}>{value}</p>
             <p className="text-sm text-stone-500 mt-1">{label}</p>
             <p className="text-xs text-stone-400 mt-0.5 truncate">{sub}</p>
           </div>
         ))}
-      </div>
+      </PageSection>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Database */}
-        <section className="bg-white border border-stone-200 rounded-xl p-4">
+        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-2">
             Database
           </h2>
@@ -262,7 +264,7 @@ export default async function AdminOverview() {
         </section>
 
         {/* Runtime */}
-        <section className="bg-white border border-stone-200 rounded-xl p-4">
+        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-2">
             Runtime
           </h2>
@@ -288,7 +290,7 @@ export default async function AdminOverview() {
         </section>
 
         {/* Station displays */}
-        <section className="bg-white border border-stone-200 rounded-xl p-4">
+        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-2">
             Station Displays (SSE)
           </h2>
@@ -321,7 +323,7 @@ export default async function AdminOverview() {
         </section>
 
         {/* Integrations */}
-        <section className="bg-white border border-stone-200 rounded-xl p-4">
+        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-2">
             Integrations
           </h2>
@@ -360,13 +362,12 @@ export default async function AdminOverview() {
             </p>
           )}
         </section>
-      </div>
+      </PageSection>
 
       {/* Stored records */}
-      <section>
-        <h2 className="font-bold text-stone-800 mb-3">Stored Records</h2>
+      <PageSection title="Stored Records" padded={false}>
         {dbOnline ? (
-          <div className="bg-white border border-stone-200 rounded-xl grid grid-cols-2 sm:grid-cols-4 divide-x divide-y divide-stone-100">
+          <div className="border-t border-stone-100 mt-2 grid grid-cols-2 sm:grid-cols-4 divide-x divide-y divide-stone-100">
             {counts.map(({ label, value }) => (
               <div key={label} className="p-5">
                 <p className="text-xl font-black text-stone-900">{value}</p>
@@ -375,11 +376,11 @@ export default async function AdminOverview() {
             ))}
           </div>
         ) : (
-          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+          <p className="px-3 py-4 text-center text-stone-400 text-sm">
             Counts unavailable while the database is unreachable.
-          </div>
+          </p>
         )}
-      </section>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

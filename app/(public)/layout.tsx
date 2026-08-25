@@ -1,4 +1,5 @@
 import Link from "next/link";
+import MobileMenu from "@/components/MobileMenu";
 import { getConfig } from "@/lib/config";
 import { resolveTheme, themeStyle } from "@/lib/themes";
 import { SHOP_TIMEZONE } from "@/lib/utils";
@@ -79,17 +80,17 @@ export default async function PublicLayout({ children }: { children: React.React
 
       <header className="sticky top-0 z-50 px-3 pt-3">
         <div className="glass-panel max-w-6xl mx-auto flex h-14 items-center justify-between rounded-2xl px-4">
-          <Link href="/" className="font-black tracking-tight text-lg text-brand-text transition-transform hover:scale-[1.02]">
+          <Link href="/" className="shrink-0 font-black tracking-tight text-lg text-brand-text transition-transform hover:scale-[1.02]">
             <span className="mr-1.5">{theme.preset.motif ?? "🐾"}</span>{config.shopName}
           </Link>
-          <nav aria-label="Main" className="flex items-center gap-3 text-sm font-medium text-muted">
-            <Link href="/about" className="hover:text-brand-text transition-colors">
+          <nav aria-label="Main" className="hidden items-center gap-1 text-sm font-medium text-muted md:flex">
+            <Link href="/about" className="rounded-lg px-2 py-2 hover:text-brand-text transition-colors">
               About
             </Link>
-            <Link href="/services" className="hover:text-brand-text transition-colors">
+            <Link href="/services" className="rounded-lg px-2 py-2 hover:text-brand-text transition-colors">
               Services
             </Link>
-            <Link href="/contact" className="hover:text-brand-text transition-colors">
+            <Link href="/contact" className="rounded-lg px-2 py-2 hover:text-brand-text transition-colors">
               Contact
             </Link>
             {config.featureOnlineBooking && (
@@ -101,6 +102,17 @@ export default async function PublicLayout({ children }: { children: React.React
               </Link>
             )}
           </nav>
+          <MobileMenu
+            className="md:hidden"
+            label="Open main navigation"
+            summaryClassName="bg-brand-600 px-3 py-2 text-brand-on-600"
+            menuClassName="left-auto right-0 w-52 border border-line bg-surface text-ink shadow-xl"
+          >
+            <Link href="/about" className="block rounded-lg px-3 py-2.5 font-medium hover:bg-brand-100/40">About</Link>
+            <Link href="/services" className="block rounded-lg px-3 py-2.5 font-medium hover:bg-brand-100/40">Services</Link>
+            <Link href="/contact" className="block rounded-lg px-3 py-2.5 font-medium hover:bg-brand-100/40">Contact</Link>
+            {config.featureOnlineBooking && <Link href="/portal" className="mt-1 block rounded-lg bg-brand-600 px-3 py-2.5 font-bold text-brand-on-600">Book Now</Link>}
+          </MobileMenu>
         </div>
       </header>
 

@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { StationRole } from "@prisma/client";
 import StationForm from "../StationForm";
 import { createStation } from "../actions";
+import { PageShell } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -21,24 +21,16 @@ export default function NewStationPage({ searchParams }: PageProps) {
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
 
   return (
-    <div className="space-y-3">
-      <div>
-        <Link
-          href="/admin/stations"
-          className="text-sm text-stone-500 hover:text-stone-800 transition-colors"
-        >
-          ← Back to Stations
-        </Link>
-        <h1 className="text-xl font-bold text-stone-900 mt-2">Add Station</h1>
-        <p className="text-sm text-stone-500 mt-1">
-          A station is any place a pet occupies — a groom table, a bath, or a bank of kennels.
-        </p>
-      </div>
+    <PageShell
+      back={{ href: "/admin/stations", label: "Back to Stations" }}
+      title="Add Station"
+      subtitle="A station is any place a pet occupies — a groom table, a bath, or a bank of kennels."
+    >
 
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
-        </div>
+        </p>
       )}
 
       <StationForm
@@ -53,6 +45,6 @@ export default function NewStationPage({ searchParams }: PageProps) {
           kennelColumns: 4,
         }}
       />
-    </div>
+    </PageShell>
   );
 }

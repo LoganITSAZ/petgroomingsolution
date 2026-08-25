@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { CoatType, Species, type BreedGuide } from "@prisma/client";
 import { formatCoatType, formatSpecies } from "@/lib/utils";
+import { PageShell, PageSection } from "@/components/ui";
 import { tipLines } from "@/lib/breeds";
 import { deleteBreedGuide, saveBreedGuide } from "./actions";
 
@@ -101,32 +102,33 @@ export default async function BreedGuidesPage({ searchParams }: PageProps) {
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-xl font-bold text-stone-900">Breed Guide</h1>
-        <p className="text-sm text-stone-500 mt-1">
+    <PageShell
+      title="Breed Guide"
+      subtitle={
+        <>
           {guides.length} breed{guides.length !== 1 ? "s" : ""} on file. Shown at the station when a
           pet&apos;s breed matches — the pet&apos;s own notes always come first.
-        </p>
-      </div>
+        </>
+      }
+    >
 
       {searchParams.saved && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 text-green-800 px-3 py-2 text-sm font-medium">
           Saved {searchParams.saved}.
-        </div>
+        </p>
       )}
       {searchParams.deleted === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 text-green-800 px-3 py-2 text-sm font-medium">
           Guide removed.
-        </div>
+        </p>
       )}
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 text-red-800 px-3 py-2 text-sm font-medium">
           {errorMessage}
-        </div>
+        </p>
       )}
 
-      <details className="bg-white border border-stone-200 rounded-xl">
+      <details className="border-t border-stone-100">
         <summary className="px-3 py-2 cursor-pointer text-sm font-semibold text-stone-800">
           + Add a breed
         </summary>
@@ -144,11 +146,11 @@ export default async function BreedGuidesPage({ searchParams }: PageProps) {
       </details>
 
       {guides.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-6 text-center text-stone-400 text-sm">
+        <PageSection grow className="text-center text-stone-400 text-sm">
           No breed guides yet.
-        </div>
+        </PageSection>
       ) : (
-        <div className="bg-white border border-stone-200 rounded-xl divide-y divide-stone-100">
+        <PageSection grow scroll padded={false} bodyClassName="divide-y divide-stone-100">
           {guides.map((guide) => (
             <details key={guide.id}>
               <summary className="px-3 py-2 cursor-pointer flex items-center justify-between gap-3">
@@ -185,8 +187,8 @@ export default async function BreedGuidesPage({ searchParams }: PageProps) {
               </div>
             </details>
           ))}
-        </div>
+        </PageSection>
       )}
-    </div>
+    </PageShell>
   );
 }

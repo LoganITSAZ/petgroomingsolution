@@ -53,7 +53,7 @@ export default async function HomePage() {
           { emoji: "📍", title: "Northern Phoenix", body: "Conveniently located at 8911 N Central Ave #104." },
         ].map(({ emoji, title, body }) => (
           <div key={title} className="glass-panel rounded-3xl p-7 text-center transition duration-200 hover:-translate-y-1 hover:shadow-2xl">
-            <span className="mb-4 block text-5xl">{emoji}</span>
+            <span className="mb-4 block text-5xl" aria-hidden="true">{emoji}</span>
             <h2 className="text-xl font-black text-ink">{title}</h2>
             <p className="mt-2 text-muted">{body}</p>
           </div>

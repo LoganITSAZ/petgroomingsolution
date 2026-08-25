@@ -10,6 +10,7 @@ import {
   type ThemePreset,
 } from "@/lib/themes";
 import { saveAppearance } from "./actions";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -90,36 +91,38 @@ export default async function AppearancePage({ searchParams }: PageProps) {
   const groups: ThemePreset["group"][] = ["Default", "Seasons", "Holidays"];
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-bold text-stone-900">Appearance</h1>
-          <p className="text-sm text-stone-500 mt-1">
-            Currently showing <span className="font-semibold">{live.preset.label}</span>
-            {live.automatic && " — chosen by the calendar"}. Staff and admin screens are not
-            affected.
-          </p>
-        </div>
+    <PageShell
+      title="Appearance"
+      subtitle={
+        <>
+          Currently showing <span className="font-semibold">{live.preset.label}</span>
+          {live.automatic && " — chosen by the calendar"}. Staff and admin screens are not
+          affected.
+        </>
+      }
+      actions={
         <Link href="/" className="text-sm text-amber-700 hover:text-amber-900 underline">
           View the site →
         </Link>
-      </div>
+      }
+    >
 
       {searchParams.saved === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Appearance saved.
-        </div>
+        </p>
       )}
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
-        </div>
+        </p>
       )}
 
       {/* Live preview of the resolved theme */}
+      <PageSection title="Live preview" tone="muted">
       <div
         style={themeStyle(live.tokens)}
-        className="rounded-xl border border-line overflow-hidden bg-page text-ink"
+        className="rounded-lg border border-line overflow-hidden bg-page text-ink"
       >
         {live.bannerText && (
           <p className="bg-brand-700 text-brand-on-700 text-center text-xs py-1">
@@ -139,9 +142,10 @@ export default async function AppearancePage({ searchParams }: PageProps) {
           <p className="text-muted">Bath, cut and style — from $75</p>
         </div>
       </div>
+      </PageSection>
 
-      <form action={saveAppearance} className="space-y-3">
-        <div className="bg-white border border-stone-200 rounded-xl p-4">
+      <form action={saveAppearance}>
+        <PageSection>
           <label className="flex items-start gap-3">
             <input
               type="checkbox"
@@ -160,13 +164,10 @@ export default async function AppearancePage({ searchParams }: PageProps) {
               </span>
             </span>
           </label>
-        </div>
+        </PageSection>
 
         {groups.map((group) => (
-          <div key={group} className="bg-white border border-stone-200 rounded-xl p-4">
-            <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
-              {group}
-            </h2>
+          <PageSection key={group} title={group}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {THEME_PRESETS.filter((preset) => preset.group === group).map((preset) => (
                 <Swatch
@@ -176,13 +177,10 @@ export default async function AppearancePage({ searchParams }: PageProps) {
                 />
               ))}
             </div>
-          </div>
+          </PageSection>
         ))}
 
-        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">
-            Shop touches
-          </h2>
+        <PageSection title="Shop touches" bodyClassName="space-y-3">
 
           <label className="flex items-center gap-3 text-sm">
             <input
@@ -215,17 +213,17 @@ export default async function AppearancePage({ searchParams }: PageProps) {
               Shown across the top of every public page.
             </span>
           </label>
-        </div>
+        </PageSection>
 
-        <div className="flex justify-end">
+        <PageSection tone="muted" bodyClassName="flex justify-end">
           <button
             type="submit"
             className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold"
           >
             Save Appearance
           </button>
-        </div>
+        </PageSection>
       </form>
-    </div>
+    </PageShell>
   );
 }

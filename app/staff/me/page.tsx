@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 import { AppointmentStatus, StaffPresence } from "@prisma/client";
 import {
   PRESENCE_CLASS,
@@ -96,10 +97,11 @@ export default async function MyShiftPage() {
   const step = current ? nextStatus(current.status) : null;
 
   return (
-    <div className="space-y-3 max-w-lg mx-auto">
-      <div>
-        <h1 className="text-xl font-black text-stone-900">{me.name}</h1>
-        <p className="text-sm text-stone-500">
+    <PageShell
+      title={me.name}
+      className="max-w-lg mx-auto w-full"
+      subtitle={
+        <>
           <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${PRESENCE_CLASS[state]}`}>
             {PRESENCE_LABEL[state]}
           </span>
@@ -121,11 +123,11 @@ export default async function MyShiftPage() {
               <span className="text-stone-400">Not scheduled today</span>
             )}
           </span>
-        </p>
-      </div>
-
+        </>
+      }
+    >
       {/* Presence: big targets, because this is tapped with wet hands */}
-      <section className="grid grid-cols-2 gap-2">
+      <PageSection tone="muted" bodyClassName="grid grid-cols-2 gap-2">
         {SETTABLE_PRESENCE.map((option) => (
           <form key={option} action={setMyPresence}>
             <input type="hidden" name="presence" value={option} />
@@ -145,13 +147,10 @@ export default async function MyShiftPage() {
             </button>
           </form>
         ))}
-      </section>
+      </PageSection>
 
       {/* What I am on */}
-      <section className="bg-white border border-stone-200 rounded-xl p-3">
-        <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1.5">
-          On my table
-        </h2>
+      <PageSection title="On my table">
         {!current ? (
           <p className="text-sm text-stone-400">
             {me.presence === StaffPresence.READY
@@ -213,14 +212,11 @@ export default async function MyShiftPage() {
             </div>
           </div>
         )}
-      </section>
+      </PageSection>
 
       {/* The rest of my week */}
       {week.length > 0 && (
-        <section className="bg-white border border-stone-200 rounded-xl p-3">
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1.5">
-            My week
-          </h2>
+        <PageSection title="My week">
           <ul className="divide-y divide-stone-100 text-sm">
             {week.map((shift) => (
               <li key={shift.id} className="py-1.5 flex items-center justify-between gap-3">
@@ -233,14 +229,11 @@ export default async function MyShiftPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </PageSection>
       )}
 
       {/* What is coming to me */}
-      <section className="bg-white border border-stone-200 rounded-xl p-3">
-        <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1.5">
-          Mine today ({mine.length})
-        </h2>
+      <PageSection title={`Mine today (${mine.length})`} grow scroll>
         {upNext.length === 0 ? (
           <p className="text-sm text-stone-400">Nothing else assigned to you today.</p>
         ) : (
@@ -261,7 +254,7 @@ export default async function MyShiftPage() {
             ))}
           </ul>
         )}
-      </section>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

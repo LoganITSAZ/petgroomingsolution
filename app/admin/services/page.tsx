@@ -15,6 +15,7 @@ import {
 } from "@/lib/pricing";
 import PricingFields from "./PricingFields";
 import { formatSpecies } from "@/lib/utils";
+import { PageShell, PageSection } from "@/components/ui";
 import {
   adjustBasePrices,
   createService,
@@ -242,47 +243,43 @@ export default async function AdminServicesPage({ searchParams }: PageProps) {
   ].filter((group) => group.items.length > 0);
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-xl font-bold text-stone-900">Services &amp; Pricing</h1>
-        <p className="text-sm text-stone-500 mt-1">
-          Edited here, shown on the public pricing page, offered in booking forms, and used for
-          revenue estimates in analytics.
-        </p>
-      </div>
+    <PageShell
+      title="Services & Pricing"
+      subtitle="Edited here, shown on the public pricing page, offered in booking forms, and used for revenue estimates in analytics."
+    >
 
       {searchParams.saved && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Saved {searchParams.saved === "surcharge" ? "surcharge" : searchParams.saved}.
-        </div>
+        </p>
       )}
       {searchParams.adjusted && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Repriced {searchParams.adjusted} service
           {searchParams.adjusted === "1" ? "" : "s"} by {searchParams.percent}%.
-        </div>
+        </p>
       )}
       {searchParams.deleted === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Removed.
-        </div>
+        </p>
       )}
       {searchParams.retired === "1" && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-amber-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-amber-50 px-3 py-2 text-amber-800 text-sm font-medium">
           That service has already been booked, so it was retired instead of deleted — past
           appointments keep their history.
-        </div>
+        </p>
       )}
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
-        </div>
+        </p>
       )}
 
       {/* Move every base price at once */}
       <form
         action={adjustBasePrices}
-        className="bg-white border border-stone-200 rounded-xl px-3 py-2 flex flex-wrap items-center gap-3"
+        className="border-t border-stone-100 bg-stone-50 px-3 py-2 flex flex-wrap items-center gap-3"
       >
         <span className="text-sm font-semibold text-stone-800">Adjust all base prices</span>
         <span className="flex items-center gap-2">
@@ -307,7 +304,7 @@ export default async function AdminServicesPage({ searchParams }: PageProps) {
       </form>
 
       {/* Add */}
-      <details className="bg-white border border-stone-200 rounded-xl">
+      <details className="border-t border-stone-100">
         <summary className="px-6 py-4 cursor-pointer text-sm font-semibold text-stone-800">
           + Add a service
         </summary>
@@ -326,16 +323,17 @@ export default async function AdminServicesPage({ searchParams }: PageProps) {
 
       {/* Catalog */}
       {services.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+        <PageSection grow className="text-center text-stone-400 text-sm">
           No services in the catalog yet.
-        </div>
+        </PageSection>
       ) : (
         groups.map((group) => (
-          <section key={group.heading}>
-            <h2 className="font-bold text-stone-700 mb-2 text-sm uppercase tracking-widest">
-              {group.heading}
-            </h2>
-            <div className="bg-white border border-stone-200 rounded-xl divide-y divide-stone-100">
+          <PageSection
+            key={group.heading}
+            title={group.heading}
+            padded={false}
+            bodyClassName="divide-y divide-stone-100 border-t border-stone-100 mt-2"
+          >
               {group.items.map((service) => {
                 const booked = bookedByService.get(service.id) ?? 0;
                 return (
@@ -392,17 +390,12 @@ export default async function AdminServicesPage({ searchParams }: PageProps) {
                   </details>
                 );
               })}
-            </div>
-          </section>
+          </PageSection>
         ))
       )}
 
       {/* Surcharges */}
-      <section>
-        <h2 className="font-bold text-stone-700 mb-2 text-sm uppercase tracking-widest">
-          Additional fees
-        </h2>
-        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-5">
+      <PageSection title="Additional fees" bodyClassName="space-y-5">
           {surcharges.map((surcharge) => (
             <div key={surcharge.id} className="space-y-2">
               <SurchargeRow surcharge={surcharge} />
@@ -425,8 +418,7 @@ export default async function AdminServicesPage({ searchParams }: PageProps) {
           <div className="border-t border-stone-100 pt-4">
             <SurchargeRow />
           </div>
-        </div>
-      </section>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

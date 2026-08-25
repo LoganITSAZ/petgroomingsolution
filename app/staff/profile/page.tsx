@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { ThemePreference } from "@prisma/client";
+import { PageShell, PageSection } from "@/components/ui";
 import PhotoUpload from "@/components/PhotoUpload";
 import { deletePhotoIfUnused, photoUrl, storePhoto } from "@/lib/photos";
 
@@ -84,20 +85,18 @@ export default async function StaffProfilePage({
   }
 
   return (
-    <div className="max-w-2xl space-y-4">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-widest text-brand-text">Account</p>
-        <h1 className="text-2xl font-black text-stone-900 mt-1">Your profile</h1>
-        <p className="text-sm text-stone-500 mt-1">Manage your account details and workspace appearance.</p>
-      </div>
-      {searchParams.saved === "1" && <p className="bg-green-50 border border-green-200 text-green-800 rounded-lg px-3 py-2 text-sm">Profile saved.</p>}
-      {searchParams.password === "saved" && <p className="bg-green-50 border border-green-200 text-green-800 rounded-lg px-3 py-2 text-sm">Password changed.</p>}
-      {searchParams.password === "wrong" && <p className="bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2 text-sm">Current password is incorrect.</p>}
-      {searchParams.password === "invalid" && <p className="bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2 text-sm">New passwords must match and be at least 8 characters.</p>}
-      {searchParams.photoError && <p className="bg-red-50 border border-red-200 text-red-800 rounded-lg px-3 py-2 text-sm">Profile photo must be a JPG, PNG, or WebP image up to 2 MB.</p>}
+    <PageShell
+      title="Your profile"
+      subtitle="Manage your account details and workspace appearance."
+      className="max-w-2xl flex-none"
+    >
+      {searchParams.saved === "1" && <p className="border-b border-stone-100 bg-green-50 text-green-800 px-4 py-2 text-sm">Profile saved.</p>}
+      {searchParams.password === "saved" && <p className="border-b border-stone-100 bg-green-50 text-green-800 px-4 py-2 text-sm">Password changed.</p>}
+      {searchParams.password === "wrong" && <p className="border-b border-stone-100 bg-red-50 text-red-800 px-4 py-2 text-sm">Current password is incorrect.</p>}
+      {searchParams.password === "invalid" && <p className="border-b border-stone-100 bg-red-50 text-red-800 px-4 py-2 text-sm">New passwords must match and be at least 8 characters.</p>}
+      {searchParams.photoError && <p className="border-b border-stone-100 bg-red-50 text-red-800 px-4 py-2 text-sm">Profile photo must be a JPG, PNG, or WebP image up to 2 MB.</p>}
 
-      <section className="bg-white border border-stone-200 rounded-xl p-5 space-y-4">
-        <h2 className="font-bold text-stone-800">Profile details</h2>
+      <PageSection title="Profile details">
         <form action={updateProfile} className="space-y-3">
           <div>
             <label htmlFor="name" className="block text-sm font-semibold text-stone-700 mb-1">Name</label>
@@ -116,10 +115,9 @@ export default async function StaffProfilePage({
           </div>
           <button className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold">Save profile</button>
         </form>
-      </section>
+      </PageSection>
 
-      <section className="bg-white border border-stone-200 rounded-xl p-5">
-        <h2 className="font-bold text-stone-800 mb-3">Profile photo</h2>
+      <PageSection title="Profile photo">
         <PhotoUpload
           action={updatePhoto}
           idField="staffId"
@@ -127,10 +125,9 @@ export default async function StaffProfilePage({
           currentUrl={photoUrl(staff.photoId)}
           label={staff.name}
         />
-      </section>
+      </PageSection>
 
-      <section className="bg-white border border-stone-200 rounded-xl p-5 space-y-4">
-        <h2 className="font-bold text-stone-800">Change password</h2>
+      <PageSection title="Change password">
         <form action={changePassword} className="space-y-3">
           {[["currentPassword", "Current password"], ["newPassword", "New password"], ["confirmPassword", "Confirm new password"]].map(([id, label]) => (
             <div key={id}>
@@ -140,7 +137,7 @@ export default async function StaffProfilePage({
           ))}
           <button className="bg-stone-800 hover:bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-semibold">Change password</button>
         </form>
-      </section>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { formatStatus, formatServiceType, formatSpecies } from "@/lib/utils";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 import { notFound } from "next/navigation";
 import {
   redeemCustomerReward,
@@ -92,42 +93,40 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
   });
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto">
-      {/* Back link */}
-      <Link
-        href="/staff/customers"
-        className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 transition-colors"
-      >
-        ← Back to Customers
-      </Link>
+    <PageShell
+      back={{ href: "/staff/customers", label: "Back to Customers" }}
+      title={`${customer.firstName} ${customer.lastName}`}
+      subtitle={`Member since ${memberSince}`}
+      className="max-w-5xl mx-auto w-full"
+    >
 
       {searchParams.photo === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Photo updated.
-        </div>
+        </p>
       )}
       {searchParams.error?.startsWith("photo_") && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {searchParams.error === "photo_too_large"
             ? "Photos have to be 2 MB or smaller."
             : "Photos must be JPEG, PNG or WebP."}
-        </div>
+        </p>
       )}
 
       {searchParams.groomer === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Groomer updated.
-        </div>
+        </p>
       )}
 
       {searchParams.created === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Customer created.
-        </div>
+        </p>
       )}
 
       {/* Customer header */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-4">
+      <PageSection>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
             <PhotoUpload
@@ -138,9 +137,6 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
               label={`${customer.firstName} ${customer.lastName}`}
             />
             <div>
-            <h1 className="text-xl font-black text-stone-900">
-              {customer.firstName} {customer.lastName}
-            </h1>
             <div className="mt-2 flex flex-wrap gap-x-6 gap-y-0.5 text-sm text-stone-500">
               <span>
                 <span className="font-medium text-stone-700">Email:</span>{" "}
@@ -209,27 +205,27 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
             + New Appointment
           </Link>
         </div>
-      </div>
+      </PageSection>
 
       {searchParams.rate === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Pricing saved. It applies from the next booking — visits already quoted keep their price.
-        </div>
+        </p>
       )}
       {searchParams.redeemed === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Reward redeemed.
-        </div>
+        </p>
       )}
       {searchParams.error === "redeem_failed" && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           Nothing to redeem — the card may have been used on another screen.
-        </div>
+        </p>
       )}
 
       {/* What this customer pays, and what they have earned */}
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="bg-white border border-stone-200 rounded-2xl p-4">
+      <PageSection bodyClassName="grid gap-3 md:grid-cols-2">
+        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="text-sm font-bold text-stone-800">Pricing</h2>
 
           {customer.pricingTier ? (
@@ -303,7 +299,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
         </div>
 
         {card.enabled && (
-          <div className="bg-white border border-stone-200 rounded-2xl p-4">
+          <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
             <h2 className="text-sm font-bold text-stone-800">Rewards</h2>
 
             <div className="mt-2">
@@ -348,17 +344,17 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
             )}
           </div>
         )}
-      </div>
+            </PageSection>
 
       {searchParams.alt === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Approved alternate saved.
-        </div>
+        </p>
       )}
       {searchParams.error === "alt_email" && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           That alternate email address does not look valid.
-        </div>
+        </p>
       )}
 
       {/* Where they are — for pickups, drop-offs and checking the service area */}
@@ -460,13 +456,9 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
       )}
 
       {/* Pets section */}
-      <section>
-        <h2 className="text-lg font-bold text-stone-800 mb-3">
-          Pets{" "}
-          <span className="text-stone-400 font-normal text-base">({customer.pets.length})</span>
-        </h2>
+      <PageSection title={`Pets (${customer.pets.length})`}>
         {customer.pets.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+          <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4 text-center text-stone-400 text-sm">
             No active pets on file.
           </div>
         ) : (
@@ -500,13 +492,12 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
             ))}
           </div>
         )}
-      </section>
+      </PageSection>
 
       {/* Recent appointments */}
-      <section>
-        <h2 className="text-lg font-bold text-stone-800 mb-3">Recent Appointments</h2>
+      <PageSection title="Recent Appointments">
         {customer.appointments.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+          <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4 text-center text-stone-400 text-sm">
             No appointments yet.
           </div>
         ) : (
@@ -568,7 +559,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
             </div>
           </div>
         )}
-      </section>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

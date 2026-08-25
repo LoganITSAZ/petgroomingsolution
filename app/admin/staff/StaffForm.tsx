@@ -1,6 +1,7 @@
 import { StaffRole } from "@prisma/client";
 import Link from "next/link";
-import MultiPicker from "@/components/MultiPicker";
+import { PageSection } from "@/components/ui";
+import TagPicker from "@/components/TagPicker";
 
 /**
  * One form for hiring and for editing. Commission is per person, blank meaning
@@ -26,7 +27,8 @@ export interface StaffFormValues {
 }
 
 const ROLE_LABEL: Record<StaffRole, string> = {
-  ADMIN: "Admin — full access, including the admin panel",
+  ADMIN: "Admin — full access, including the technical screens",
+  MANAGER: "Shop manager — runs the shop, no technical screens",
   GROOMER: "Groomer — grooms pets",
   BATHER: "Bather — bathing and prep",
 };
@@ -47,10 +49,10 @@ export default function StaffForm({
   const editing = Boolean(initial.id);
 
   return (
-    <form action={action} className="space-y-3">
+    <form action={action}>
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
 
-      <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-4">
+      <PageSection bodyClassName="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="text-sm">
             <span className="block font-medium text-stone-700 mb-1">Name</span>
@@ -86,15 +88,15 @@ export default function StaffForm({
 
         <div className="text-sm">
           <span className="block font-medium text-stone-700 mb-1">Roles</span>
-          <MultiPicker
+          <TagPicker
             name="roles"
             initialIds={initial.roles}
             options={Object.values(StaffRole).map((role) => ({
               id: role,
               label: ROLE_LABEL[role],
             }))}
-            addLabel="+ Add another role"
-            placeholder="Select a role…"
+            addLabel="+ Add a role"
+            emptyLabel="No roles yet"
             noun="role"
           />
           <span className="block text-xs text-stone-400 mt-1">
@@ -150,9 +152,9 @@ export default function StaffForm({
           />
           Active — can sign in and be assigned pets
         </label>
-      </div>
+      </PageSection>
 
-      <div className="flex justify-end gap-3">
+      <PageSection tone="muted" bodyClassName="flex justify-end gap-3">
         <Link
           href="/admin/staff"
           className="px-5 py-2 rounded-lg text-sm font-semibold text-stone-600 hover:bg-stone-100"
@@ -165,7 +167,7 @@ export default function StaffForm({
         >
           {submitLabel}
         </button>
-      </div>
+      </PageSection>
     </form>
   );
 }

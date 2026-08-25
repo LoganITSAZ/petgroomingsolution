@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { PageSection } from "@/components/ui";
 import { StaffRole, StationRole } from "@prisma/client";
-import MultiPicker from "@/components/MultiPicker";
+import TagPicker from "@/components/TagPicker";
 import { MAX_KENNEL_COLUMNS, MAX_KENNEL_ROWS, kennelLabel } from "@/lib/kennels";
 
 const ROLE_COPY: Record<StationRole, { label: string; description: string }> = {
@@ -22,11 +23,12 @@ const ROLE_COPY: Record<StationRole, { label: string; description: string }> = {
   },
 };
 
-// ADMIN is an access role, not a floor role, so it is not offered here.
+// ADMIN and MANAGER are access roles, not floor roles, so neither is offered here.
 const ASSIGNABLE_ROLES: StaffRole[] = [StaffRole.GROOMER, StaffRole.BATHER];
 
 const STAFF_ROLE_LABEL: Record<StaffRole, string> = {
   ADMIN: "Admin",
+  MANAGER: "Shop manager",
   GROOMER: "Groomer",
   BATHER: "Bather",
 };
@@ -71,12 +73,9 @@ export default function StationForm({
   });
 
   return (
-    <form action={action} className="space-y-3">
+    <form action={action}>
       {stationId && <input type="hidden" name="id" value={stationId} />}
-      <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-5">
-        <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3">
-          Identity
-        </h2>
+      <PageSection title="Identity" bodyClassName="space-y-5">
 
         <div className="grid grid-cols-3 gap-3 items-start">
           <label htmlFor="name" className="text-sm font-medium text-stone-700 pt-2">
@@ -114,13 +113,10 @@ export default function StationForm({
             <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-700" />
           </label>
         </div>
-      </div>
+      </PageSection>
 
       {/* Role */}
-      <div className="bg-white border border-stone-200 rounded-xl p-4">
-        <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-3">
-          Role
-        </h2>
+      <PageSection title="Role">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {(Object.keys(ROLE_COPY) as StationRole[]).map((value) => (
             <label
@@ -148,22 +144,19 @@ export default function StationForm({
             </label>
           ))}
         </div>
-      </div>
+      </PageSection>
 
       {/* Who may work here */}
-      <div className="bg-white border border-stone-200 rounded-xl p-4">
-        <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-3">
-          Who can work this station
-        </h2>
-        <MultiPicker
+      <PageSection title="Who can work this station">
+        <TagPicker
           name="allowedRoles"
           initialIds={initial.allowedRoles}
           options={ASSIGNABLE_ROLES.map((role) => ({
             id: role,
             label: STAFF_ROLE_LABEL[role],
           }))}
-          addLabel="+ Add another role"
-          placeholder="Anyone on staff"
+          addLabel="+ Add a role"
+          emptyLabel="Anyone on staff"
           noun="role"
           required={false}
         />
@@ -171,11 +164,11 @@ export default function StationForm({
           Leave it empty to allow anyone. With roles listed, only staff holding one of them can be
           assigned to a pet at this station.
         </p>
-      </div>
+      </PageSection>
 
       {/* Kennel grid */}
       {isKennel && (
-        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-5">
+        <PageSection bodyClassName="space-y-5">
           <div className="border-b border-stone-100 pb-3">
             <h2 className="text-base font-semibold text-stone-800">Kennel Layout</h2>
             <p className="text-sm text-stone-500 mt-1">
@@ -259,10 +252,10 @@ export default function StationForm({
               and sit outside this layout. Those doors are kept until they are emptied.
             </p>
           )}
-        </div>
+        </PageSection>
       )}
 
-      <div className="flex justify-end gap-3">
+      <PageSection tone="muted" bodyClassName="flex justify-end gap-3">
         <Link
           href="/admin/stations"
           className="px-5 py-2 rounded-lg text-sm font-semibold text-stone-600 hover:bg-stone-100 transition-colors"
@@ -287,7 +280,7 @@ export default function StationForm({
         >
           {submitLabel}
         </button>
-      </div>
+      </PageSection>
     </form>
   );
 }

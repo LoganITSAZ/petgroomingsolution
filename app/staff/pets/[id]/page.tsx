@@ -6,6 +6,7 @@ import {
   formatCoatType,
 } from "@/lib/utils";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 import PhotoUpload from "@/components/PhotoUpload";
 import InsightList from "@/components/InsightList";
 import { petInsights } from "@/lib/insights";
@@ -95,38 +96,36 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
     : null;
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto">
-      {/* Back link */}
-      <Link
-        href="/staff/customers"
-        className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 transition-colors"
-      >
-        ← Back to Customers
-      </Link>
+    <PageShell
+      back={{ href: "/staff/customers", label: "Back to Customers" }}
+      title={pet.name}
+      subtitle={`${formatSpecies(pet.species)}${pet.breed ? ` · ${pet.breed}` : ""}`}
+      className="max-w-5xl mx-auto w-full"
+    >
 
       {searchParams.photo === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Photo updated.
-        </div>
+        </p>
       )}
       {searchParams.error?.startsWith("photo_") && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-red-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {searchParams.error === "photo_too_large"
             ? "Photos have to be 2 MB or smaller."
             : "Photos must be JPEG, PNG or WebP."}
-        </div>
+        </p>
       )}
 
       {/* Bite history banner */}
       {pet.hasBiteHistory && (
-        <div className="bg-red-600 text-white rounded-xl px-4 py-2.5 flex items-center gap-3 font-bold text-sm shadow-sm">
+        <div className="border-t border-stone-100 bg-red-600 text-white px-3 py-2.5 flex items-center gap-3 font-bold text-sm">
           <span className="text-xl">⚠</span>
           <span>BITE HISTORY — Handle with extreme caution</span>
         </div>
       )}
 
       {/* Pet header */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-4">
+      <PageSection>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
             <PhotoUpload
@@ -137,7 +136,6 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
               label={pet.name}
             />
             <div>
-            <h1 className="text-xl font-black text-stone-900">{pet.name}</h1>
             <div className="mt-2 flex flex-wrap gap-x-6 gap-y-0.5 text-sm text-stone-500">
               <span>
                 <span className="font-medium text-stone-700">Species:</span>{" "}
@@ -191,21 +189,18 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
             + New Appointment
           </Link>
         </div>
-      </div>
+      </PageSection>
 
       {insights.length > 0 && (
-        <section>
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1.5">
-            What past visits show
-          </h2>
+        <PageSection title="What past visits show">
           <InsightList insights={insights} compact />
-        </section>
+        </PageSection>
       )}
 
       {/* Two-column info grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <PageSection bodyClassName="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Owner card */}
-        <div className="bg-white border border-stone-200 rounded-xl p-4">
+        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">Owner</h2>
           <p className="font-bold text-stone-900">
             {pet.customer.firstName} {pet.customer.lastName}
@@ -231,7 +226,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
         </div>
 
         {/* Health flags */}
-        <div className="bg-white border border-stone-200 rounded-xl p-4">
+        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
             Health Flags
           </h2>
@@ -252,7 +247,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
         </div>
 
         {/* Grooming notes */}
-        <div className="bg-white border border-stone-200 rounded-xl p-4">
+        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
             Grooming Notes
           </h2>
@@ -264,7 +259,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
         </div>
 
         {/* Temperament notes */}
-        <div className="bg-white border border-stone-200 rounded-xl p-4">
+        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
             Temperament Notes
           </h2>
@@ -274,13 +269,12 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
             <p className="text-sm text-stone-400">No temperament notes.</p>
           )}
         </div>
-      </div>
+            </PageSection>
 
       {/* Visit event log */}
-      <section>
-        <h2 className="text-lg font-bold text-stone-800 mb-3">Visit Events</h2>
+      <PageSection title="Visit Events">
         {visitEvents.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+          <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4 text-center text-stone-400 text-sm">
             No visit events recorded.
           </div>
         ) : (
@@ -315,13 +309,12 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
             ))}
           </div>
         )}
-      </section>
+      </PageSection>
 
       {/* Appointment history */}
-      <section>
-        <h2 className="text-lg font-bold text-stone-800 mb-3">Appointment History</h2>
+      <PageSection title="Appointment History">
         {pet.appointments.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+          <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4 text-center text-stone-400 text-sm">
             No appointments yet.
           </div>
         ) : (
@@ -378,7 +371,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
             </div>
           </div>
         )}
-      </section>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

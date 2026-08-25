@@ -2,9 +2,10 @@ import { getConfig } from "@/lib/config";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-guards";
+import { requireManager } from "@/lib/auth-guards";
 import Link from "next/link";
 import AddressMap from "@/components/AddressMap";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -23,7 +24,7 @@ export const metadata = { title: "Shop settings" };
 async function saveSettings(formData: FormData) {
   "use server";
 
-  await requireAdmin();
+  await requireManager();
 
   const shopName = formData.get("shopName") as string;
   const shopTagline = formData.get("shopTagline") as string;
@@ -108,11 +109,10 @@ const FIELD =
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-5 mt-3 first:mt-0">
-      <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3">{title}</h2>
-      {hint && <p className="text-sm text-stone-500 -mt-2">{hint}</p>}
+    <PageSection title={title} bodyClassName="space-y-5">
+      {hint && <p className="text-sm text-stone-500">{hint}</p>}
       {children}
-    </div>
+    </PageSection>
   );
 }
 
@@ -173,18 +173,15 @@ export default async function SettingsPage({ searchParams }: PageProps) {
   const config = await getConfig();
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-xl font-bold text-stone-900">Shop Settings</h1>
-        <p className="text-sm text-stone-500 mt-1">
-          Your shop&apos;s details, the features it runs, and the numbers behind them.
-        </p>
-      </div>
+    <PageShell
+      title="Shop Settings"
+      subtitle="Your shop's details, the features it runs, and the numbers behind them."
+    >
 
       {searchParams.saved === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Settings saved successfully.
-        </div>
+        </p>
       )}
 
       <form action={saveSettings}>
@@ -381,15 +378,15 @@ export default async function SettingsPage({ searchParams }: PageProps) {
           </Field>
         </Section>
 
-        <div className="flex justify-end pt-4">
+        <PageSection tone="muted" bodyClassName="flex justify-end">
           <button
             type="submit"
             className="bg-amber-700 hover:bg-amber-800 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
           >
             Save settings
           </button>
-        </div>
+        </PageSection>
       </form>
-    </div>
+    </PageShell>
   );
 }
