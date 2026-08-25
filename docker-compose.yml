@@ -1,24 +1,8 @@
-services:
-  app:
-    build: .
-    container_name: gentlegroomer_app
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/gentlegroomer
-      AUTH_SECRET: ${AUTH_SECRET}
-      NEXTAUTH_URL: ${NEXTAUTH_URL}
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      EMAIL_FROM: ${EMAIL_FROM}
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
-      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
-      NODE_ENV: production
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - internal
+# Deploy: cp .env.example .env, fill in the two required values, then
+#   docker compose up -d --build
+# Migrations and baseline data run automatically before the app starts.
 
+services:
   db:
     image: postgres:16-alpine
     container_name: gentlegroomer_db
@@ -26,17 +10,73 @@ services:
     environment:
       POSTGRES_DB: gentlegroomer
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gentlegroomer"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+    # Loopback only: the app reaches Postgres over the internal network, and
+    # local tools can still use localhost:5432.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    networks:
+      - internal
+
+  # Runs to completion, then the app starts. This is what makes a deploy a
+  # single command.
+  migrate:
+    build:
+      context: .
+      target: toolbox
+    container_name: gentlegroomer_migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/gentlegroomer
+      SEED_ON_START: ${SEED_ON_START:-true}
+      SHOP_NAME: ${SHOP_NAME:-Your Grooming Shop}
+      SHOP_PHONE: ${SHOP_PHONE:-}
+      SHOP_EMAIL: ${SHOP_EMAIL:-}
+      SHOP_ADDRESS: ${SHOP_ADDRESS:-}
+      SHOP_WEBSITE: ${SHOP_WEBSITE:-}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme123}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  app:
+    build:
+      context: .
+      target: runner
+    container_name: gentlegroomer_app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/gentlegroomer
+      AUTH_SECRET: "${AUTH_SECRET:?set AUTH_SECRET in .env - generate one with openssl rand -base64 32}"
+      AUTH_TRUST_HOST: "true"
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     networks:
       - internal
 
@@ -48,7 +88,9 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # Defaults to plain HTTP so a fresh box works immediately. Once
+      # certificates exist, set NGINX_CONF=./nginx.tls.conf in .env.
+      - ${NGINX_CONF:-./nginx.conf}:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
     depends_on:

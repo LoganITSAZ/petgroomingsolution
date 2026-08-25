@@ -1,4 +1,5 @@
 FROM node:20-alpine AS base
+RUN apk add --no-cache openssl
 
 # ─── deps stage ────────────────────────────────────────────
 FROM base AS deps
@@ -15,6 +16,21 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
+# ─── toolbox stage ─────────────────────────────────────────
+# Carries the Prisma CLI and the seed script. Compose runs this once, before
+# the app starts, so a deployment never needs a manual migrate step.
+FROM base AS toolbox
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json tsconfig.json ./
+COPY prisma ./prisma
+COPY lib ./lib
+COPY docker-entrypoint.sh ./
+RUN npx prisma generate
+RUN chmod +x docker-entrypoint.sh
+CMD ["./docker-entrypoint.sh"]
+
 # ─── runner stage ──────────────────────────────────────────
 FROM base AS runner
 WORKDIR /app
@@ -27,7 +43,6 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 USER nextjs
 EXPOSE 3000
