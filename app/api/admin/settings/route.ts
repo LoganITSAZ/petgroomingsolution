@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { getStaffRoles } from "@/lib/staff-roles";
 import type { Session } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
@@ -17,10 +18,14 @@ const PATCHABLE_FIELDS = new Set([
   "featureEmailNotify",
   "featureSmsNotify",
   "featureWaiverRequired",
+  "featureRewards",
+  "rewardVisitsPerReward",
+  "rewardLabel",
   "waiverText",
   "waiverVersion",
   "businessHours",
-  "emailFromName",
+  "shopTagline",
+  "overtimeWeeklyHours",
   "emailFromAddress",
   "twilioAccountSid",
   "twilioAuthToken",
@@ -31,10 +36,13 @@ const PATCHABLE_FIELDS = new Set([
   "walkInWindowEnd",
 ]);
 
-function requireAdmin(session: Session | null) {
+// Roles come from the database, not the token: a role granted after sign-in
+// has to take effect immediately.
+async function requireAdmin(session: Session | null) {
   if (!session?.user) return "Unauthorized";
   if (session.user.userType !== "staff") return "Forbidden";
-  if (session.user.role !== "ADMIN") return "Forbidden";
+  const roles = await getStaffRoles(session.user.id);
+  if (!roles.includes("ADMIN")) return "Forbidden";
   return null;
 }
 
@@ -42,7 +50,7 @@ function requireAdmin(session: Session | null) {
 // Returns the full SystemConfig row. Admin only.
 export async function GET(_req: Request) {
   const session = await auth();
-  const denied = requireAdmin(session);
+  const denied = await requireAdmin(session);
   if (denied) {
     const status = denied === "Unauthorized" ? 401 : 403;
     return NextResponse.json({ error: denied }, { status });
@@ -57,7 +65,7 @@ export async function GET(_req: Request) {
 // Body: partial SystemConfig (only whitelisted fields are applied)
 export async function PATCH(req: Request) {
   const session = await auth();
-  const denied = requireAdmin(session);
+  const denied = await requireAdmin(session);
   if (denied) {
     const status = denied === "Unauthorized" ? 401 : 403;
     return NextResponse.json({ error: denied }, { status });

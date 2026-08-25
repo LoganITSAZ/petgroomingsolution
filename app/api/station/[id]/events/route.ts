@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { subscribeToStation } from "@/lib/station-events";
+import { KIOSK_APPOINTMENT_SELECT, subscribeToStation } from "@/lib/station-events";
+import { getKennelBoard } from "@/lib/kennels";
+import { OCCUPYING_STATUSES } from "@/lib/stations";
+import { StationRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 export async function GET(
@@ -14,21 +17,18 @@ export async function GET(
     return new Response("Station not found", { status: 404 });
   }
 
-  // Fetch current appointment for initial state
-  const currentAppointment = await prisma.appointment.findFirst({
-    where: {
-      stationId,
-      status: {
-        notIn: ["COMPLETE", "READY_PICKUP", "PICKED_UP", "CANCELLED", "NO_SHOW"],
-      },
-    },
-    include: {
-      pet: true,
-      customer: { select: { firstName: true, lastName: true, phone: true, email: true } },
-      staff: { select: { name: true } },
-    },
-    orderBy: { checkedInAt: "asc" },
-  });
+  // Kennel units stream their whole board instead of a single appointment
+  const isKennel = station.role === StationRole.KENNEL;
+  const kennels = isKennel ? await getKennelBoard(stationId) : [];
+
+  // A station can hold several pets, so the screen is sent the whole list.
+  const appointments = isKennel
+    ? []
+    : await prisma.appointment.findMany({
+        where: { stationId, status: { in: OCCUPYING_STATUSES } },
+        select: KIOSK_APPOINTMENT_SELECT,
+        orderBy: { checkedInAt: "asc" },
+      });
 
   const encoder = new TextEncoder();
 
@@ -37,7 +37,11 @@ export async function GET(
       const unsubscribe = subscribeToStation(stationId, controller);
 
       // Send initial state immediately
-      const initial = `data: ${JSON.stringify({ type: "init", appointment: currentAppointment, station })}\n\n`;
+      const initial = `data: ${JSON.stringify(
+        isKennel
+          ? { type: "init", station, kennels }
+          : { type: "init", appointments, station }
+      )}\n\n`;
       controller.enqueue(encoder.encode(initial));
 
       // Heartbeat every 30s to keep connection alive through proxies

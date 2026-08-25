@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { changeAppointmentStatus } from "@/lib/appointment-status";
 import { AppointmentStatus } from "@prisma/client";
 
 const APPOINTMENT_INCLUDE = {
@@ -129,23 +130,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Appointment is already cancelled" }, { status: 409 });
   }
 
-  const cancelled = await prisma.$transaction(async (tx) => {
-    const updated = await tx.appointment.update({
-      where: { id },
-      data: { status: AppointmentStatus.CANCELLED },
-      include: APPOINTMENT_INCLUDE,
-    });
-
-    await tx.appointmentStatusHistory.create({
-      data: {
-        appointmentId: id,
-        status: AppointmentStatus.CANCELLED,
-        changedById: session.user.id,
-        note: "Cancelled via API",
-      },
-    });
-
-    return updated;
+  // Same path as every other status change: audit row, station display
+  // refresh, kennel release, notifications.
+  const cancelled = await changeAppointmentStatus({
+    appointmentId: id,
+    status: AppointmentStatus.CANCELLED,
+    note: "Cancelled via API",
+    staffId: session.user.id,
   });
 
   return NextResponse.json(cancelled);

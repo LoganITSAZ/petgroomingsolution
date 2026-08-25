@@ -1,7 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { broadcastToStation } from "@/lib/station-events";
-import { sendReadyForPickup } from "@/lib/email";
+import { changeAppointmentStatus } from "@/lib/appointment-status";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { AppointmentStatus } from "@prisma/client";
@@ -26,63 +25,19 @@ export async function PATCH(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { status, note } = parsed.data;
-
-  // Load current appointment
-  const appointment = await prisma.appointment.findUnique({
-    where: { id: params.id },
-    include: {
-      pet: true,
-      customer: { select: { email: true, firstName: true, lastName: true } },
-      station: true,
-    },
-  });
-
+  const appointment = await prisma.appointment.findUnique({ where: { id: params.id } });
   if (!appointment) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Update status + timestamps
-  const now = new Date();
-  const updated = await prisma.appointment.update({
-    where: { id: params.id },
-    data: {
-      status,
-      checkedInAt: status === "CHECKED_IN" ? now : undefined,
-      completedAt: status === "COMPLETE" ? now : undefined,
-      statusHistory: {
-        create: {
-          status,
-          note,
-          changedById: session.user.id,
-        },
-      },
-    },
-    include: {
-      pet: true,
-      customer: { select: { firstName: true, lastName: true, phone: true, email: true } },
-      staff: { select: { name: true } },
-      station: true,
-    },
+  // Audit row, station broadcast, kennel release and pickup email all live in
+  // changeAppointmentStatus so every caller behaves identically.
+  const updated = await changeAppointmentStatus({
+    appointmentId: params.id,
+    status: parsed.data.status,
+    note: parsed.data.note,
+    staffId: session.user.id,
   });
-
-  // Broadcast to station display
-  if (updated.stationId) {
-    broadcastToStation(updated.stationId, {
-      type: "status_update",
-      appointment: updated,
-      station: updated.station,
-    });
-  }
-
-  // Send ready-for-pickup email
-  if (status === "READY_PICKUP" && updated.customer.email) {
-    await sendReadyForPickup({
-      to: updated.customer.email,
-      ownerName: `${updated.customer.firstName} ${updated.customer.lastName}`,
-      petName: updated.pet.name,
-    }).catch(console.error); // don't fail the request if email fails
-  }
 
   return NextResponse.json(updated);
 }

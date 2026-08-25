@@ -1,5 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { serviceFloorCents } from "@/lib/pricing";
+import { bookingRateSnapshot } from "@/lib/pricing-tiers";
 import { getConfig } from "@/lib/config";
 import { currentShopTime, isWithinWalkInWindow } from "@/lib/utils";
 import { NextResponse } from "next/server";
@@ -87,6 +89,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Pet does not belong to this customer" }, { status: 400 });
   }
 
+  // Walk-ins need a line item like any other visit, or they are invisible to
+  // the service mix and revenue figures in analytics.
+  const catalogService = await prisma.service.findFirst({
+    where: { type: serviceType as ServiceType, isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+  });
+
+  const linePriceCents = catalogService ? serviceFloorCents(catalogService) : null;
+  // A walk-in is quoted the same negotiated rate as a booked visit.
+  const rate = await bookingRateSnapshot(customerId as string, [{ priceCents: linePriceCents }]);
+
   const appointment = await prisma.$transaction(async (tx) => {
     const created = await tx.appointment.create({
       data: {
@@ -97,6 +110,16 @@ export async function POST(req: Request) {
         appointmentType: AppointmentType.WALK_IN,
         status: AppointmentStatus.CHECKED_IN,
         checkedInAt: now,
+        pricingTierId: rate.pricingTierId,
+        pricingDiscountCents: rate.pricingDiscountCents,
+        services: {
+          create: {
+            serviceId: catalogService?.id ?? null,
+            serviceType: serviceType as ServiceType,
+            priceCents: linePriceCents,
+            sortOrder: 0,
+          },
+        },
       },
       include: {
         pet: true,
