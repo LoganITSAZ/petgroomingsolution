@@ -6,6 +6,14 @@ import { getConfig } from "@/lib/config";
 import { currentShopTime, isWithinWalkInWindow } from "@/lib/utils";
 import { NextResponse } from "next/server";
 import { AppointmentStatus, AppointmentType, ServiceType } from "@prisma/client";
+import { z } from "zod";
+import { parseBody } from "@/lib/api-validation";
+
+const CreateBody = z.object({
+  customerId: z.string().min(1),
+  petId: z.string().min(1),
+  serviceType: z.nativeEnum(ServiceType),
+});
 
 // POST /api/walk-in
 // Creates a walk-in appointment if the walk-in portal is enabled and the
@@ -45,38 +53,19 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const { customerId, petId, serviceType } = body as Record<string, unknown>;
-
-  if (!customerId || !petId || !serviceType) {
-    return NextResponse.json(
-      { error: "customerId, petId, and serviceType are required" },
-      { status: 400 }
-    );
-  }
-
-  if (!Object.values(ServiceType).includes(serviceType as ServiceType)) {
-    return NextResponse.json({ error: "Invalid serviceType" }, { status: 400 });
-  }
+  const parsed = await parseBody(req, CreateBody);
+  if ("response" in parsed) return parsed.response;
+  const { customerId, petId, serviceType } = parsed.data;
 
   // Customers can only create walk-ins for themselves
-  if (
-    session.user.userType === "customer" &&
-    session.user.id !== customerId
-  ) {
+  if (session.user.userType === "customer" && session.user.id !== customerId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   // Verify customer and pet
   const [customer, pet] = await Promise.all([
-    prisma.customer.findUnique({ where: { id: customerId as string } }),
-    prisma.pet.findUnique({ where: { id: petId as string } }),
+    prisma.customer.findUnique({ where: { id: customerId } }),
+    prisma.pet.findUnique({ where: { id: petId } }),
   ]);
 
   if (!customer) {
@@ -92,21 +81,21 @@ export async function POST(req: Request) {
   // Walk-ins need a line item like any other visit, or they are invisible to
   // the service mix and revenue figures in analytics.
   const catalogService = await prisma.service.findFirst({
-    where: { type: serviceType as ServiceType, isActive: true },
+    where: { type: serviceType, isActive: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
 
   const linePriceCents = catalogService ? serviceFloorCents(catalogService) : null;
   // A walk-in is quoted the same negotiated rate as a booked visit.
-  const rate = await bookingRateSnapshot(customerId as string, [{ priceCents: linePriceCents }]);
+  const rate = await bookingRateSnapshot(customerId, [{ priceCents: linePriceCents }]);
 
   const appointment = await prisma.$transaction(async (tx) => {
     const created = await tx.appointment.create({
       data: {
-        customerId: customerId as string,
-        petId: petId as string,
+        customerId,
+        petId,
         scheduledAt: now,
-        serviceType: serviceType as ServiceType,
+        serviceType,
         appointmentType: AppointmentType.WALK_IN,
         status: AppointmentStatus.CHECKED_IN,
         checkedInAt: now,
@@ -115,7 +104,7 @@ export async function POST(req: Request) {
         services: {
           create: {
             serviceId: catalogService?.id ?? null,
-            serviceType: serviceType as ServiceType,
+            serviceType,
             priceCents: linePriceCents,
             sortOrder: 0,
           },

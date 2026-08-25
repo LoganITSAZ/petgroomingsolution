@@ -1,22 +1,37 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { Species, CoatType } from "@prisma/client";
+import { z } from "zod";
+import { Species, CoatType, Prisma } from "@prisma/client";
+import { parseBody } from "@/lib/api-validation";
+import { PhotoUrl } from "@/lib/pet-schema";
 
 const PET_INCLUDE_STAFF = {
   customer: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
 } as const;
 
+const CreateBody = z.object({
+  name: z.string().trim().min(1, "name is required"),
+  customerId: z.string().min(1).optional(),
+  species: z.nativeEnum(Species).default(Species.DOG),
+  breed: z.string().nullish(),
+  dateOfBirth: z.coerce.date().nullish(),
+  weightLbs: z.number().positive().nullish(),
+  coatType: z.nativeEnum(CoatType).nullish(),
+  temperamentNotes: z.string().nullish(),
+  healthFlags: z.array(z.string().min(1)).default([]),
+  groomingNotes: z.string().nullish(),
+  photoUrl: PhotoUrl.nullish(),
+});
+
 // GET /api/pets
-// Staff: all active pets (with customer info), filterable by customerId query param
+// Staff: all active pets (with customer info), filterable by customerId
 // Customer: only their own pets
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const { searchParams } = new URL(req.url);
 
   if (session.user.userType === "customer") {
     const pets = await prisma.pet.findMany({
@@ -26,10 +41,9 @@ export async function GET(req: Request) {
     return NextResponse.json(pets);
   }
 
-  // Staff: can filter by customerId
+  const { searchParams } = new URL(req.url);
   const customerId = searchParams.get("customerId");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { isActive: true };
+  const where: Prisma.PetWhereInput = { isActive: true };
   if (customerId) where.customerId = customerId;
 
   const pets = await prisma.pet.findMany({
@@ -43,53 +57,28 @@ export async function GET(req: Request) {
 
 // POST /api/pets
 // Staff can create for any customerId. Customer creates only for themselves.
-// Body: { name, customerId?, species?, breed?, dateOfBirth?, weightLbs?, coatType?,
-//         temperamentNotes?, healthFlags?, groomingNotes?, photoUrl? }
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
+  const parsed = await parseBody(req, CreateBody);
+  if ("response" in parsed) return parsed.response;
+  const body = parsed.data;
 
-  const {
-    name,
-    customerId: bodyCustomerId,
-    species,
-    breed,
-    dateOfBirth,
-    weightLbs,
-    coatType,
-    temperamentNotes,
-    healthFlags,
-    groomingNotes,
-    photoUrl,
-  } = body as Record<string, unknown>;
-
-  if (!name || typeof name !== "string" || !name.trim()) {
-    return NextResponse.json({ error: "name is required" }, { status: 400 });
-  }
-
-  // Resolve the target customerId
+  // A customer's own id wins over anything in the body — they never create a
+  // pet under someone else's account.
   let targetCustomerId: string;
   if (session.user.userType === "customer") {
-    // Customers always create pets for themselves
     targetCustomerId = session.user.id;
   } else {
-    // Staff must supply a customerId
-    if (!bodyCustomerId || typeof bodyCustomerId !== "string") {
+    if (!body.customerId) {
       return NextResponse.json({ error: "customerId is required" }, { status: 400 });
     }
-    targetCustomerId = bodyCustomerId;
+    targetCustomerId = body.customerId;
   }
 
-  // Verify the customer exists
   const customer = await prisma.customer.findUnique({
     where: { id: targetCustomerId },
     select: { id: true, isActive: true },
@@ -101,38 +90,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Customer account is inactive" }, { status: 400 });
   }
 
-  // Validate enums
-  if (species && !Object.values(Species).includes(species as Species)) {
-    return NextResponse.json({ error: "Invalid species" }, { status: 400 });
-  }
-  if (coatType && !Object.values(CoatType).includes(coatType as CoatType)) {
-    return NextResponse.json({ error: "Invalid coatType" }, { status: 400 });
-  }
-
-  let parsedDob: Date | undefined;
-  if (dateOfBirth) {
-    parsedDob = new Date(dateOfBirth as string);
-    if (isNaN(parsedDob.getTime())) {
-      return NextResponse.json({ error: "Invalid dateOfBirth" }, { status: 400 });
-    }
-  }
-
   const pet = await prisma.pet.create({
     data: {
       customerId: targetCustomerId,
-      name: (name as string).trim(),
-      species: (species as Species | undefined) ?? Species.DOG,
-      breed: (breed as string | undefined) ?? null,
-      dateOfBirth: parsedDob ?? null,
-      weightLbs: weightLbs != null ? Number(weightLbs) : null,
-      coatType: (coatType as CoatType | undefined) ?? null,
-      temperamentNotes: (temperamentNotes as string | undefined) ?? null,
-      healthFlags: Array.isArray(healthFlags) ? (healthFlags as string[]) : [],
-      groomingNotes: (groomingNotes as string | undefined) ?? null,
-      photoUrl: (photoUrl as string | undefined) ?? null,
+      name: body.name,
+      species: body.species,
+      breed: body.breed ?? null,
+      dateOfBirth: body.dateOfBirth ?? null,
+      weightLbs: body.weightLbs ?? null,
+      coatType: body.coatType ?? null,
+      temperamentNotes: body.temperamentNotes ?? null,
+      healthFlags: body.healthFlags,
+      groomingNotes: body.groomingNotes ?? null,
+      photoUrl: body.photoUrl ?? null,
     },
-    include:
-      session.user.userType === "staff" ? PET_INCLUDE_STAFF : undefined,
+    include: session.user.userType === "staff" ? PET_INCLUDE_STAFF : undefined,
   });
 
   return NextResponse.json(pet, { status: 201 });

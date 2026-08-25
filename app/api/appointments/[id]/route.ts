@@ -2,7 +2,18 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { changeAppointmentStatus } from "@/lib/appointment-status";
-import { AppointmentStatus } from "@prisma/client";
+import { AppointmentStatus, Prisma } from "@prisma/client";
+import { z } from "zod";
+import { parseBody } from "@/lib/api-validation";
+
+// Every field optional: a PATCH applies only the keys it actually sends.
+const PatchBody = z.object({
+  stationId: z.string().min(1).nullish(),
+  staffId: z.string().min(1).nullish(),
+  scheduledAt: z.coerce.date().optional(),
+  durationMins: z.number().int().positive().nullish(),
+  visitNotes: z.string().nullish(),
+});
 
 const APPOINTMENT_INCLUDE = {
   pet: true,
@@ -63,33 +74,33 @@ export async function PATCH(
     return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
+  const parsed = await parseBody(req, PatchBody);
+  if ("response" in parsed) return parsed.response;
+  const body = parsed.data;
 
-  const { stationId, staffId, scheduledAt, durationMins, visitNotes } =
-    body as Record<string, unknown>;
-
-  // Build update payload — only include keys that were explicitly provided
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data: Record<string, any> = {};
-
-  if ("stationId" in (body as object)) data.stationId = stationId ?? null;
-  if ("staffId" in (body as object)) data.staffId = staffId ?? null;
-  if ("visitNotes" in (body as object)) data.visitNotes = visitNotes ?? null;
-  if ("durationMins" in (body as object))
-    data.durationMins = durationMins != null ? Number(durationMins) : null;
-
-  if ("scheduledAt" in (body as object)) {
-    const parsed = new Date(scheduledAt as string);
-    if (isNaN(parsed.getTime())) {
-      return NextResponse.json({ error: "Invalid scheduledAt date" }, { status: 400 });
+  // A station or groomer that does not exist is a bad request, not the
+  // foreign-key crash Prisma would otherwise return as a 500.
+  if (body.stationId) {
+    const station = await prisma.station.findUnique({ where: { id: body.stationId } });
+    if (!station) {
+      return NextResponse.json({ error: "Station not found" }, { status: 400 });
     }
-    data.scheduledAt = parsed;
   }
+  if (body.staffId) {
+    const staff = await prisma.staff.findUnique({ where: { id: body.staffId } });
+    if (!staff) {
+      return NextResponse.json({ error: "Staff member not found" }, { status: 400 });
+    }
+  }
+
+  // Only the keys the caller sent are written, so an omitted field keeps its
+  // current value while an explicit null clears it.
+  const data: Prisma.AppointmentUncheckedUpdateInput = {};
+  if ("stationId" in body) data.stationId = body.stationId ?? null;
+  if ("staffId" in body) data.staffId = body.staffId ?? null;
+  if ("visitNotes" in body) data.visitNotes = body.visitNotes ?? null;
+  if ("durationMins" in body) data.durationMins = body.durationMins ?? null;
+  if ("scheduledAt" in body) data.scheduledAt = body.scheduledAt;
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "No updatable fields provided" }, { status: 400 });

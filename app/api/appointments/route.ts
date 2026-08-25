@@ -1,7 +1,13 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { AppointmentStatus, AppointmentType, ServiceType } from "@prisma/client";
+import { z } from "zod";
+import { AppointmentStatus, AppointmentType, Prisma, ServiceType } from "@prisma/client";
+import { parseBody, parseOrBadRequest } from "@/lib/api-validation";
+import { resolveSelectedServices } from "@/lib/appointment-services";
+import { bookingRateSnapshot } from "@/lib/pricing-tiers";
+import { serviceFloorCents } from "@/lib/pricing";
+import { shopDayRangeForKey } from "@/lib/utils";
 
 const APPOINTMENT_INCLUDE = {
   pet: true,
@@ -11,9 +17,37 @@ const APPOINTMENT_INCLUDE = {
   statusHistory: { orderBy: { changedAt: "asc" as const } },
 } as const;
 
+const ListQuery = z.object({
+  // A shop-local calendar day, not a UTC one — see shopDayRangeForKey.
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD").nullish(),
+  status: z.nativeEnum(AppointmentStatus).nullish(),
+  customerId: z.string().min(1).nullish(),
+  petId: z.string().min(1).nullish(),
+});
+
+const CreateBody = z
+  .object({
+    customerId: z.string().min(1),
+    petId: z.string().min(1),
+    scheduledAt: z.coerce.date(),
+    // Catalog ids are the real booking input; serviceType alone is accepted so
+    // an older caller keeps working, and is resolved to a catalog row below.
+    serviceIds: z.array(z.string().min(1)).nonempty().optional(),
+    serviceType: z.nativeEnum(ServiceType).optional(),
+    appointmentType: z.nativeEnum(AppointmentType).default(AppointmentType.APPOINTMENT),
+    stationId: z.string().min(1).nullish(),
+    staffId: z.string().min(1).nullish(),
+    durationMins: z.number().int().positive().nullish(),
+    visitNotes: z.string().nullish(),
+  })
+  .refine((body) => body.serviceIds != null || body.serviceType != null, {
+    message: "either serviceIds or serviceType is required",
+    path: ["serviceIds"],
+  });
+
 // GET /api/appointments
 // Auth: staff only
-// Query params: date (YYYY-MM-DD), status, customerId, petId
+// Query params: date (shop-local YYYY-MM-DD), status, customerId, petId
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) {
@@ -24,29 +58,29 @@ export async function GET(req: Request) {
   }
 
   const { searchParams } = new URL(req.url);
-  const date = searchParams.get("date");       // YYYY-MM-DD
-  const status = searchParams.get("status");   // AppointmentStatus value
-  const customerId = searchParams.get("customerId");
-  const petId = searchParams.get("petId");
+  const parsed = parseOrBadRequest(ListQuery, {
+    date: searchParams.get("date"),
+    status: searchParams.get("status"),
+    customerId: searchParams.get("customerId"),
+    petId: searchParams.get("petId"),
+  });
+  if ("response" in parsed) return parsed.response;
+  const query = parsed.data;
 
-  // Build where clause
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = {};
+  const where: Prisma.AppointmentWhereInput = {};
 
-  if (date) {
-    const start = new Date(`${date}T00:00:00.000Z`);
-    const end = new Date(`${date}T23:59:59.999Z`);
-    where.scheduledAt = { gte: start, lte: end };
+  if (query.date) {
+    // The shop's day, not the server's: a UTC window would open at 5pm the
+    // previous afternoon in Phoenix and drop the evening off the end.
+    const range = shopDayRangeForKey(query.date);
+    if (!range) {
+      return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+    }
+    where.scheduledAt = { gte: range.start, lt: range.end };
   }
-  if (status && Object.values(AppointmentStatus).includes(status as AppointmentStatus)) {
-    where.status = status as AppointmentStatus;
-  }
-  if (customerId) {
-    where.customerId = customerId;
-  }
-  if (petId) {
-    where.petId = petId;
-  }
+  if (query.status) where.status = query.status;
+  if (query.customerId) where.customerId = query.customerId;
+  if (query.petId) where.petId = query.petId;
 
   const appointments = await prisma.appointment.findMany({
     where,
@@ -59,7 +93,6 @@ export async function GET(req: Request) {
 
 // POST /api/appointments
 // Auth: staff only
-// Body: { customerId, petId, scheduledAt, serviceType, appointmentType?, stationId?, staffId?, durationMins?, visitNotes? }
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
@@ -69,45 +102,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
+  const parsed = await parseBody(req, CreateBody);
+  if ("response" in parsed) return parsed.response;
+  const body = parsed.data;
 
-  const {
-    customerId,
-    petId,
-    scheduledAt,
-    serviceType,
-    appointmentType,
-    stationId,
-    staffId,
-    durationMins,
-    visitNotes,
-  } = body as Record<string, unknown>;
-
-  if (!customerId || !petId || !scheduledAt || !serviceType) {
-    return NextResponse.json(
-      { error: "customerId, petId, scheduledAt, and serviceType are required" },
-      { status: 400 }
-    );
-  }
-
-  if (!Object.values(ServiceType).includes(serviceType as ServiceType)) {
-    return NextResponse.json({ error: "Invalid serviceType" }, { status: 400 });
-  }
-
-  const parsedScheduledAt = new Date(scheduledAt as string);
-  if (isNaN(parsedScheduledAt.getTime())) {
-    return NextResponse.json({ error: "Invalid scheduledAt date" }, { status: 400 });
-  }
-
-  // Verify customer and pet exist
   const [customer, pet] = await Promise.all([
-    prisma.customer.findUnique({ where: { id: customerId as string } }),
-    prisma.pet.findUnique({ where: { id: petId as string } }),
+    prisma.customer.findUnique({ where: { id: body.customerId } }),
+    prisma.pet.findUnique({ where: { id: body.petId } }),
   ]);
 
   if (!customer) {
@@ -116,33 +117,81 @@ export async function POST(req: Request) {
   if (!pet) {
     return NextResponse.json({ error: "Pet not found" }, { status: 404 });
   }
-  if (pet.customerId !== customerId) {
+  if (pet.customerId !== body.customerId) {
     return NextResponse.json({ error: "Pet does not belong to this customer" }, { status: 400 });
   }
 
-  const resolvedType =
-    appointmentType && Object.values(AppointmentType).includes(appointmentType as AppointmentType)
-      ? (appointmentType as AppointmentType)
-      : AppointmentType.APPOINTMENT;
+  // A missing station or groomer is a bad request, not a foreign-key crash.
+  if (body.stationId) {
+    const station = await prisma.station.findUnique({ where: { id: body.stationId } });
+    if (!station) {
+      return NextResponse.json({ error: "Station not found" }, { status: 400 });
+    }
+  }
+  if (body.staffId) {
+    const staff = await prisma.staff.findUnique({ where: { id: body.staffId } });
+    if (!staff) {
+      return NextResponse.json({ error: "Staff member not found" }, { status: 400 });
+    }
+  }
+
+  const resolved = await resolveSelectedServices(body.serviceIds ?? []);
+  if (body.serviceIds && !resolved) {
+    return NextResponse.json({ error: "No such services" }, { status: 400 });
+  }
+
+  // A visit carries line items or it is invisible to the service mix and to
+  // revenue. When only a legacy serviceType was sent, stand in the catalog row
+  // for that type — the same fallback the walk-in route uses.
+  // serviceId is nullable on the line: a shop can retire a catalog row while
+  // visits that used it stay on the books.
+  let lines: {
+    serviceId: string | null;
+    serviceType: ServiceType;
+    priceCents: number | null;
+    sortOrder: number;
+  }[] = resolved?.lines ?? [];
+  const serviceType = resolved?.primaryType ?? body.serviceType!;
+
+  if (lines.length === 0) {
+    const catalogService = await prisma.service.findFirst({
+      where: { type: serviceType, isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    });
+    lines = [
+      {
+        serviceId: catalogService?.id ?? null,
+        serviceType,
+        priceCents: catalogService ? serviceFloorCents(catalogService) : null,
+        sortOrder: 0,
+      },
+    ];
+  }
+
+  // Snapshot the customer's negotiated rate onto the visit, so editing the
+  // tier later never reprices what was quoted here.
+  const rate = await bookingRateSnapshot(body.customerId, lines);
 
   const appointment = await prisma.$transaction(async (tx) => {
     const created = await tx.appointment.create({
       data: {
-        customerId: customerId as string,
-        petId: petId as string,
-        scheduledAt: parsedScheduledAt,
-        serviceType: serviceType as ServiceType,
-        appointmentType: resolvedType,
-        stationId: (stationId as string | undefined) ?? null,
-        staffId: (staffId as string | undefined) ?? null,
-        durationMins: durationMins != null ? Number(durationMins) : null,
-        visitNotes: (visitNotes as string | undefined) ?? null,
+        customerId: body.customerId,
+        petId: body.petId,
+        scheduledAt: body.scheduledAt,
+        serviceType,
+        appointmentType: body.appointmentType,
+        stationId: body.stationId ?? null,
+        staffId: body.staffId ?? null,
+        durationMins: body.durationMins ?? resolved?.totalDurationMins ?? null,
+        visitNotes: body.visitNotes ?? null,
         status: AppointmentStatus.SCHEDULED,
+        pricingTierId: rate.pricingTierId,
+        pricingDiscountCents: rate.pricingDiscountCents,
+        services: { create: lines },
       },
       include: APPOINTMENT_INCLUDE,
     });
 
-    // Create initial status history entry
     await tx.appointmentStatusHistory.create({
       data: {
         appointmentId: created.id,
