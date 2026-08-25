@@ -27,3 +27,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# verification builds (npm run build:check)
+.next-check
+
+# Playwright MCP session artifacts (screenshots, traces)
+.playwright-mcp/
+
+# Claude Code notes and local settings
+CLAUDE.md
+**/CLAUDE.md
+CLAUDE.local.md
+**/CLAUDE.local.md
+.claude/
