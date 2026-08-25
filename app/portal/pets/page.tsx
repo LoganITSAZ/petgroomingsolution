@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "My pets" };
+
 const speciesEmoji: Record<string, string> = {
   DOG: "🐶",
   CAT: "🐱",
@@ -31,18 +35,18 @@ export default async function PortalPetsPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-stone-900">My Pets</h1>
+          <h1 className="text-xl font-black text-stone-900">My Pets</h1>
           <p className="text-stone-500 text-sm mt-0.5">
             {pets.length === 0 ? "No pets on file yet." : `${pets.length} pet${pets.length !== 1 ? "s" : ""} on file.`}
           </p>
         </div>
         <Link
           href="/portal/pets/new"
-          className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+          className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
         >
           + Add a Pet
         </Link>
@@ -50,22 +54,22 @@ export default async function PortalPetsPage() {
 
       {/* Pet cards */}
       {pets.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-12 text-center">
-          <p className="text-4xl mb-4">🐾</p>
-          <p className="text-stone-500 mb-4">You haven&apos;t added any pets yet.</p>
+        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+          <p className="text-4xl mb-3">🐾</p>
+          <p className="text-stone-500 mb-3">You haven&apos;t added any pets yet.</p>
           <Link
             href="/portal/pets/new"
-            className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+            className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
           >
             Add your first pet →
           </Link>
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid sm:grid-cols-2 gap-3">
           {pets.map((pet) => (
             <div
               key={pet.id}
-              className="bg-white border border-stone-200 rounded-xl p-5 space-y-3 hover:border-amber-300 transition-colors"
+              className="bg-white border border-stone-200 rounded-xl p-4 space-y-3 hover:border-amber-300 transition-colors"
             >
               {/* Pet name + bite badge */}
               <div className="flex items-start justify-between gap-2">

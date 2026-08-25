@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import { formatStatus, formatServiceType } from "@/lib/utils";
 import Link from "next/link";
 
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "My appointments" };
+
 const statusColor: Record<string, string> = {
   SCHEDULED: "bg-stone-100 text-stone-600",
   CHECKED_IN: "bg-blue-100 text-blue-700",
@@ -13,7 +17,7 @@ const statusColor: Record<string, string> = {
   COMPLETE: "bg-green-100 text-green-700",
   READY_PICKUP: "bg-emerald-100 text-emerald-800",
   PICKED_UP: "bg-stone-100 text-stone-400",
-  CANCELLED: "bg-red-100 text-red-500",
+  CANCELLED: "bg-red-100 text-red-700",
   NO_SHOW: "bg-red-100 text-red-400",
 };
 
@@ -41,16 +45,16 @@ export default async function PortalAppointmentsPage() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-black text-stone-900">My Appointments</h1>
+          <h1 className="text-xl font-black text-stone-900">My Appointments</h1>
           <p className="text-stone-500 text-sm mt-0.5">View and manage your grooming appointments.</p>
         </div>
         <Link
           href="/portal/appointments/new"
-          className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+          className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
         >
           + Book Appointment
         </Link>
@@ -62,9 +66,9 @@ export default async function PortalAppointmentsPage() {
           Upcoming ({upcoming.length})
         </h2>
         {upcoming.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-8 text-center text-stone-400">
+          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400">
             No upcoming appointments.{" "}
-            <Link href="/portal/appointments/new" className="text-amber-600 hover:underline">
+            <Link href="/portal/appointments/new" className="text-amber-700 hover:underline">
               Book one now →
             </Link>
           </div>
@@ -106,7 +110,7 @@ function AppointmentCard({
     status: string;
     appointmentType: string;
     pet: { name: string; species: string };
-    station: { displayLabel?: string | null; name: string } | null;
+    station: { name: string } | null;
   };
   statusColor: Record<string, string>;
   muted?: boolean;
@@ -125,7 +129,7 @@ function AppointmentCard({
 
   return (
     <div
-      className={`bg-white border rounded-xl px-5 py-4 flex items-start justify-between gap-4 ${
+      className={`bg-white border rounded-xl px-4 py-2.5 flex items-start justify-between gap-3 ${
         muted ? "border-stone-100 opacity-75" : "border-stone-200"
       }`}
     >
@@ -145,7 +149,7 @@ function AppointmentCard({
           </p>
           {appt.station && (
             <p className="text-xs text-stone-400 mt-0.5">
-              Station: {appt.station.displayLabel ?? appt.station.name}
+              Station: {appt.station.name}
             </p>
           )}
         </div>

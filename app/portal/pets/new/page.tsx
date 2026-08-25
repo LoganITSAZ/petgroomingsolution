@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "Add a pet" };
+
 export default async function NewPetPage() {
   const session = await auth();
   if (!session?.user) redirect("/login?type=customer");
@@ -43,19 +47,19 @@ export default async function NewPetPage() {
   return (
     <div className="max-w-xl">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-3">
         <Link href="/portal/pets" className="text-sm text-stone-400 hover:text-stone-600 mb-2 inline-block">
           ← Back to My Pets
         </Link>
-        <h1 className="text-2xl font-black text-stone-900">Add a Pet</h1>
+        <h1 className="text-xl font-black text-stone-900">Add a Pet</h1>
         <p className="text-stone-500 text-sm mt-0.5">Tell us about your furry family member.</p>
       </div>
 
-      <form action={createPet} className="bg-white border border-stone-200 rounded-xl p-6 space-y-5">
+      <form action={createPet} className="bg-white border border-stone-200 rounded-xl p-4 space-y-5">
         {/* Name */}
         <div>
           <label htmlFor="name" className="block text-sm font-semibold text-stone-700 mb-1">
-            Pet Name <span className="text-red-500">*</span>
+            Pet Name <span className="text-red-700">*</span>
           </label>
           <input
             id="name"
@@ -70,7 +74,7 @@ export default async function NewPetPage() {
         {/* Species */}
         <div>
           <label htmlFor="species" className="block text-sm font-semibold text-stone-700 mb-1">
-            Species <span className="text-red-500">*</span>
+            Species <span className="text-red-700">*</span>
           </label>
           <select
             id="species"
@@ -101,7 +105,7 @@ export default async function NewPetPage() {
         </div>
 
         {/* Date of Birth + Weight */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="dateOfBirth" className="block text-sm font-semibold text-stone-700 mb-1">
               Date of Birth <span className="text-stone-400 font-normal">(optional)</span>
@@ -169,7 +173,7 @@ export default async function NewPetPage() {
         <div className="flex items-center gap-3 pt-1">
           <button
             type="submit"
-            className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+            className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
           >
             Add Pet
           </button>
