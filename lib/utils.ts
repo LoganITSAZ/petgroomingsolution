@@ -136,6 +136,34 @@ export function shopDayRange(
   };
 }
 
+/**
+ * Half-open [start, end) covering one shop-local calendar day, named by its
+ * key ("2026-08-24"). Returns null when the key is not a real date.
+ *
+ * A `?date=` parameter names a day the way the shop says it, so it must not be
+ * read as a UTC day: in Phoenix that window opens at 5pm the previous
+ * afternoon and drops the whole evening off the end.
+ */
+export function shopDayRangeForKey(
+  key: string,
+  timeZone: string = SHOP_TIMEZONE
+): { start: Date; end: Date } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!match) return null;
+
+  const [year, month, day] = match.slice(1).map(Number);
+  const utcCalendar = Date.UTC(year, month - 1, day);
+  // Date.UTC rolls an impossible date forward (Feb 31 becomes Mar 3), so the
+  // month has to be checked back rather than trusted.
+  const rolled = new Date(utcCalendar);
+  if (rolled.getUTCMonth() !== month - 1 || rolled.getUTCDate() !== day) return null;
+
+  return {
+    start: zonedMidnight(utcCalendar, timeZone),
+    end: zonedMidnight(Date.UTC(year, month - 1, day + 1), timeZone),
+  };
+}
+
 /** Format a date in the shop's timezone (server renders in UTC otherwise). */
 export function formatShopDate(
   date: Date,
