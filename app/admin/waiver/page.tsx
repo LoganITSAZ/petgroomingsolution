@@ -2,6 +2,14 @@ import { getConfig } from "@/lib/config";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-guards";
+import { nextAvailableVersion, recordRevision } from "@/lib/waiver";
+import { formatShopDate } from "@/lib/utils";
+import VersionField from "./VersionField";
+
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "Waiver" };
 
 /**
  * Everything about the liability waiver lives here: the on/off flag, the
@@ -14,15 +22,35 @@ import { prisma } from "@/lib/prisma";
 async function saveWaiver(formData: FormData) {
   "use server";
 
+  const staffId = await requireAdmin();
+
   const featureWaiverRequired = formData.get("featureWaiverRequired") === "on";
   const waiverText = ((formData.get("waiverText") as string | null) ?? "").trim();
-  const waiverVersion = ((formData.get("waiverVersion") as string | null) ?? "").trim();
+  const manualVersion = formData.get("versionMode") === "manual";
+  const typedVersion = ((formData.get("waiverVersion") as string | null) ?? "").trim();
 
-  if (!waiverVersion) {
-    redirect("/admin/waiver?error=version_required");
-  }
   if (featureWaiverRequired && !waiverText) {
     redirect("/admin/waiver?error=text_required");
+  }
+  if (manualVersion && !typedVersion) {
+    redirect("/admin/waiver?error=version_required");
+  }
+
+  const config = await getConfig();
+  const textChanged = (config.waiverText ?? "").trim() !== waiverText;
+
+  // Keep the outgoing text recoverable before it is replaced.
+  if (config.waiverVersion && config.waiverText) {
+    await recordRevision(config.waiverVersion, config.waiverText);
+  }
+
+  let version: string;
+  if (manualVersion) {
+    version = typedVersion;
+  } else if (textChanged) {
+    version = await nextAvailableVersion(config.waiverVersion);
+  } else {
+    version = config.waiverVersion ?? "1.0";
   }
 
   await prisma.systemConfig.update({
@@ -30,29 +58,70 @@ async function saveWaiver(formData: FormData) {
     data: {
       featureWaiverRequired,
       waiverText: waiverText || null,
-      waiverVersion,
+      waiverVersion: version,
     },
+  });
+
+  if (waiverText) {
+    await recordRevision(version, waiverText, staffId);
+  }
+
+  revalidatePath("/admin/waiver");
+  revalidatePath("/admin");
+  redirect(
+    `/admin/waiver?saved=1&version=${encodeURIComponent(version)}${textChanged && !manualVersion ? "&bumped=1" : ""}`
+  );
+}
+
+async function restoreRevision(formData: FormData) {
+  "use server";
+
+  await requireAdmin();
+
+  const version = ((formData.get("version") as string | null) ?? "").trim();
+  const revision = await prisma.waiverRevision.findUnique({ where: { version } });
+  if (!revision) {
+    redirect("/admin/waiver?error=revision_missing");
+  }
+
+  const config = await getConfig();
+  if (config.waiverVersion && config.waiverText) {
+    await recordRevision(config.waiverVersion, config.waiverText);
+  }
+
+  // Restoring puts the original number back: customers who already accepted
+  // this exact text stay accepted.
+  await prisma.systemConfig.update({
+    where: { id: "global" },
+    data: { waiverText: revision.text, waiverVersion: revision.version },
   });
 
   revalidatePath("/admin/waiver");
   revalidatePath("/admin");
-  redirect("/admin/waiver?saved=1");
+  redirect(`/admin/waiver?restored=${encodeURIComponent(revision.version)}`);
 }
 
 const ERRORS: Record<string, string> = {
-  version_required: "Waiver version cannot be empty — customers are tracked against it.",
+  version_required: "Enter a version number, or switch back to automatic versioning.",
   text_required: "Add the waiver text before requiring customers to accept it.",
+  revision_missing: "That revision is no longer stored.",
 };
 
 interface PageProps {
-  searchParams: { saved?: string; error?: string };
+  searchParams: {
+    saved?: string;
+    error?: string;
+    version?: string;
+    bumped?: string;
+    restored?: string;
+  };
 }
 
 export default async function WaiverPage({ searchParams }: PageProps) {
   const config = await getConfig();
   const currentVersion = config.waiverVersion;
 
-  const [activeCustomers, acceptedCurrent, versionGroups] = await Promise.all([
+  const [activeCustomers, acceptedCurrent, versionGroups, revisions, nextVersion] = await Promise.all([
     prisma.customer.count({ where: { isActive: true } }),
     currentVersion
       ? prisma.customer.count({
@@ -67,15 +136,24 @@ export default async function WaiverPage({ searchParams }: PageProps) {
       _count: { _all: true },
       orderBy: { waiverVersion: "desc" },
     }),
+    prisma.waiverRevision.findMany({
+      include: { createdBy: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    nextAvailableVersion(currentVersion),
   ]);
+
+  const acceptancesByVersion = new Map(
+    versionGroups.map((group) => [group.waiverVersion, group._count._all])
+  );
 
   const outstanding = Math.max(activeCustomers - acceptedCurrent, 0);
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div>
-        <h1 className="text-2xl font-bold text-stone-900">Liability Waiver</h1>
+        <h1 className="text-xl font-bold text-stone-900">Liability Waiver</h1>
         <p className="text-sm text-stone-500 mt-1">
           The single place to turn the waiver on or off, edit its text, set its version, and see
           who has accepted it.
@@ -83,38 +161,52 @@ export default async function WaiverPage({ searchParams }: PageProps) {
       </div>
 
       {searchParams.saved === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 text-green-800 text-sm font-medium">
-          Waiver saved successfully.
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+          Waiver saved as version {searchParams.version}.
+          {searchParams.bumped === "1" && (
+            <span className="font-normal">
+              {" "}
+              The text changed, so the version was bumped and every customer will be asked to accept
+              it again.
+            </span>
+          )}
+        </div>
+      )}
+
+      {searchParams.restored && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+          Restored version {searchParams.restored}. Customers who already accepted that exact
+          version stay accepted.
         </div>
       )}
 
       {errorMessage && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-red-800 text-sm font-medium">
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
           {errorMessage} Nothing was saved.
         </div>
       )}
 
       {/* Acceptance status — live figures, not a projection */}
-      <div className="bg-white border border-stone-200 rounded-xl p-6">
-        <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-4">
+      <div className="bg-white border border-stone-200 rounded-xl p-4">
+        <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-3">
           Acceptance Status
         </h2>
         {config.featureWaiverRequired ? (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-3xl font-black text-stone-900">{activeCustomers}</p>
+              <p className="text-2xl font-black text-stone-900">{activeCustomers}</p>
               <p className="text-xs text-stone-500 mt-1">Active customers</p>
             </div>
             <div>
-              <p className="text-3xl font-black text-green-700">{acceptedCurrent}</p>
+              <p className="text-2xl font-black text-green-700">{acceptedCurrent}</p>
               <p className="text-xs text-stone-500 mt-1">
                 Accepted version {currentVersion ?? "—"}
               </p>
             </div>
             <div>
               <p
-                className={`text-3xl font-black ${
-                  outstanding > 0 ? "text-amber-700" : "text-stone-300"
+                className={`text-2xl font-black ${
+                  outstanding > 0 ? "text-amber-700" : "text-stone-400"
                 }`}
               >
                 {outstanding}
@@ -128,27 +220,68 @@ export default async function WaiverPage({ searchParams }: PageProps) {
           </p>
         )}
 
-        {versionGroups.length > 0 && (
-          <div className="mt-5 border-t border-stone-100 pt-4">
+        {(revisions.length > 0 || versionGroups.length > 0) && (
+          <div className="mt-3 border-t border-stone-100 pt-4">
             <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">
-              Acceptances on record
+              Version history
             </p>
-            <ul className="text-sm text-stone-600 space-y-1">
-              {versionGroups.map((group) => (
-                <li key={group.waiverVersion} className="flex items-center gap-2">
-                  <span className="font-medium text-stone-800">
-                    Version {group.waiverVersion}
-                  </span>
-                  {group.waiverVersion === currentVersion && (
-                    <span className="bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                      CURRENT
-                    </span>
-                  )}
-                  <span className="text-stone-400">
-                    · {group._count._all} acceptance{group._count._all !== 1 ? "s" : ""}
-                  </span>
-                </li>
-              ))}
+            <ul className="divide-y divide-stone-100">
+              {revisions.map((revision) => {
+                const accepted = acceptancesByVersion.get(revision.version) ?? 0;
+                const isCurrent = revision.version === currentVersion;
+                return (
+                  <li key={revision.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium text-stone-800">
+                        Version {revision.version}
+                      </span>
+                      {isCurrent && (
+                        <span className="ml-2 bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                          CURRENT
+                        </span>
+                      )}
+                      <span className="block text-xs text-stone-400">
+                        Published {formatShopDate(revision.createdAt)}
+                        {revision.createdBy && ` by ${revision.createdBy.name}`} · {accepted}{" "}
+                        acceptance{accepted !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    {isCurrent ? (
+                      <span className="text-xs text-stone-400 whitespace-nowrap">In use</span>
+                    ) : (
+                      <form action={restoreRevision}>
+                        <input type="hidden" name="version" value={revision.version} />
+                        <button
+                          type="submit"
+                          className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
+                        >
+                          Restore
+                        </button>
+                      </form>
+                    )}
+                  </li>
+                );
+              })}
+
+              {/* Versions customers signed before revision text was kept */}
+              {versionGroups
+                .filter((group) => !revisions.some((r) => r.version === group.waiverVersion))
+                .map((group) => (
+                  <li
+                    key={group.waiverVersion}
+                    className="flex items-center justify-between gap-3 py-2.5"
+                  >
+                    <div>
+                      <span className="text-sm font-medium text-stone-800">
+                        Version {group.waiverVersion}
+                      </span>
+                      <span className="block text-xs text-stone-400">
+                        {group._count._all} acceptance{group._count._all !== 1 ? "s" : ""} · text not
+                        stored, cannot be restored
+                      </span>
+                    </div>
+                  </li>
+                ))}
             </ul>
           </div>
         )}
@@ -156,11 +289,11 @@ export default async function WaiverPage({ searchParams }: PageProps) {
 
       <form action={saveWaiver}>
         {/* Requirement switch */}
-        <div className="bg-white border border-stone-200 rounded-xl p-6">
+        <div className="bg-white border border-stone-200 rounded-xl p-4">
           <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-2">
             Requirement
           </h2>
-          <div className="flex items-start gap-4 py-4">
+          <div className="flex items-start gap-3 py-4">
             <div className="flex-1">
               <p className="text-sm font-medium text-stone-800">Waiver Required</p>
               <p className="text-sm text-stone-500 mt-0.5">
@@ -181,7 +314,7 @@ export default async function WaiverPage({ searchParams }: PageProps) {
         </div>
 
         {/* Version change warning */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 flex gap-3 mt-6">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex gap-3 mt-3">
           <svg
             className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0"
             fill="none"
@@ -205,39 +338,24 @@ export default async function WaiverPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-5 mt-6">
+        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-5 mt-3">
           <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3">
             Waiver Document
           </h2>
 
-          {/* Version */}
-          <div className="grid grid-cols-3 gap-4 items-start">
-            <label className="text-sm font-medium text-stone-700 pt-2">
-              Waiver Version
-            </label>
-            <div className="col-span-2">
-              <input
-                type="text"
-                name="waiverVersion"
-                defaultValue={currentVersion ?? "1.0"}
-                placeholder="1.0"
-                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-              />
-              <p className="text-xs text-stone-400 mt-1">
-                Current version: <span className="font-medium text-stone-600">{currentVersion ?? "1.0"}</span>.
-                Change this value to require all customers to re-sign.
-              </p>
-            </div>
-          </div>
+          <VersionField
+            currentVersion={currentVersion ?? "1.0"}
+            nextVersion={nextVersion}
+          />
 
           {/* Waiver text */}
-          <div className="grid grid-cols-3 gap-4 items-start">
-            <label className="text-sm font-medium text-stone-700 pt-2">
+          <div className="grid grid-cols-3 gap-3 items-start">
+            <label htmlFor="waiverText" className="text-sm font-medium text-stone-700 pt-2">
               Waiver Text
             </label>
             <div className="col-span-2">
               <textarea
-                name="waiverText"
+                id="waiverText" name="waiverText"
                 defaultValue={config.waiverText ?? ""}
                 rows={20}
                 placeholder="Enter the full waiver text here. Customers will be required to read and accept this before their first appointment…"
@@ -251,13 +369,14 @@ export default async function WaiverPage({ searchParams }: PageProps) {
         </div>
 
         {/* How acceptance works */}
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-5 mt-6">
+        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 mt-3">
           <h3 className="text-sm font-semibold text-stone-700 mb-1">About waiver acceptance</h3>
           <ul className="text-sm text-stone-500 space-y-1 list-disc list-inside">
             <li>Customers accept the waiver once per version, at registration or after a version change.</li>
             <li>Each acceptance is stored with a timestamp, the accepted version, and the signing IP.</li>
             <li>Turning the requirement off leaves existing acceptance records untouched.</li>
             <li>Requiring the waiver with empty text is rejected — customers would have nothing to sign.</li>
+            <li>Every published version is kept, so an earlier document can be restored under its original number.</li>
           </ul>
         </div>
 

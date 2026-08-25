@@ -1,24 +1,26 @@
 import { getConfig } from "@/lib/config";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-guards";
+
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "Notifications" };
 
 async function saveNotifications(formData: FormData) {
   "use server";
 
-  const emailFromName = formData.get("emailFromName") as string;
+  await requireAdmin();
+
   const emailFromAddress = formData.get("emailFromAddress") as string;
-  const featureEmailNotify = formData.get("featureEmailNotify") === "on";
   const twilioAccountSid = formData.get("twilioAccountSid") as string;
   const twilioAuthToken = formData.get("twilioAuthToken") as string;
   const twilioFromNumber = formData.get("twilioFromNumber") as string;
-  const featureSmsNotify = formData.get("featureSmsNotify") === "on";
 
   const data: Record<string, unknown> = {
-    emailFromName,
     emailFromAddress,
-    featureEmailNotify,
-    featureSmsNotify,
     twilioAccountSid,
     twilioFromNumber,
   };
@@ -37,6 +39,26 @@ async function saveNotifications(formData: FormData) {
   redirect("/admin/notifications?saved=1");
 }
 
+/**
+ * Whether email or SMS goes out at all is a shop setting, set with the other
+ * features on /admin/settings. This page holds what makes them work — the
+ * sender address and the Twilio credentials — and only reports the flag.
+ */
+function StatusPill({ on }: { on: boolean }) {
+  return (
+    <Link
+      href="/admin/settings"
+      className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+        on
+          ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+          : "bg-stone-50 border-stone-200 text-stone-500 hover:bg-stone-100"
+      }`}
+    >
+      {on ? "Enabled" : "Disabled"} · change in Shop Settings
+    </Link>
+  );
+}
+
 interface PageProps {
   searchParams: { saved?: string };
 }
@@ -45,71 +67,49 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
   const config = await getConfig();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div>
-        <h1 className="text-2xl font-bold text-stone-900">Notification Settings</h1>
+        <h1 className="text-xl font-bold text-stone-900">Notification Settings</h1>
         <p className="text-sm text-stone-500 mt-1">
           Configure email and SMS delivery settings for customer notifications.
         </p>
       </div>
 
       {searchParams.saved === "1" && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-5 py-4 text-green-800 text-sm font-medium">
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
           Notification settings saved successfully.
         </div>
       )}
 
       <form action={saveNotifications}>
         {/* Email Settings */}
-        <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-5">
+        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-5">
           <div className="flex items-center justify-between border-b border-stone-100 pb-3">
             <div>
               <h2 className="text-base font-semibold text-stone-800">Email Notifications</h2>
               <p className="text-xs text-stone-400 mt-0.5">
-                Configure the sender identity used for all outgoing emails.
+                Emails go out as{" "}
+                <span className="font-medium text-stone-600">{config?.shopName ?? "your shop name"}</span>
+                , the Shop Name set in{" "}
+                <Link href="/admin/settings" className="underline hover:text-stone-700">
+                  Shop Settings
+                </Link>
+                .
               </p>
             </div>
-            {/* Enable email toggle */}
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                name="featureEmailNotify"
-                defaultChecked={config?.featureEmailNotify ?? false}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-700" />
-              <span className="ml-2 text-sm font-medium text-stone-600">Enabled</span>
-            </label>
+            <StatusPill on={config?.featureEmailNotify ?? false} />
           </div>
 
-          <div className="grid grid-cols-3 gap-4 items-start">
-            <label className="text-sm font-medium text-stone-700 pt-2">
-              From Name
-            </label>
-            <div className="col-span-2">
-              <input
-                type="text"
-                name="emailFromName"
-                defaultValue={config?.emailFromName ?? ""}
-                placeholder="Gentle Groomer"
-                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-              />
-              <p className="text-xs text-stone-400 mt-1">
-                The display name shown in the customer&apos;s inbox.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4 items-start">
-            <label className="text-sm font-medium text-stone-700 pt-2">
+          <div className="grid grid-cols-3 gap-3 items-start">
+            <label htmlFor="emailFromAddress" className="text-sm font-medium text-stone-700 pt-2">
               From Address
             </label>
             <div className="col-span-2">
               <input
                 type="email"
-                name="emailFromAddress"
+                id="emailFromAddress" name="emailFromAddress"
                 defaultValue={config?.emailFromAddress ?? ""}
-                placeholder="no-reply@gentlegroomer.com"
+                placeholder="no-reply@example.com"
                 className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
               <p className="text-xs text-stone-400 mt-1">
@@ -120,7 +120,7 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
         </div>
 
         {/* SMS Settings */}
-        <div className="bg-white border border-stone-200 rounded-xl p-6 space-y-5 mt-6">
+        <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-5 mt-3">
           <div className="flex items-center justify-between border-b border-stone-100 pb-3">
             <div>
               <h2 className="text-base font-semibold text-stone-800">SMS Notifications</h2>
@@ -128,21 +128,11 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
                 Powered by Twilio. Enter your credentials below to enable SMS delivery.
               </p>
             </div>
-            {/* Enable SMS toggle */}
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                name="featureSmsNotify"
-                defaultChecked={config?.featureSmsNotify ?? false}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-700" />
-              <span className="ml-2 text-sm font-medium text-stone-600">Enabled</span>
-            </label>
+            <StatusPill on={config?.featureSmsNotify ?? false} />
           </div>
 
           {/* Info banner */}
-          <div className="bg-stone-50 border border-stone-200 rounded-lg px-4 py-3 flex gap-3">
+          <div className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 flex gap-3">
             <svg
               className="w-4 h-4 text-stone-400 mt-0.5 flex-shrink-0"
               fill="none"
@@ -163,14 +153,14 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 items-start">
-            <label className="text-sm font-medium text-stone-700 pt-2">
+          <div className="grid grid-cols-3 gap-3 items-start">
+            <label htmlFor="twilioAccountSid" className="text-sm font-medium text-stone-700 pt-2">
               Twilio Account SID
             </label>
             <div className="col-span-2">
               <input
                 type="text"
-                name="twilioAccountSid"
+                id="twilioAccountSid" name="twilioAccountSid"
                 defaultValue={config?.twilioAccountSid ?? ""}
                 placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                 className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono"
@@ -178,14 +168,14 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 items-start">
-            <label className="text-sm font-medium text-stone-700 pt-2">
+          <div className="grid grid-cols-3 gap-3 items-start">
+            <label htmlFor="twilioAuthToken" className="text-sm font-medium text-stone-700 pt-2">
               Twilio Auth Token
             </label>
             <div className="col-span-2">
               <input
                 type="password"
-                name="twilioAuthToken"
+                id="twilioAuthToken" name="twilioAuthToken"
                 defaultValue=""
                 placeholder={
                   config?.twilioAuthToken ? "••••••••••••••••••••••••••••••••" : "Paste auth token"
@@ -201,14 +191,14 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 items-start">
-            <label className="text-sm font-medium text-stone-700 pt-2">
+          <div className="grid grid-cols-3 gap-3 items-start">
+            <label htmlFor="twilioFromNumber" className="text-sm font-medium text-stone-700 pt-2">
               Twilio From Number
             </label>
             <div className="col-span-2">
               <input
                 type="tel"
-                name="twilioFromNumber"
+                id="twilioFromNumber" name="twilioFromNumber"
                 defaultValue={config?.twilioFromNumber ?? ""}
                 placeholder="+15551234567"
                 className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"

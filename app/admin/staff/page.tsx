@@ -1,10 +1,20 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-guards";
 import Link from "next/link";
+import { getConfig } from "@/lib/config";
+import { formatRole, roleBadgeClass } from "@/lib/utils";
+import { setDefaultCommission } from "./actions";
+
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "Staff" };
 
 async function toggleStaffActive(formData: FormData) {
   "use server";
+
+  await requireAdmin();
 
   const id = formData.get("id") as string;
   const currentActive = formData.get("currentActive") === "true";
@@ -18,42 +28,49 @@ async function toggleStaffActive(formData: FormData) {
   redirect("/admin/staff");
 }
 
-function RoleBadge({ role }: { role: string }) {
-  if (role === "ADMIN") {
-    return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
-        Admin
-      </span>
-    );
-  }
-  if (role === "GROOMER") {
-    return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-700">
-        Groomer
-      </span>
-    );
+function RoleBadges({ roles }: { roles: string[] }) {
+  if (roles.length === 0) {
+    return <span className="text-xs text-stone-400">No roles</span>;
   }
   return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-500">
-      {role}
+    <span className="flex flex-wrap gap-1">
+      {roles.map((role) => (
+        <span
+          key={role}
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${roleBadgeClass(role)}`}
+        >
+          {formatRole(role)}
+        </span>
+      ))}
     </span>
   );
 }
 
-export default async function StaffPage() {
-  const staffList = await prisma.staff.findMany({
-    orderBy: { name: "asc" },
-  });
+interface PageProps {
+  searchParams: {
+    created?: string;
+    saved?: string;
+    commission?: string;
+    error?: string;
+  };
+}
+
+export default async function StaffPage({ searchParams }: PageProps) {
+  const [staffList, config] = await Promise.all([
+    prisma.staff.findMany({ orderBy: { name: "asc" } }),
+    getConfig(),
+  ]);
 
   const activeCount = staffList.filter((s) => s.isActive).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-stone-900">Staff</h1>
+          <h1 className="text-xl font-bold text-stone-900">Staff</h1>
           <p className="text-sm text-stone-500 mt-1">
-            {activeCount} of {staffList.length} staff members active.
+            {activeCount} of {staffList.length} staff members active · default commission{" "}
+            {config.defaultCommissionPercent}%
           </p>
         </div>
         <Link
@@ -64,9 +81,52 @@ export default async function StaffPage() {
         </Link>
       </div>
 
+      {(searchParams.created || searchParams.saved) && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+          {searchParams.created ? `${searchParams.created} added.` : `${searchParams.saved} saved.`}
+        </div>
+      )}
+      {searchParams.commission === "1" && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-green-800 text-sm font-medium">
+          Default commission updated.
+        </div>
+      )}
+      {searchParams.error === "bad_commission" && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
+          Commission has to be between 0 and 100.
+        </div>
+      )}
+
+      {/* Pay basis for anyone without their own rate */}
+      <form
+        action={setDefaultCommission}
+        className="bg-white border border-stone-200 rounded-xl px-3 py-2 flex flex-wrap items-center gap-3"
+      >
+        <span className="text-sm font-semibold text-stone-800">Default commission</span>
+        <span className="flex items-center gap-2">
+          <input
+            name="defaultCommissionPercent"
+            aria-label="Default commission percent"
+            inputMode="decimal"
+            defaultValue={config.defaultCommissionPercent}
+            className="w-20 border border-stone-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+          />
+          <span className="text-sm text-stone-500">%</span>
+        </span>
+        <button
+          type="submit"
+          className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-1.5 rounded-lg text-sm font-semibold"
+        >
+          Save
+        </button>
+        <span className="text-xs text-stone-400">
+          Used for estimated pay in analytics when a groomer has no rate of their own.
+        </span>
+      </form>
+
       <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
         {staffList.length === 0 ? (
-          <div className="py-16 text-center text-stone-400 text-sm">
+          <div className="py-8 text-center text-stone-400 text-sm">
             No staff members found.{" "}
             <Link href="/admin/staff/new" className="text-amber-700 hover:underline font-medium">
               Add the first one.
@@ -76,19 +136,22 @@ export default async function StaffPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-stone-50 border-b border-stone-200 text-left">
-                <th className="px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
                   Name
                 </th>
-                <th className="px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
                   Email
                 </th>
-                <th className="px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">
-                  Role
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                  Roles
                 </th>
-                <th className="px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                  Commission
+                </th>
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
                   Status
                 </th>
-                <th className="px-5 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide text-right">
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide text-right">
                   Actions
                 </th>
               </tr>
@@ -96,7 +159,7 @@ export default async function StaffPage() {
             <tbody className="divide-y divide-stone-100">
               {staffList.map((staff) => (
                 <tr key={staff.id} className="hover:bg-stone-50 transition-colors">
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-2.5">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">
                         {staff.name
@@ -106,14 +169,28 @@ export default async function StaffPage() {
                           .slice(0, 2)
                           .toUpperCase()}
                       </div>
-                      <span className="font-medium text-stone-800">{staff.name}</span>
+                      <Link
+                        href={`/admin/staff/${staff.id}/edit`}
+                        className="font-medium text-stone-800 hover:text-amber-700"
+                      >
+                        {staff.name}
+                      </Link>
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-stone-500">{staff.email}</td>
-                  <td className="px-5 py-4">
-                    <RoleBadge role={staff.role} />
+                  <td className="px-4 py-2.5 text-stone-500">{staff.email}</td>
+                  <td className="px-4 py-2.5">
+                    <RoleBadges roles={staff.roles} />
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-2.5 text-stone-600">
+                    {staff.commissionPercent != null ? (
+                      `${staff.commissionPercent}%`
+                    ) : (
+                      <span className="text-stone-400">
+                        {config.defaultCommissionPercent}% (default)
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5">
                     {staff.isActive ? (
                       <span className="inline-flex items-center gap-1.5 text-green-700 text-xs font-medium">
                         <span className="w-2 h-2 rounded-full bg-green-500" />
@@ -126,14 +203,8 @@ export default async function StaffPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-5 py-4 text-right">
+                  <td className="px-4 py-2.5 text-right">
                     <div className="flex items-center justify-end gap-3">
-                      <Link
-                        href={`/admin/staff/${staff.id}/edit`}
-                        className="text-amber-700 hover:text-amber-900 text-xs font-medium"
-                      >
-                        Edit
-                      </Link>
                       <form action={toggleStaffActive}>
                         <input type="hidden" name="id" value={staff.id} />
                         <input
