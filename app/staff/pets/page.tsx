@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 
-// Customers and pets are searched together at /staff/directory.
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "Pets" };
+
+// Customers and pets are searched together at /staff/customers.
 // This path stays as a redirect so existing links and bookmarks keep working.
 export default function LegacyPetsPage({
   searchParams,
@@ -8,5 +12,5 @@ export default function LegacyPetsPage({
   searchParams: { q?: string };
 }) {
   const q = searchParams.q?.trim();
-  redirect(q ? `/staff/directory?q=${encodeURIComponent(q)}` : "/staff/directory");
+  redirect(q ? `/staff/customers?q=${encodeURIComponent(q)}` : "/staff/customers");
 }

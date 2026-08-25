@@ -1,6 +1,36 @@
 import { prisma } from "@/lib/prisma";
-import { formatStatus, formatServiceType } from "@/lib/utils";
+import { Prisma, AppointmentStatus, AppointmentType, StaffRole, StationRole } from "@prisma/client";
+import { nextStatus } from "@/lib/appointment-status";
+import {
+  formatServiceType,
+  formatShopDate,
+  formatShopTime,
+  formatStatus,
+  shopDayKey,
+  shopDayRange,
+} from "@/lib/utils";
+import { checkInWithKennel, moveStatus } from "./actions";
+import CheckInDialog from "@/components/CheckInDialog";
+import { KENNELABLE_STATUSES, compartmentCapacity } from "@/lib/kennels";
+import {
+  ARRIVAL_CLASS,
+  ARRIVAL_LABEL,
+  ARRIVAL_TEXT_CLASS,
+  arrivalLevel,
+  arrivalThresholds,
+  minutesLate,
+} from "@/lib/arrivals";
+import { PICKUP_LEVEL_CLASS, PICKUP_LEVEL_LABEL, formatWait, pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
+
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "Appointments" };
+
+/**
+ * The working list: find a visit, see where it stands, and move it on without
+ * leaving the page. Anything deeper happens on the visit's own page.
+ */
 
 const statusColor: Record<string, string> = {
   SCHEDULED: "bg-stone-100 text-stone-600",
@@ -11,177 +41,577 @@ const statusColor: Record<string, string> = {
   COMPLETE: "bg-green-100 text-green-700",
   READY_PICKUP: "bg-emerald-100 text-emerald-800",
   PICKED_UP: "bg-stone-100 text-stone-400",
-  CANCELLED: "bg-red-100 text-red-500",
+  CANCELLED: "bg-red-100 text-red-700",
   NO_SHOW: "bg-red-100 text-red-400",
 };
 
+const IN_SHOP: AppointmentStatus[] = [
+  AppointmentStatus.CHECKED_IN,
+  AppointmentStatus.IN_PROGRESS,
+  AppointmentStatus.DRYING,
+  AppointmentStatus.FINISHING,
+  AppointmentStatus.COMPLETE,
+];
+
+const VIEWS = {
+  day: "Day",
+  week: "Next 7 days",
+  upcoming: "All upcoming",
+} as const;
+type View = keyof typeof VIEWS;
+
+function AppointmentSummaryCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white border border-stone-200 rounded-lg px-3 py-2">
+      <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+const GROUPS = {
+  active: "Active",
+  all: "All (incl. cancelled)",
+  open: "Open",
+  in_shop: "In the shop",
+  finished: "Finished",
+  cancelled: "Cancelled",
+} as const;
+type Group = keyof typeof GROUPS;
+
+/**
+ * A cancelled visit is not work, so the working list leaves it out until it is
+ * asked for. "All" still means all — it is one item down the same menu.
+ */
+const DEFAULT_GROUP: Group = "active";
+
+const GROUP_FILTER: Record<Group, AppointmentStatus[] | null> = {
+  active: Object.values(AppointmentStatus).filter(
+    (status) => status !== AppointmentStatus.CANCELLED
+  ),
+  all: null,
+  open: [AppointmentStatus.SCHEDULED, ...IN_SHOP, AppointmentStatus.READY_PICKUP],
+  in_shop: IN_SHOP,
+  finished: [AppointmentStatus.READY_PICKUP, AppointmentStatus.PICKED_UP],
+  cancelled: [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW],
+};
+
+interface Filters {
+  view: View;
+  date: string;
+  group: Group;
+  q: string;
+  staffId: string;
+  stationId: string;
+  type: string;
+}
+
+function queryString(filters: Filters, patch: Partial<Filters> = {}): string {
+  const merged = { ...filters, ...patch };
+  const params = new URLSearchParams();
+  if (merged.view !== "day") params.set("view", merged.view);
+  if (merged.date) params.set("date", merged.date);
+  if (merged.group !== DEFAULT_GROUP) params.set("group", merged.group);
+  if (merged.q) params.set("q", merged.q);
+  if (merged.staffId) params.set("staffId", merged.staffId);
+  if (merged.stationId) params.set("stationId", merged.stationId);
+  if (merged.type) params.set("type", merged.type);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+/** Shift a YYYY-MM-DD key by whole days. */
+function shiftDay(dayKey: string, days: number): string {
+  const date = new Date(`${dayKey}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 interface PageProps {
-  searchParams: { date?: string };
+  searchParams: Partial<Record<keyof Filters, string>> & { error?: string };
 }
 
 export default async function StaffAppointmentsPage({ searchParams }: PageProps) {
-  const dateStr = searchParams.date ?? new Date().toISOString().slice(0, 10);
-  const dayStart = new Date(`${dateStr}T00:00:00`);
-  const dayEnd = new Date(`${dateStr}T23:59:59.999`);
+  const todayKey = shopDayKey();
 
-  const appointments = await prisma.appointment.findMany({
-    where: {
-      scheduledAt: { gte: dayStart, lte: dayEnd },
-    },
-    include: {
-      pet: true,
-      customer: { select: { firstName: true, lastName: true, phone: true } },
-      station: true,
-      staff: { select: { name: true } },
-    },
-    orderBy: { scheduledAt: "desc" },
-  });
+  const filters: Filters = {
+    view: (searchParams.view as View) in VIEWS ? (searchParams.view as View) : "day",
+    date: searchParams.date ?? todayKey,
+    group: (searchParams.group as Group) in GROUPS ? (searchParams.group as Group) : DEFAULT_GROUP,
+    q: searchParams.q?.trim() ?? "",
+    staffId: searchParams.staffId ?? "",
+    stationId: searchParams.stationId ?? "",
+    type: searchParams.type ?? "",
+  };
 
-  const displayDate = dayStart.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  // Range for the chosen view, always resolved in shop time.
+  const dayStart = shopDayRange(new Date(`${filters.date}T12:00:00Z`)).start;
+  const dayEnd = shopDayRange(new Date(`${filters.date}T12:00:00Z`)).end;
+  const range: Prisma.DateTimeFilter =
+    filters.view === "day"
+      ? { gte: dayStart, lt: dayEnd }
+      : filters.view === "week"
+        ? { gte: dayStart, lt: new Date(dayStart.getTime() + 7 * 86400000) }
+        : { gte: dayStart };
+
+  const statuses = GROUP_FILTER[filters.group];
+
+  const where: Prisma.AppointmentWhereInput = {
+    scheduledAt: range,
+    ...(statuses ? { status: { in: statuses } } : {}),
+    ...(filters.staffId ? { staffId: filters.staffId } : {}),
+    ...(filters.stationId ? { stationId: filters.stationId } : {}),
+    ...(filters.type ? { appointmentType: filters.type as AppointmentType } : {}),
+    ...(filters.q
+      ? {
+          OR: [
+            { pet: { name: { contains: filters.q, mode: "insensitive" } } },
+            { customer: { firstName: { contains: filters.q, mode: "insensitive" } } },
+            { customer: { lastName: { contains: filters.q, mode: "insensitive" } } },
+            { customer: { phone: { contains: filters.q, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
+  };
+
+  const [appointments, groomers, stations, kennels, perCompartment, arrivals, counts, operationalAppointments, pickupList] =
+    await Promise.all([
+    prisma.appointment.findMany({
+      where,
+      include: {
+        pet: { select: { id: true, name: true, hasBiteHistory: true } },
+        customer: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        station: { select: { id: true, name: true } },
+        staff: { select: { id: true, name: true } },
+        kennel: { include: { station: { select: { name: true } } } },
+        services: { include: { service: true }, orderBy: { sortOrder: "asc" } },
+      },
+      orderBy: { scheduledAt: "asc" },
+      take: 300,
+    }),
+    prisma.staff.findMany({
+      where: { isActive: true, roles: { hasSome: [StaffRole.GROOMER, StaffRole.BATHER] } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.station.findMany({
+      where: { isActive: true, role: { not: StationRole.KENNEL } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.kennel.findMany({
+      where: { isActive: true, station: { isActive: true } },
+      select: {
+        id: true,
+        label: true,
+        station: { select: { name: true } },
+        _count: { select: { appointments: { where: { status: { in: KENNELABLE_STATUSES } } } } },
+      },
+      orderBy: [{ station: { name: "asc" } }, { row: "asc" }, { column: "asc" }],
+    }),
+    compartmentCapacity(),
+    arrivalThresholds(),
+    prisma.appointment.groupBy({
+      by: ["status"],
+      where: { scheduledAt: range },
+      _count: { _all: true },
+    }),
+    prisma.appointment.findMany({
+      where: { scheduledAt: range, status: { in: [AppointmentStatus.SCHEDULED, ...IN_SHOP] } },
+      select: {
+        id: true,
+        scheduledAt: true,
+        status: true,
+        stationId: true,
+        pet: { select: { name: true } },
+      },
+      orderBy: { scheduledAt: "asc" },
+    }),
+    pickupWatchlist(),
+  ]);
+
+  const countFor = (list: AppointmentStatus[]) =>
+    counts.filter((row) => list.includes(row.status)).reduce((n, row) => n + row._count._all, 0);
+
+  const summary = [
+    { label: "Scheduled", value: countFor([AppointmentStatus.SCHEDULED]) },
+    { label: "In the shop", value: countFor(IN_SHOP) },
+    { label: "Ready", value: countFor([AppointmentStatus.READY_PICKUP]) },
+    { label: "Picked up", value: countFor([AppointmentStatus.PICKED_UP]) },
+    {
+      label: "Cancelled",
+      value: countFor([AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW]),
+    },
+  ];
+
+  const listQuery = queryString(filters);
+  const now = new Date();
+  const arrivingNext = operationalAppointments
+    .filter((appointment) => appointment.status === AppointmentStatus.SCHEDULED && appointment.scheduledAt >= now)
+    .slice(0, 4);
+  const noStation = operationalAppointments.filter(
+    (appointment) => IN_SHOP.includes(appointment.status) && !appointment.stationId
+  );
+
+  // Compartments with room, offered when a pet arrives.
+  const openKennels = kennels
+    .filter((kennel) => kennel._count.appointments < perCompartment)
+    .map((kennel) => ({
+      id: kennel.id,
+      label: kennel.label,
+      stationName: kennel.station.name,
+      inside: kennel._count.appointments,
+      capacity: perCompartment,
+    }));
+  // Filters stay collapsed until asked for, but never hide the fact that some
+  // are applied.
+  const activeFilters = [
+    filters.q,
+    filters.group !== DEFAULT_GROUP ? filters.group : "",
+    filters.staffId,
+    filters.stationId,
+    filters.type,
+  ].filter(Boolean).length;
+  const selectClass =
+    "border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-stone-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-stone-900">Appointments</h1>
-          <p className="text-stone-500 text-sm mt-0.5">{displayDate}</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-xl font-black text-stone-900">Appointments</h1>
+          <span className="text-sm text-stone-500">{appointments.length} shown</span>
         </div>
-        <Link
-          href="/staff/appointments/new"
-          className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
-        >
-          + New Appointment
-        </Link>
+        <div className="flex items-center gap-2">
+          {(Object.keys(VIEWS) as View[]).map((view) => (
+            <Link
+              key={view}
+              href={`/staff/appointments${queryString(filters, { view })}`}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+                filters.view === view
+                  ? "bg-stone-800 text-white"
+                  : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+              }`}
+            >
+              {VIEWS[view]}
+            </Link>
+          ))}
+          <Link
+            href="/staff/appointments/new"
+            className="bg-amber-700 hover:bg-amber-800 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+          >
+            + New
+          </Link>
+        </div>
       </div>
 
-      {/* Date filter */}
-      <form method="GET" className="flex items-center gap-3">
-        <label className="text-sm font-medium text-stone-600" htmlFor="date">
-          Filter by date
-        </label>
+      {/* Day navigation: arrows at the edges, the day itself centred */}
+      <div className="bg-white border border-stone-200 rounded-xl px-2 py-1.5 flex items-center">
+        {filters.view === "day" ? (
+          <>
+            <Link
+              href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, -1) })}`}
+              aria-label="Previous day"
+              className="px-3 py-1 rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+            >
+              ←
+            </Link>
+            <span className="flex-1 text-center text-sm font-semibold text-stone-800">
+              {filters.date === todayKey ? (
+                <>
+                  Today —{" "}
+                  {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
+                </>
+              ) : (
+                <Link
+                  href={`/staff/appointments${queryString(filters, { date: todayKey })}`}
+                  title="Back to today"
+                  className="hover:text-amber-700"
+                >
+                  {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
+                </Link>
+              )}
+            </span>
+            <Link
+              href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, 1) })}`}
+              aria-label="Next day"
+              className="px-3 py-1 rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+            >
+              →
+            </Link>
+          </>
+        ) : (
+          <span className="flex-1 text-center text-sm font-semibold text-stone-800">
+            {VIEWS[filters.view]} from{" "}
+            {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
+          </span>
+        )}
+      </div>
+
+      {/* Filters — collapsed by default, opened when any are applied */}
+      <details open={activeFilters > 0} className="bg-white border border-stone-200 rounded-xl">
+        <summary className="px-3 py-2 cursor-pointer text-sm font-semibold text-stone-700 flex items-center gap-2">
+          Filters
+          {activeFilters > 0 && (
+            <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              {activeFilters}
+            </span>
+          )}
+        </summary>
+        <form method="GET" className="px-3 pb-3 pt-1 border-t border-stone-100 flex flex-wrap items-center gap-2">
+        <input type="hidden" name="view" value={filters.view} />
         <input
-          id="date"
-          name="date"
-          type="date"
-          defaultValue={dateStr}
-          className="border border-stone-300 rounded-lg px-3 py-1.5 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          name="q"
+          type="search"
+          aria-label="Search pet, owner or phone"
+          defaultValue={filters.q}
+          placeholder="Pet, owner or phone…"
+          className={`${selectClass} w-52`}
         />
+        <input name="date" type="date" aria-label="Filter by date" defaultValue={filters.date} className={selectClass} />
+        <select name="group" aria-label="Group by" defaultValue={filters.group} className={selectClass}>
+          {Object.entries(GROUPS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <select name="staffId" aria-label="Filter by groomer" defaultValue={filters.staffId} className={selectClass}>
+          <option value="">Any groomer</option>
+          {groomers.map((groomer) => (
+            <option key={groomer.id} value={groomer.id}>
+              {groomer.name}
+            </option>
+          ))}
+        </select>
+        <select name="stationId" aria-label="Filter by station" defaultValue={filters.stationId} className={selectClass}>
+          <option value="">Any station</option>
+          {stations.map((station) => (
+            <option key={station.id} value={station.id}>
+              {station.name}
+            </option>
+          ))}
+        </select>
+        <select name="type" aria-label="Filter by visit type" defaultValue={filters.type} className={selectClass}>
+          <option value="">Any type</option>
+          <option value={AppointmentType.APPOINTMENT}>Booked</option>
+          <option value={AppointmentType.WALK_IN}>Walk-in</option>
+        </select>
         <button
           type="submit"
-          className="bg-stone-100 hover:bg-stone-200 text-stone-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+          className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-1.5 rounded-lg text-sm font-semibold"
         >
-          Go
+          Apply
         </button>
-        {searchParams.date && (
-          <Link href="/staff/appointments" className="text-sm text-stone-400 hover:text-stone-600 underline">
-            Today
+        {listQuery && (
+          <Link href="/staff/appointments" className="text-xs text-stone-400 hover:text-stone-600 underline">
+            Reset
           </Link>
         )}
-      </form>
+        </form>
+      </details>
 
-      {/* Table */}
+      {/* Counts for the range, regardless of the current filter */}
+      <div className="flex flex-wrap gap-x-5 gap-y-0.5 text-sm text-stone-500 px-1">
+        {summary.map(({ label, value }) => (
+          <span key={label}>
+            <span className="font-bold text-stone-800">{value}</span> {label.toLowerCase()}
+          </span>
+        ))}
+      </div>
+
+      <section className="grid gap-2 lg:grid-cols-3">
+        <AppointmentSummaryCard title={`Waiting for pickup (${pickupList.pets.length})`}>
+          {pickupList.pets.length === 0 ? (
+            <p className="text-sm text-stone-400">Nobody waiting.</p>
+          ) : (
+            <ul className="space-y-0.5 text-sm">
+              {pickupList.pets.slice(0, 4).map((pet) => (
+                <li key={pet.appointmentId}>
+                  <Link href={`/staff/appointments/${pet.appointmentId}`} className="flex items-center justify-between gap-2 hover:text-amber-700">
+                    <span className="font-semibold truncate">{pet.petName}</span>
+                    <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${PICKUP_LEVEL_CLASS[pet.level]}`} title={PICKUP_LEVEL_LABEL[pet.level]}>
+                      {formatWait(pet.waitingMins)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </AppointmentSummaryCard>
+        <AppointmentSummaryCard title={`In the shop, no station (${noStation.length})`}>
+          {noStation.length === 0 ? <p className="text-sm text-stone-400">Everyone is at a station.</p> : (
+            <ul className="space-y-0.5 text-sm">
+              {noStation.map((appointment) => <li key={appointment.id}><Link href={`/staff/appointments/${appointment.id}`} className="font-semibold hover:text-amber-700">{appointment.pet.name}</Link></li>)}
+            </ul>
+          )}
+        </AppointmentSummaryCard>
+        <AppointmentSummaryCard title={`Arriving next (${arrivingNext.length})`}>
+          {arrivingNext.length === 0 ? <p className="text-sm text-stone-400">Nothing else booked today.</p> : (
+            <ul className="space-y-0.5 text-sm">
+              {arrivingNext.map((appointment) => <li key={appointment.id}><Link href={`/staff/appointments/${appointment.id}`} className="flex items-center justify-between gap-2 hover:text-amber-700"><span className="font-semibold truncate">{appointment.pet.name}</span><span className="shrink-0 text-stone-500">{formatShopTime(appointment.scheduledAt)}</span></Link></li>)}
+            </ul>
+          )}
+        </AppointmentSummaryCard>
+      </section>
+
+      {searchParams.error === "not_found" && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-800 text-sm font-medium">
+          That appointment no longer exists.
+        </div>
+      )}
+
+      {/* List */}
       {appointments.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-12 text-center text-stone-400">
-          No appointments on {displayDate}.
+        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
+          Nothing matches those filters.
         </div>
       ) : (
         <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-stone-50 text-stone-500 text-xs uppercase tracking-widest">
+            <table className="w-full text-sm text-center">
+              <thead className="bg-stone-50 text-stone-500 text-[10px] uppercase tracking-widest">
                 <tr>
-                  <th className="px-4 py-3 text-left">Time</th>
-                  <th className="px-4 py-3 text-left">Type</th>
-                  <th className="px-4 py-3 text-left">Pet</th>
-                  <th className="px-4 py-3 text-left">Owner / Phone</th>
-                  <th className="px-4 py-3 text-left">Service</th>
-                  <th className="px-4 py-3 text-left">Station</th>
-                  <th className="px-4 py-3 text-left">Staff</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                  <th className="px-4 py-3 text-left">Actions</th>
+                  <th scope="col" className="px-3 py-2">Status</th>
+                  <th scope="col" className="px-3 py-2">When</th>
+                  <th scope="col" className="px-3 py-2">Pet</th>
+                  <th scope="col" className="px-3 py-2">Owner</th>
+                  <th scope="col" className="px-3 py-2">Services</th>
+                  <th scope="col" className="px-3 py-2">Groomer</th>
+                  <th scope="col" className="px-3 py-2">Where</th>
+                  <th scope="col" className="px-3 py-2">Move</th>
                 </tr>
               </thead>
-              <tbody>
-                {appointments.map((appt, i) => (
-                  <tr
-                    key={appt.id}
-                    className={`border-t border-stone-100 ${i % 2 === 0 ? "bg-white" : "bg-stone-50"}`}
-                  >
-                    <td className="px-4 py-3 font-medium text-stone-800 whitespace-nowrap">
-                      {new Date(appt.scheduledAt).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                    <td className="px-4 py-3">
-                      {appt.appointmentType === "WALK_IN" ? (
-                        <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-700">
-                          Walk-In
-                        </span>
-                      ) : (
-                        <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-stone-100 text-stone-600">
-                          Appt
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-semibold text-stone-900">{appt.pet.name}</span>
-                      {appt.pet.hasBiteHistory && (
-                        <span className="ml-2 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">
-                          BITE
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-stone-700">
-                      <span>
-                        {appt.customer.firstName} {appt.customer.lastName}
-                      </span>
-                      {appt.customer.phone && (
-                        <span className="block text-xs text-stone-400">{appt.customer.phone}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-stone-600 whitespace-nowrap">
-                      {formatServiceType(appt.serviceType)}
-                    </td>
-                    <td className="px-4 py-3 text-stone-500">
-                      {appt.station?.displayLabel ?? appt.station?.name ?? (
-                        <span className="text-stone-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-stone-500">
-                      {appt.staff?.name ?? <span className="text-stone-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
-                          statusColor[appt.status] ?? "bg-stone-100 text-stone-500"
-                        }`}
-                      >
-                        {formatStatus(appt.status)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/staff/appointments/${appt.id}`}
-                        className="text-amber-700 hover:text-amber-900 font-medium text-xs hover:underline"
-                      >
-                        View →
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-stone-100">
+                {appointments.map((appt) => {
+                  const next = nextStatus(appt.status);
+                  // Only a pet that has not arrived can be late.
+                  const lateness =
+                    appt.status === AppointmentStatus.SCHEDULED
+                      ? arrivalLevel(appt.scheduledAt, arrivals)
+                      : null;
+                  const services =
+                    appt.services.length > 0
+                      ? appt.services
+                          .map((line) => line.service?.name ?? formatServiceType(line.serviceType))
+                          .join(", ")
+                      : formatServiceType(appt.serviceType);
+                  return (
+                    <tr key={appt.id} className="hover:bg-stone-50">
+                      <td className="px-3 py-1.5 whitespace-nowrap">
+                        {(() => {
+                          const arrivalAlert = lateness && lateness !== "on_time";
+                          const label = arrivalAlert
+                            ? `${ARRIVAL_LABEL[lateness]} · ${minutesLate(appt.scheduledAt)}m`
+                            : formatStatus(appt.status);
+                          return (
+                            <span
+                              className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black ${
+                                arrivalAlert
+                                  ? ARRIVAL_CLASS[lateness]
+                                  : statusColor[appt.status] ?? "bg-stone-100 text-stone-500"
+                              }`}
+                              title={label}
+                              aria-label={label}
+                            >
+                              {arrivalAlert ? "!" : "•"}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">
+                        <Link
+                          href={`/staff/appointments/${appt.id}`}
+                          className={`font-medium hover:text-amber-700 ${
+                            lateness ? ARRIVAL_TEXT_CLASS[lateness] : "text-stone-800"
+                          }`}
+                        >
+                          {formatShopTime(appt.scheduledAt)}
+                        </Link>
+                        {filters.view !== "day" && (
+                          <span className="block text-[10px] text-stone-400">
+                            {formatShopDate(appt.scheduledAt, { month: "short", day: "numeric" })}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <Link
+                          href={`/staff/pets/${appt.pet.id}`}
+                          className="font-semibold text-stone-900 hover:text-amber-700"
+                        >
+                          {appt.pet.name}
+                        </Link>
+                        {appt.pet.hasBiteHistory && (
+                          <span className="ml-1.5 text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold">
+                            BITE
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5 text-stone-600 whitespace-nowrap">
+                        <Link
+                          href={`/staff/customers/${appt.customer.id}`}
+                          className="hover:text-amber-700"
+                        >
+                          {appt.customer.firstName} {appt.customer.lastName}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-1.5 text-stone-600 max-w-[16rem] truncate" title={services}>
+                        {services}
+                      </td>
+                      <td className="px-3 py-1.5 text-stone-500 whitespace-nowrap">
+                        {appt.staff?.name ?? <span className="text-amber-700">Unassigned</span>}
+                      </td>
+                      <td className="px-3 py-1.5 text-stone-500 whitespace-nowrap">
+                        {appt.kennel
+                          ? `${appt.kennel.station.name} ${appt.kennel.label}`
+                          : (appt.station?.name ?? <span className="text-stone-400">—</span>)}
+                      </td>
+                      <td className="px-3 py-1.5 whitespace-nowrap">
+                        {next === AppointmentStatus.CHECKED_IN ? (
+                          <CheckInDialog
+                            action={checkInWithKennel}
+                            appointmentId={appt.id}
+                            petName={appt.pet.name}
+                            ownerName={`${appt.customer.firstName} ${appt.customer.lastName}`}
+                            kennels={openKennels}
+                            listQuery={listQuery}
+                            needsKennel={appt.needsKennel}
+                          />
+                        ) : next ? (
+                          <form action={moveStatus} className="inline">
+                            <input type="hidden" name="appointmentId" value={appt.id} />
+                            <input type="hidden" name="status" value={next} />
+                            <input type="hidden" name="returnTo" value="list" />
+                            <input type="hidden" name="listQuery" value={listQuery} />
+                            <button
+                              type="submit"
+                              className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+                            >
+                              → {formatStatus(next)}
+                            </button>
+                          </form>
+                        ) : (
+                          <span className="text-xs text-stone-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-          <div className="px-4 py-2 border-t border-stone-100 text-xs text-stone-400">
-            {appointments.length} appointment{appointments.length !== 1 ? "s" : ""}
-          </div>
+          {appointments.length === 300 && (
+            <p className="px-3 py-2 border-t border-stone-100 text-xs text-stone-400">
+              Showing the first 300 — narrow the range or filters to see more.
+            </p>
+          )}
         </div>
       )}
     </div>

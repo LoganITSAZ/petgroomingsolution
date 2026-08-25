@@ -2,21 +2,24 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { formatServiceType } from "@/lib/utils";
+import CustomerPetFields from "../CustomerPetFields";
+import { CoatType, PetSex, Species } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
+import { defaultAssignment } from "@/lib/stations";
+import { capacityConflicts, kennelAvailableFor } from "@/lib/kennels";
+import { shopDayRange } from "@/lib/utils";
+import {
+  getServiceOptions,
+  resolveSelectedServices,
+  sendBookingEmail,
+  setAppointmentServices,
+} from "@/lib/appointment-services";
+import { bookingRateSnapshot } from "@/lib/pricing-tiers";
 
-const SERVICE_TYPES = [
-  "BATH_AND_TIDY",
-  "BATH_AND_TRIM",
-  "FULL_GROOM",
-  "LION_CUT",
-  "NAIL_TRIM",
-  "NAIL_GRIND",
-  "EAR_CLEANING",
-  "TEETH_BRUSHING",
-  "GLAND_EXPRESSION",
-  "ADD_ON",
-  "CUSTOM",
-] as const;
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "New appointment" };
 
 interface PageProps {
   searchParams: { customerId?: string; petId?: string };
@@ -30,27 +33,17 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
 
   const { customerId, petId } = searchParams;
 
-  const [customers, pets, stations, staffList] = await Promise.all([
+  const [customers, pets, serviceOptions] = await Promise.all([
     prisma.customer.findMany({
       where: { isActive: true },
       orderBy: { lastName: "asc" },
     }),
     prisma.pet.findMany({
-      where: {
-        isActive: true,
-        ...(customerId ? { customerId } : {}),
-      },
-      orderBy: { name: "asc" },
-      include: { customer: { select: { firstName: true, lastName: true } } },
-    }),
-    prisma.station.findMany({
       where: { isActive: true },
+      select: { id: true, name: true, customerId: true, species: true },
       orderBy: { name: "asc" },
     }),
-    prisma.staff.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
+    getServiceOptions(),
   ]);
 
   // Default datetime: next full hour, at least 1 hour from now
@@ -66,36 +59,151 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
     const session = await auth();
     if (!session || session.user.userType !== "staff") redirect("/login");
 
-    const customerId = formData.get("customerId") as string;
-    const petId = formData.get("petId") as string;
     const scheduledAt = formData.get("scheduledAt") as string;
-    const serviceType = formData.get("serviceType") as string;
     const appointmentType = formData.get("appointmentType") as string;
-    const stationId = (formData.get("stationId") as string) || null;
-    const staffId = (formData.get("staffId") as string) || null;
-    const durationMinsRaw = formData.get("durationMins") as string;
+
     const visitNotes = (formData.get("visitNotes") as string) || null;
 
-    if (!customerId || !petId || !scheduledAt || !serviceType || !appointmentType) {
+    if (!appointmentType) {
       throw new Error("Missing required fields");
     }
 
-    const durationMins = durationMinsRaw ? parseInt(durationMinsRaw, 10) : null;
+    // Booking a pet that is standing at the counter should not require typing
+    // a time: an empty field is stamped with the moment the record is saved.
+    const scheduledFor = scheduledAt ? new Date(scheduledAt) : new Date();
+    if (Number.isNaN(scheduledFor.getTime())) {
+      throw new Error("That date and time could not be read");
+    }
+
+    const field = (name: string) => ((formData.get(name) as string | null) ?? "").trim();
+
+    // Counter staff often book someone who has never been in, so registering
+    // the owner and the pet is part of the booking.
+    let customerId: string;
+    if (formData.get("customerMode") === "new") {
+      const firstName = field("newCustomerFirstName");
+      const lastName = field("newCustomerLastName");
+      const email = field("newCustomerEmail").toLowerCase();
+      const password = field("newCustomerPassword");
+
+      if (!firstName || !lastName || !email) {
+        throw new Error("New customers need a first name, last name and email");
+      }
+      if (password && password.length < 8) {
+        throw new Error("Portal passwords must be at least 8 characters");
+      }
+      if (await prisma.customer.findUnique({ where: { email } })) {
+        throw new Error("A customer already uses that email address");
+      }
+
+      // No password means no portal sign-in: store an unusable random hash
+      // rather than something guessable.
+      const customer = await prisma.customer.create({
+        data: {
+          firstName,
+          lastName,
+          email,
+          phone: field("newCustomerPhone") || null,
+          passwordHash: await bcrypt.hash(password || randomBytes(32).toString("hex"), 12),
+        },
+      });
+      customerId = customer.id;
+    } else {
+      customerId = field("customerId");
+      if (!customerId) throw new Error("Pick a customer");
+    }
+
+    let petId: string;
+    if (formData.get("petMode") === "new") {
+      const name = field("newPetName");
+      if (!name) throw new Error("The new pet needs a name");
+
+      const weightRaw = field("newPetWeightLbs");
+      const weightLbs = weightRaw ? Number(weightRaw) : null;
+      if (weightLbs != null && (!Number.isFinite(weightLbs) || weightLbs <= 0)) {
+        throw new Error("Weight has to be a positive number");
+      }
+      const speciesRaw = field("newPetSpecies");
+      const coatRaw = field("newPetCoatType");
+
+      const pet = await prisma.pet.create({
+        data: {
+          customerId,
+          name,
+          species: Object.values(Species).includes(speciesRaw as Species)
+            ? (speciesRaw as Species)
+            : Species.DOG,
+          sex: Object.values(PetSex).includes(field("newPetSex") as PetSex)
+            ? (field("newPetSex") as PetSex)
+            : PetSex.UNKNOWN,
+          breed: field("newPetBreed") || null,
+          weightLbs,
+          coatType: Object.values(CoatType).includes(coatRaw as CoatType)
+            ? (coatRaw as CoatType)
+            : null,
+          groomingNotes: field("newPetGroomingNotes") || null,
+        },
+      });
+      petId = pet.id;
+    } else {
+      petId = field("petId");
+      if (!petId) throw new Error("Pick a pet");
+
+      // The pet must belong to the customer the appointment is being booked for.
+      const owned = await prisma.pet.findFirst({ where: { id: petId, customerId } });
+      if (!owned) throw new Error("That pet belongs to a different customer");
+    }
+
+    // One visit, one or more services. The first pick is the primary service.
+    const services = await resolveSelectedServices(
+      formData.getAll("serviceIds").map((value) => String(value))
+    );
+    if (!services) throw new Error("Select at least one service");
+
+    // Duration is the sum of the services booked, never typed in.
+    const durationMins = services.totalDurationMins;
+
+    // Every visit needs a kennel, so the day cannot promise more kennels than
+    // the shop has.
+    const { start, end } = shopDayRange(scheduledFor);
+    const availability = await kennelAvailableFor(start, end);
+    if (!availability.ok) {
+      const conflicts = await capacityConflicts(start, end);
+      const held = conflicts.overstaying.length;
+      throw new Error(
+        `Every kennel is spoken for that day (${availability.committed}/${availability.capacity})` +
+          (held > 0
+            ? ` — ${held} pet${held === 1 ? " is" : "s are"} waiting to be collected. Chase the pickups.`
+            : ".")
+      );
+    }
+
+    // Customers are attached to a groomer, and groomers to a station, so
+    // neither is chosen here.
+    const assignment = await defaultAssignment(customerId);
+    // Customers on a negotiated rate are quoted it from the moment they book.
+    const rate = await bookingRateSnapshot(customerId, services.lines);
 
     const appointment = await prisma.appointment.create({
       data: {
         customerId,
         petId,
-        scheduledAt: new Date(scheduledAt),
-        serviceType: serviceType as never,
+        scheduledAt: scheduledFor,
+        serviceType: services.primaryType,
         appointmentType: appointmentType as never,
         status: "SCHEDULED",
-        stationId: stationId || undefined,
-        staffId: staffId || undefined,
+        stationId: assignment.stationId ?? undefined,
+        staffId: assignment.staffId ?? undefined,
         durationMins: durationMins ?? undefined,
+        needsKennel: true,
         visitNotes: visitNotes ?? undefined,
+        pricingTierId: rate.pricingTierId,
+        pricingDiscountCents: rate.pricingDiscountCents,
       },
     });
+
+    await setAppointmentServices(appointment.id, services);
+    await sendBookingEmail(appointment.id);
 
     await prisma.appointmentStatusHistory.create({
       data: {
@@ -110,7 +218,7 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-3">
       {/* Back link */}
       <Link
         href="/staff/appointments"
@@ -119,102 +227,45 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
         ← Back to Appointments
       </Link>
 
-      <div className="bg-white border border-stone-200 rounded-2xl p-6">
-        <h1 className="text-xl font-black text-stone-900 mb-6">New Appointment</h1>
+      <div className="bg-white border border-stone-200 rounded-2xl p-4">
+        <h1 className="text-xl font-black text-stone-900 mb-3">New Appointment</h1>
 
-        <form action={createAppointment} className="space-y-5">
-          {/* Customer */}
-          <div>
-            <label htmlFor="customerId" className="block text-sm font-semibold text-stone-700 mb-1.5">
-              Customer <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="customerId"
-              name="customerId"
-              required
-              defaultValue={customerId ?? ""}
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-            >
-              <option value="" disabled>Select a customer…</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.lastName}, {c.firstName} — {c.email}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Pet */}
-          <div>
-            <label htmlFor="petId" className="block text-sm font-semibold text-stone-700 mb-1.5">
-              Pet <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="petId"
-              name="petId"
-              required
-              defaultValue={petId ?? ""}
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-            >
-              <option value="" disabled>Select a pet…</option>
-              {pets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.customer.firstName} {p.customer.lastName})
-                </option>
-              ))}
-            </select>
-            {customerId && pets.length === 0 && (
-              <p className="mt-1.5 text-xs text-amber-700">
-                No active pets found for this customer.{" "}
-                <Link href={`/staff/pets/new?customerId=${customerId}`} className="underline">
-                  Add one
-                </Link>
-              </p>
-            )}
-          </div>
+        <form action={createAppointment} className="space-y-3">
+          <CustomerPetFields
+            customers={customers.map((customer) => ({
+              id: customer.id,
+              name: `${customer.lastName}, ${customer.firstName} — ${customer.email}`,
+            }))}
+            pets={pets}
+            services={serviceOptions}
+            defaultCustomerId={customerId ?? ""}
+            defaultPetId={petId ?? ""}
+          />
 
           {/* Date & Time */}
           <div>
             <label htmlFor="scheduledAt" className="block text-sm font-semibold text-stone-700 mb-1.5">
-              Date &amp; Time <span className="text-red-500">*</span>
+              Date &amp; Time
             </label>
             <input
               id="scheduledAt"
               name="scheduledAt"
               type="datetime-local"
-              required
               defaultValue={defaultDtLocal}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
-          </div>
-
-          {/* Service Type */}
-          <div>
-            <label htmlFor="serviceType" className="block text-sm font-semibold text-stone-700 mb-1.5">
-              Service Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="serviceType"
-              name="serviceType"
-              required
-              defaultValue=""
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-            >
-              <option value="" disabled>Select a service…</option>
-              {SERVICE_TYPES.map((s) => (
-                <option key={s} value={s}>
-                  {formatServiceType(s)}
-                </option>
-              ))}
-            </select>
+            <p className="text-xs text-stone-400 mt-1">
+              Clear it to stamp the time the appointment is saved — for someone already at the
+              counter.
+            </p>
           </div>
 
           {/* Appointment Type */}
           <div>
             <span className="block text-sm font-semibold text-stone-700 mb-2">
-              Appointment Type <span className="text-red-500">*</span>
+              Appointment Type <span className="text-red-700">*</span>
             </span>
-            <div className="flex gap-6">
+            <div className="flex gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -237,63 +288,9 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
             </div>
           </div>
 
-          {/* Station */}
-          <div>
-            <label htmlFor="stationId" className="block text-sm font-semibold text-stone-700 mb-1.5">
-              Station <span className="text-stone-400 font-normal">(optional)</span>
-            </label>
-            <select
-              id="stationId"
-              name="stationId"
-              defaultValue=""
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-            >
-              <option value="">Assign at check-in</option>
-              {stations.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Staff */}
-          <div>
-            <label htmlFor="staffId" className="block text-sm font-semibold text-stone-700 mb-1.5">
-              Groomer <span className="text-stone-400 font-normal">(optional)</span>
-            </label>
-            <select
-              id="staffId"
-              name="staffId"
-              defaultValue=""
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-            >
-              <option value="">Unassigned</option>
-              {staffList.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Duration */}
-          <div>
-            <label htmlFor="durationMins" className="block text-sm font-semibold text-stone-700 mb-1.5">
-              Estimated Duration (minutes){" "}
-              <span className="text-stone-400 font-normal">(optional)</span>
-            </label>
-            <input
-              id="durationMins"
-              name="durationMins"
-              type="number"
-              min={5}
-              max={480}
-              step={5}
-              placeholder="e.g. 90"
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-          </div>
+          {/* Groomer and station are not chosen here: the customer's groomer
+              takes the visit, at that groomer's station. Both can be changed on
+              the appointment itself. */}
 
           {/* Notes */}
           <div>
@@ -313,7 +310,7 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
           <div className="flex items-center gap-3 pt-2">
             <button
               type="submit"
-              className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+              className="bg-amber-700 hover:bg-amber-800 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
             >
               Create Appointment
             </button>

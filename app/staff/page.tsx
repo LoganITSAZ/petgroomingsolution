@@ -1,134 +1,722 @@
 import { prisma } from "@/lib/prisma";
-import { formatStatus, formatServiceType } from "@/lib/utils";
+import {
+  formatShopDate,
+  formatStatus,
+  shopDayRange,
+} from "@/lib/utils";
+import { AppointmentStatus, StaffRole, StationRole } from "@prisma/client";
+import { stationCapacity } from "@/lib/stations";
+import { KENNELABLE_STATUSES, capacityConflicts, kennelDemand } from "@/lib/kennels";
+import { shopInsights } from "@/lib/insights";
+import { ALERT_DOT, serviceAlerts } from "@/lib/alerts";
+import { assignmentSuggestions, floorBlockers } from "@/lib/recommendations";
+import { PRESENCE_CLASS, PRESENCE_LABEL, floorRoster } from "@/lib/presence";
+import { describeShifts, isOnShiftNow, scheduleGaps, todaysShifts } from "@/lib/schedule";
+import { applySuggestion } from "./presence-actions";
+import InsightList from "@/components/InsightList";
+import { pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
 
-export default async function StaffDashboard() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "Dashboard" };
 
-  const [todayAppointments, activeByStation] = await Promise.all([
+/**
+ * Shop floor dashboard, grouped by station: every place a pet can be, with the
+ * groomer, the owner and where the service stands, read in one pass.
+ * Configuration lives in the admin panel; the shop's numbers are at
+ * /staff/analytics, which every staff member can read.
+ */
+
+// Statuses that mean the pet is in the shop and being worked on.
+const ON_FLOOR: AppointmentStatus[] = [
+  AppointmentStatus.CHECKED_IN,
+  AppointmentStatus.IN_PROGRESS,
+  AppointmentStatus.DRYING,
+  AppointmentStatus.FINISHING,
+  AppointmentStatus.COMPLETE,
+];
+
+const statusColor: Record<string, string> = {
+  SCHEDULED: "bg-stone-100 text-stone-600",
+  CHECKED_IN: "bg-blue-100 text-blue-700",
+  IN_PROGRESS: "bg-amber-100 text-amber-700",
+  DRYING: "bg-sky-100 text-sky-700",
+  FINISHING: "bg-purple-100 text-purple-700",
+  COMPLETE: "bg-green-100 text-green-700",
+  READY_PICKUP: "bg-emerald-100 text-emerald-800",
+  PICKED_UP: "bg-stone-100 text-stone-400",
+};
+
+const ROLE_HEADING: Record<StationRole, string> = {
+  GROOMER: "Groomer",
+  BATHING: "Bathing",
+  KENNEL: "Kennels",
+};
+
+function minutesSince(from: Date | null): number | null {
+  return from ? Math.max(0, Math.round((Date.now() - from.getTime()) / 60000)) : null;
+}
+
+export default async function StaffDashboard({
+  searchParams,
+}: {
+  searchParams: { assigned?: string; error?: string };
+}) {
+  const now = new Date();
+  const { start, end } = shopDayRange(now);
+
+  const [
+    todayAppointments,
+    onFloor,
+    pickups,
+    stations,
+    groomers,
+    kennels,
+    conflicts,
+    insights,
+    suggestions,
+    blockers,
+    roster,
+    alerts,
+    shifts,
+    gaps,
+  ] = await Promise.all([
     prisma.appointment.findMany({
-      where: {
-        scheduledAt: { gte: today, lt: tomorrow },
-        status: { notIn: ["CANCELLED", "NO_SHOW"] },
-      },
-      include: {
-        pet: true,
-        customer: { select: { firstName: true, lastName: true, phone: true } },
-        station: true,
-        staff: { select: { name: true } },
-      },
+      where: { scheduledAt: { gte: start, lt: end } },
+      select: { id: true, status: true, staffId: true, scheduledAt: true, pet: { select: { name: true } } },
       orderBy: { scheduledAt: "asc" },
     }),
     prisma.appointment.findMany({
-      where: {
-        stationId: { not: null },
-        status: { notIn: ["COMPLETE", "READY_PICKUP", "PICKED_UP", "CANCELLED", "NO_SHOW"] },
-      },
+      where: { status: { in: ON_FLOOR } },
       include: {
-        pet: true,
+        pet: { select: { id: true, name: true, hasBiteHistory: true } },
         customer: { select: { firstName: true, lastName: true } },
-        station: true,
+        staff: { select: { id: true, name: true } },
+        services: { include: { service: true }, orderBy: { sortOrder: "asc" } },
+      },
+      orderBy: { checkedInAt: "asc" },
+    }),
+    pickupWatchlist(),
+    prisma.station.findMany({
+      where: { isActive: true },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+      include: {
+        kennels: {
+          select: {
+            id: true,
+            label: true,
+            isActive: true,
+            appointments: {
+              where: { status: { in: KENNELABLE_STATUSES } },
+              select: {
+                id: true,
+                status: true,
+                kenneledAt: true,
+                pet: { select: { id: true, name: true, hasBiteHistory: true } },
+                customer: { select: { firstName: true, lastName: true } },
+                staff: { select: { name: true } },
+              },
+              orderBy: { kenneledAt: "asc" },
+            },
+          },
+          orderBy: [{ row: "asc" }, { column: "asc" }],
+        },
       },
     }),
+    // Floor headcount: the people who actually work pets.
+    prisma.staff.findMany({
+      where: { isActive: true, roles: { hasSome: [StaffRole.GROOMER, StaffRole.BATHER] } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    kennelDemand(start, end),
+    capacityConflicts(start, end),
+    shopInsights(),
+    assignmentSuggestions(),
+    floorBlockers(),
+    floorRoster(),
+    serviceAlerts(),
+    todaysShifts(),
+    scheduleGaps(),
   ]);
 
-  const statusColor: Record<string, string> = {
-    SCHEDULED: "bg-stone-100 text-stone-600",
-    CHECKED_IN: "bg-blue-100 text-blue-700",
-    IN_PROGRESS: "bg-amber-100 text-amber-700",
-    DRYING: "bg-sky-100 text-sky-700",
-    FINISHING: "bg-purple-100 text-purple-700",
-    COMPLETE: "bg-green-100 text-green-700",
-    READY_PICKUP: "bg-emerald-100 text-emerald-800",
-    PICKED_UP: "bg-stone-100 text-stone-400",
+  // ── Today at a glance ─────────────────────────────────────────
+  const scheduled = todayAppointments.filter((a) => a.status === AppointmentStatus.SCHEDULED);
+  const cancelled = todayAppointments.filter(
+    (a) => a.status === AppointmentStatus.CANCELLED || a.status === AppointmentStatus.NO_SHOW
+  );
+  const active = todayAppointments.filter(
+    (a) => a.status !== AppointmentStatus.CANCELLED && a.status !== AppointmentStatus.NO_SHOW
+  );
+
+  // ── The board ─────────────────────────────────────────────────
+  // Stations can hold more than one pet, so occupancy is a list per station.
+  const occupantsByStation = new Map<string, typeof onFloor>();
+  for (const appointment of onFloor) {
+    if (!appointment.stationId) continue;
+    const list = occupantsByStation.get(appointment.stationId) ?? [];
+    list.push(appointment);
+    occupantsByStation.set(appointment.stationId, list);
+  }
+  const workStations = stations.filter((s) => s.role !== StationRole.KENNEL);
+  const kennelStations = stations.filter((s) => s.role === StationRole.KENNEL);
+
+  const kennelTotal = kennels.capacity;
+  const kennelOccupied = kennelStations.reduce(
+    (n, s) => n + s.kennels.reduce((inside, kennel) => inside + kennel.appointments.length, 0),
+    0
+  );
+
+  // ── Capacity ──────────────────────────────────────────────────
+  const segment = (role: StationRole) => {
+    const list = workStations.filter((s) => s.role === role);
+    return {
+      label: ROLE_HEADING[role],
+      total: list.reduce((n, station) => n + stationCapacity(station), 0),
+      used: list.reduce((n, station) => n + (occupantsByStation.get(station.id)?.length ?? 0), 0),
+    };
   };
 
+  const capacitySegments = [
+    segment(StationRole.GROOMER),
+    segment(StationRole.BATHING),
+    { label: "Kennels", total: kennelTotal, used: kennelOccupied },
+  ].filter((s) => s.total > 0);
+
+  const capacityTotal = capacitySegments.reduce((n, s) => n + s.total, 0);
+  const capacityUsed = capacitySegments.reduce((n, s) => n + s.used, 0);
+  const capacityPercent = capacityTotal === 0 ? 0 : Math.round((capacityUsed / capacityTotal) * 100);
+  const groomersOnAPet = groomers.filter((groomer) =>
+    onFloor.some((a) => a.staffId === groomer.id)
+  ).length;
+
+  const capacityState =
+    capacityTotal === 0
+      ? { label: "Not configured", tone: "text-stone-400", bar: "bg-stone-300" }
+      : capacityUsed >= capacityTotal
+        ? { label: "Full", tone: "text-red-700", bar: "bg-red-600" }
+        : capacityPercent >= 85
+          ? { label: "Nearly full", tone: "text-amber-700", bar: "bg-amber-500" }
+          : capacityPercent >= 50
+            ? { label: "Busy", tone: "text-amber-700", bar: "bg-amber-400" }
+            : { label: "Open", tone: "text-green-700", bar: "bg-green-500" };
+
+  const counts = [
+    { label: "scheduled", value: scheduled.length },
+    { label: "in the shop", value: onFloor.length },
+    { label: "ready", value: pickups.pets.length },
+    {
+      label: "picked up",
+      value: todayAppointments.filter((a) => a.status === AppointmentStatus.PICKED_UP).length,
+    },
+  ];
+
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-black text-stone-900">
-          Today — {today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-        </h1>
-        <Link
-          href="/staff/appointments/new"
-          className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
-        >
-          + New Appointment
-        </Link>
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="bg-white border border-stone-200 rounded-xl px-3 py-2">
+        <div className="flex items-start justify-between gap-6 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="text-lg font-black text-stone-900">
+              {formatShopDate(now, { weekday: "long", month: "long", day: "numeric" })}
+            </h1>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-sm text-stone-500 mt-1">
+              <span>{active.length} on the books</span>
+              {counts.map(({ label, value }) => (
+                <span key={label}>
+                  <span className="font-bold text-stone-800">{value}</span> {label}
+                </span>
+              ))}
+              {cancelled.length > 0 && (
+                <span className="text-stone-400">{cancelled.length} cancelled / no-show</span>
+              )}
+              <Link href="/staff/appointments" className="text-stone-400 hover:text-stone-700 underline">
+                full schedule
+              </Link>
+            </div>
+          </div>
+
+          {/* Service-level problems, beside the capacity they usually cause */}
+          <div className="flex-1 min-w-[16rem] max-w-md">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">
+                Alerts
+              </span>
+              {alerts.length > 0 && (
+                <span className="text-xs text-stone-400">
+                  {alerts.filter((alert) => alert.severity === "critical").length} critical
+                </span>
+              )}
+            </div>
+            {alerts.length === 0 ? (
+              <p className="text-sm text-stone-400 mt-1.5">
+                Nothing needs chasing — no late pickups, arrivals or overruns.
+              </p>
+            ) : (
+              <ul className="mt-1.5 space-y-1">
+                {alerts.slice(0, 4).map((alert) => (
+                  <li key={alert.id}>
+                    <Link
+                      href={alert.href}
+                      className="flex items-baseline gap-2 text-sm hover:opacity-80"
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${ALERT_DOT[alert.severity]}`}
+                      />
+                      <span className="min-w-0">
+                        <span className="font-semibold text-stone-800">{alert.title}</span>
+                        <span className="block text-xs text-stone-500 truncate">
+                          {alert.detail}
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+                {alerts.length > 4 && (
+                  <li className="text-xs text-stone-400 pl-3.5">
+                    +{alerts.length - 4} more
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+
+          <div className="w-56">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">
+                Capacity
+              </span>
+              <span className={`text-lg font-black leading-none ${capacityState.tone}`}>
+                {capacityState.label}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-stone-200 overflow-hidden mt-2">
+              <div
+                className={`h-full ${capacityState.bar}`}
+                style={{ width: `${Math.min(capacityPercent, 100)}%` }}
+              />
+            </div>
+            <div className="mt-1 space-y-0.5 text-xs text-stone-500">
+              {capacitySegments.map(({ label, used, total }) => (
+                <span
+                  key={label}
+                  className={`flex items-center justify-between gap-3 ${
+                    used >= total ? "text-red-600 font-semibold" : ""
+                  }`}
+                >
+                  <span>{label}</span>
+                  <span>{used}/{total}</span>
+                </span>
+              ))}
+              <span className="flex items-center justify-between gap-3">
+                <span>Groomers on a pet</span>
+                <span>{groomersOnAPet}/{groomers.length}</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="w-56">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">
+                Floor
+              </span>
+              <Link href="/staff/team" className="text-xs text-stone-400 hover:text-stone-600 underline">
+                Team
+              </Link>
+            </div>
+            <p className="text-xs text-stone-500 mt-1">
+              {roster.filter((member) => member.state !== "OFF_SHIFT").length} signed in ·{" "}
+              {roster.filter((member) => isOnShiftNow(shifts.get(member.id))).length} scheduled now
+            </p>
+            {roster.length === 0 ? (
+              <p className="text-xs text-stone-400 mt-1.5">No floor staff on file.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+              {roster.map((member) => {
+                const href = member.working
+                  ? `/staff/appointments/${member.working.appointmentId}`
+                  : "/staff/team";
+                return (
+                  <Link
+                    key={member.id}
+                    href={href}
+                    title={[
+                      PRESENCE_LABEL[member.state],
+                      `${member.minutesInState} min`,
+                      member.working
+                        ? `${member.working.petName}${member.working.stationName ? ` at ${member.working.stationName}` : ""}`
+                        : null,
+                      describeShifts(shifts.get(member.id))
+                        ? `scheduled ${describeShifts(shifts.get(member.id))}`
+                        : "not scheduled today",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                    className={`inline-flex items-baseline gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition-opacity hover:opacity-80 ${PRESENCE_CLASS[member.state]}`}
+                  >
+                    <span>{member.name}</span>
+                    <span className="font-normal opacity-70">
+                      {member.working ? member.working.petName : `${member.minutesInState}m`}
+                    </span>
+                  </Link>
+                );
+              })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {gaps.filter((gap) => gap.kind === "expected").length > 0 && (
+          <p className="mt-2 pt-2 border-t border-stone-100 text-sm text-amber-700">
+            <span className="font-semibold">Scheduled but not signed in:</span>{" "}
+            {gaps
+              .filter((gap) => gap.kind === "expected")
+              .map((gap) => gap.staffName)
+              .join(", ")}
+          </p>
+        )}
+
       </div>
 
-      {/* Active at stations */}
-      {activeByStation.length > 0 && (
+      {searchParams.assigned === "1" && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+          Assigned.
+        </div>
+      )}
+      {searchParams.error === "suggestion_stale" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-amber-800 text-sm font-medium">
+          The floor moved before that could be applied — here is the current picture.
+        </div>
+      )}
+      {searchParams.error === "not_floor_staff" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-amber-800 text-sm font-medium">
+          Floor status is for groomers and bathers — an admin-only account does not take pets.
+        </div>
+      )}
+      {searchParams.error === "role_not_allowed" && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-red-800 text-sm font-medium">
+          That station is limited to roles this person does not hold.
+        </div>
+      )}
+
+      {/* What to do with the open stations, right now */}
+      {(suggestions.length > 0 || blockers.blocked) && (
         <section>
-          <h2 className="font-bold text-stone-700 mb-3 text-sm uppercase tracking-widest">Active at Stations</h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {activeByStation.map((appt) => (
-              <div key={appt.id} className="bg-white border border-stone-200 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-stone-400 uppercase">{appt.station?.displayLabel ?? appt.station?.name}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[appt.status] ?? ""}`}>
-                    {formatStatus(appt.status)}
-                  </span>
-                </div>
-                <p className="font-bold text-stone-900">{appt.pet.name}</p>
-                <p className="text-sm text-stone-500">{appt.customer.firstName} {appt.customer.lastName}</p>
-              </div>
-            ))}
+          <div className="flex items-baseline justify-between mb-1.5">
+            <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">
+              Next moves
+            </h2>
+            <span className="text-xs text-stone-400">
+              {blockers.readyStaff} ready · {blockers.waitingPets} waiting ·{" "}
+              {blockers.openStations} station{blockers.openStations === 1 ? "" : "s"} open
+            </span>
           </div>
+
+          {suggestions.length === 0 ? (
+            <p className="text-sm text-stone-500 bg-white border border-stone-200 rounded-lg px-3 py-2">
+              {blockers.blocked}
+            </p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {suggestions.map((suggestion) => (
+                <form
+                  key={suggestion.stationId}
+                  action={applySuggestion}
+                  className="bg-white border border-emerald-200 rounded-lg px-3 py-2"
+                >
+                  <input type="hidden" name="appointmentId" value={suggestion.appointmentId} />
+                  <input type="hidden" name="stationId" value={suggestion.stationId} />
+                  <input type="hidden" name="staffId" value={suggestion.staffId} />
+
+                  <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+                    {suggestion.stationName} is open
+                  </p>
+                  <p className="text-sm font-bold text-stone-900 mt-0.5">
+                    {suggestion.petName}
+                    {suggestion.hasBiteHistory && (
+                      <span className="ml-1.5 text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold align-middle">
+                        BITE
+                      </span>
+                    )}
+                    <span className="font-normal text-stone-500"> → {suggestion.staffName}</span>
+                  </p>
+                  <p className="text-xs text-stone-400">{suggestion.reasons.join(" · ")}</p>
+                  <button
+                    type="submit"
+                    className="mt-1.5 w-full bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg py-1.5 text-xs font-semibold transition-colors"
+                  >
+                    Assign
+                  </button>
+                </form>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
-      {/* All today's appointments */}
-      <section>
-        <h2 className="font-bold text-stone-700 mb-3 text-sm uppercase tracking-widest">All Today ({todayAppointments.length})</h2>
-        {todayAppointments.length === 0 ? (
-          <p className="text-stone-400 text-sm">No appointments today.</p>
-        ) : (
-          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-stone-50 text-stone-500 text-xs uppercase tracking-widest">
-                <tr>
-                  <th className="px-4 py-3 text-left">Time</th>
-                  <th className="px-4 py-3 text-left">Pet</th>
-                  <th className="px-4 py-3 text-left">Owner</th>
-                  <th className="px-4 py-3 text-left">Service</th>
-                  <th className="px-4 py-3 text-left">Station</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {todayAppointments.map((appt, i) => (
-                  <tr key={appt.id} className={i % 2 === 0 ? "bg-white" : "bg-stone-50"}>
-                    <td className="px-4 py-3 font-medium">
-                      {new Date(appt.scheduledAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-semibold text-stone-900">{appt.pet.name}</span>
-                      {appt.pet.hasBiteHistory && (
-                        <span className="ml-2 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">BITE</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-stone-600">
-                      {appt.customer.firstName} {appt.customer.lastName}
-                      {appt.customer.phone && <span className="block text-xs text-stone-400">{appt.customer.phone}</span>}
-                    </td>
-                    <td className="px-4 py-3 text-stone-600">{formatServiceType(appt.serviceType)}</td>
-                    <td className="px-4 py-3 text-stone-500">{appt.station?.displayLabel ?? appt.station?.name ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[appt.status] ?? ""}`}>
-                        {formatStatus(appt.status)}
+      {/* What the day's data is flagging */}
+      {insights.length > 0 && (
+        <section>
+          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1.5">
+            Worth knowing
+          </h2>
+          <InsightList insights={insights.slice(0, 3)} compact />
+        </section>
+      )}
+
+      {/* Kennel space about to run out */}
+      {(conflicts.shortfall > 0 || conflicts.overstaying.length > 0) && (
+        <section
+          className={`rounded-xl px-3 py-2 border ${
+            conflicts.shortfall > 0
+              ? "bg-red-50 border-red-200"
+              : "bg-amber-50 border-amber-200"
+          }`}
+        >
+          <h2
+            className={`font-bold text-xs uppercase tracking-widest ${
+              conflicts.shortfall > 0 ? "text-red-800" : "text-amber-800"
+            }`}
+          >
+            {conflicts.shortfall > 0
+              ? `Kennel space short by ${conflicts.shortfall}`
+              : "Kennels held by late pickups"}
+          </h2>
+          <p className="text-sm text-stone-700 mt-0.5">
+            {conflicts.committed}/{conflicts.capacity} committed
+            {conflicts.incoming > 0 && ` · ${conflicts.incoming} still to arrive`}
+            {conflicts.overstaying.length > 0 &&
+              ` · ${conflicts.overstaying.length} waiting to be collected`}
+          </p>
+          {conflicts.overstaying.length > 0 && (
+            <ul className="mt-1 divide-y divide-amber-100 text-sm">
+              {conflicts.overstaying.map((pet) => (
+                <li key={pet.appointmentId} className="py-1 flex items-center justify-between gap-3">
+                  <Link
+                    href={`/staff/appointments/${pet.appointmentId}`}
+                    className="truncate hover:text-amber-900"
+                  >
+                    <span className="font-semibold text-stone-900">{pet.petName}</span>
+                    <span className="text-stone-600"> · {pet.ownerName}</span>
+                    {pet.kennelLabel && (
+                      <span className="text-stone-400"> · kennel {pet.kennelLabel}</span>
+                    )}
+                  </Link>
+                  <span className="whitespace-nowrap text-xs">
+                    {pet.phone && (
+                      <a href={`tel:${pet.phone}`} className="text-amber-800 hover:underline mr-2">
+                        {pet.phone}
+                      </a>
+                    )}
+                    <span className="text-stone-500">waiting {pet.waitingMins} min</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {/* The board — one vertical column for each kind of station */}
+      <div className="grid gap-4 lg:grid-cols-3 items-start">
+        {[StationRole.GROOMER, StationRole.BATHING].map((role) => {
+        const list = workStations.filter((s) => s.role === role);
+        if (list.length === 0) return null;
+
+        return (
+          <section key={role}>
+            <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-2">
+              {ROLE_HEADING[role]}{" "}
+            <span className="text-stone-400">
+              ({list.reduce((n, station) => n + (occupantsByStation.get(station.id)?.length ?? 0), 0)}
+              /{list.reduce((n, station) => n + stationCapacity(station), 0)})
+            </span>
+            </h2>
+            <div className="grid gap-2">
+              {list.map((station) => {
+                const occupants = occupantsByStation.get(station.id) ?? [];
+                const capacity = stationCapacity(station);
+                const full = occupants.length >= capacity;
+
+                return (
+                  <Link
+                    key={station.id}
+                    href={`/staff/stations/${station.id}`}
+                    className={`rounded-lg border px-3 py-2 transition-colors ${
+                      occupants.length > 0
+                        ? "bg-white border-stone-200 hover:border-amber-300"
+                        : "bg-stone-50 border-dashed border-stone-300 hover:border-stone-400"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide truncate">
+                        {station.name}
                       </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold whitespace-nowrap ${
+                          full
+                            ? "bg-red-100 text-red-700"
+                            : occupants.length > 0
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-stone-200 text-stone-500"
+                        }`}
+                      >
+                        {occupants.length}/{capacity}
+                      </span>
+                    </div>
+
+                    {occupants.length === 0 ? (
+                      <p className="text-stone-400 text-xs mt-1">Open</p>
+                    ) : (
+                      <ul className="mt-1 divide-y divide-stone-100 text-sm">
+                        {occupants.map((appt) => {
+                          const mins = minutesSince(appt.checkedInAt);
+                          const over =
+                            appt.durationMins != null && mins != null && mins > appt.durationMins;
+                          return (
+                            <li key={appt.id} className="py-0.5">
+                              <p className="font-bold text-stone-900 truncate">
+                                {appt.pet.name}
+                                {appt.pet.hasBiteHistory && (
+                                  <span className="ml-1 text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold align-middle">
+                                    BITE
+                                  </span>
+                                )}
+                                <span className="font-normal text-stone-500">
+                                  {" "}
+                                  · {appt.customer.firstName} {appt.customer.lastName}
+                                </span>
+                              </p>
+                              <p className="text-xs flex justify-between gap-2">
+                                <span className={appt.staff ? "text-stone-500" : "text-amber-700"}>
+                                  {appt.staff?.name ?? "No groomer"}
+                                </span>
+                                <span className="flex items-center gap-1.5">
+                                  <span
+                                    className={`text-[10px] px-1.5 rounded-full font-medium ${
+                                      statusColor[appt.status] ?? ""
+                                    }`}
+                                  >
+                                    {formatStatus(appt.status)}
+                                  </span>
+                                  {mins != null && (
+                                    <span className={over ? "text-red-600 font-semibold" : "text-stone-400"}>
+                                      {mins}m
+                                    </span>
+                                  )}
+                                </span>
+                              </p>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        );
+        })}
+
+        {/* Kennels — same card as the stations above, one per unit */}
+        {kennelStations.length > 0 && (
+          <section>
+          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-2">
+            {ROLE_HEADING.KENNEL}{" "}
+            <span className="text-stone-400">
+              ({kennelStations.length} unit{kennelStations.length !== 1 ? "s" : ""} ·{" "}
+              {kennelOccupied}/{kennelTotal} in use
+              {kennels.reserved > 0 && `, ${kennels.reserved} still expected`}
+              {kennels.capacity > 0 && kennels.free === 0 && " — none free"})
+            </span>
+          </h2>
+            <div className="grid gap-2">
+            {kennelStations.map((station) => {
+              const occupants = station.kennels.flatMap((kennel) =>
+                kennel.appointments.map((appt) => ({ ...appt, label: kennel.label }))
+              );
+              const capacity =
+                station.kennels.filter((kennel) => kennel.isActive).length * kennels.perCompartment;
+              const full = occupants.length >= capacity;
+
+              return (
+                <Link
+                  key={station.id}
+                  href={`/staff/stations/${station.id}`}
+                  className={`rounded-lg border px-3 py-2 transition-colors ${
+                    occupants.length > 0
+                      ? "bg-white border-stone-200 hover:border-emerald-300"
+                      : "bg-stone-50 border-dashed border-stone-300 hover:border-stone-400"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide truncate">
+                      {station.name}
+                    </span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold whitespace-nowrap ${
+                        full
+                          ? "bg-red-100 text-red-700"
+                          : occupants.length > 0
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-stone-200 text-stone-500"
+                      }`}
+                    >
+                      {occupants.length}/{capacity}
+                    </span>
+                  </div>
+
+                  {occupants.length === 0 ? (
+                    <p className="text-stone-400 text-xs mt-1">Empty</p>
+                  ) : (
+                    <ul className="mt-1 divide-y divide-stone-100 text-sm">
+                      {occupants.map((occupant) => {
+                        const mins = minutesSince(occupant.kenneledAt);
+                        return (
+                          <li key={occupant.id} className="py-0.5">
+                            <p className="font-bold text-stone-900 truncate">
+                              <span className="text-stone-500 font-black">{occupant.label}</span>{" "}
+                              {occupant.pet.name}
+                              {occupant.pet.hasBiteHistory && (
+                                <span className="ml-1 text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold align-middle">
+                                  BITE
+                                </span>
+                              )}
+                              <span className="font-normal text-stone-500">
+                                {" "}
+                                · {occupant.customer.firstName} {occupant.customer.lastName}
+                              </span>
+                            </p>
+                            <p className="text-xs flex justify-between gap-2">
+                              <span className={occupant.staff ? "text-stone-500" : "text-amber-700"}>
+                                {occupant.staff?.name ?? "No groomer"}
+                              </span>
+                              <span className="flex items-center gap-1.5">
+                                <span
+                                  className={`text-[10px] px-1.5 rounded-full font-medium ${
+                                    statusColor[occupant.status] ?? ""
+                                  }`}
+                                >
+                                  {formatStatus(occupant.status)}
+                                </span>
+                                {mins != null && <span className="text-stone-400">{mins}m</span>}
+                              </span>
+                            </p>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </Link>
+              );
+            })}
           </div>
+          </section>
         )}
-      </section>
+      </div>
+
     </div>
   );
 }

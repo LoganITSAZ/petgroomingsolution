@@ -6,7 +6,16 @@ import {
   formatCoatType,
 } from "@/lib/utils";
 import Link from "next/link";
+import PhotoUpload from "@/components/PhotoUpload";
+import InsightList from "@/components/InsightList";
+import { petInsights } from "@/lib/insights";
+import { setPetPhoto } from "@/app/staff/customers/actions";
+import { photoUrl } from "@/lib/photos";
 import { notFound } from "next/navigation";
+
+// Screen readers announce the title first; without one every page in the
+// app reads as the same document (WCAG 2.4.2).
+export const metadata = { title: "Pet" };
 
 const statusColor: Record<string, string> = {
   SCHEDULED: "bg-stone-100 text-stone-600",
@@ -17,7 +26,7 @@ const statusColor: Record<string, string> = {
   COMPLETE: "bg-green-100 text-green-700",
   READY_PICKUP: "bg-emerald-100 text-emerald-800",
   PICKED_UP: "bg-stone-100 text-stone-400",
-  CANCELLED: "bg-red-100 text-red-500",
+  CANCELLED: "bg-red-100 text-red-700",
   NO_SHOW: "bg-red-100 text-red-400",
 };
 
@@ -43,16 +52,17 @@ const visitEventColor: Record<string, string> = {
 
 interface PageProps {
   params: { id: string };
+  searchParams: { photo?: string; error?: string };
 }
 
-export default async function PetDetailPage({ params }: PageProps) {
+export default async function PetDetailPage({ params, searchParams }: PageProps) {
   let pet;
   try {
     pet = await prisma.pet.findUniqueOrThrow({
       where: { id: params.id },
       include: {
         customer: {
-          select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+          select: { id: true, firstName: true, lastName: true, email: true, phone: true, photoId: true },
         },
         appointments: {
           include: {
@@ -76,6 +86,8 @@ export default async function PetDetailPage({ params }: PageProps) {
     take: 20,
   });
 
+  const insights = await petInsights(params.id);
+
   const age = pet.dateOfBirth
     ? Math.floor(
         (Date.now() - new Date(pet.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25)
@@ -86,26 +98,47 @@ export default async function PetDetailPage({ params }: PageProps) {
     <div className="space-y-8 max-w-5xl mx-auto">
       {/* Back link */}
       <Link
-        href="/staff/directory"
+        href="/staff/customers"
         className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-800 transition-colors"
       >
-        ← Back to Customers & Pets
+        ← Back to Customers
       </Link>
+
+      {searchParams.photo === "1" && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-green-800 text-sm font-medium">
+          Photo updated.
+        </div>
+      )}
+      {searchParams.error?.startsWith("photo_") && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-red-800 text-sm font-medium">
+          {searchParams.error === "photo_too_large"
+            ? "Photos have to be 2 MB or smaller."
+            : "Photos must be JPEG, PNG or WebP."}
+        </div>
+      )}
 
       {/* Bite history banner */}
       {pet.hasBiteHistory && (
-        <div className="bg-red-600 text-white rounded-xl px-5 py-4 flex items-center gap-3 font-bold text-sm shadow-sm">
+        <div className="bg-red-600 text-white rounded-xl px-4 py-2.5 flex items-center gap-3 font-bold text-sm shadow-sm">
           <span className="text-xl">⚠</span>
           <span>BITE HISTORY — Handle with extreme caution</span>
         </div>
       )}
 
       {/* Pet header */}
-      <div className="bg-white border border-stone-200 rounded-2xl p-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-black text-stone-900">{pet.name}</h1>
-            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-stone-500">
+      <div className="bg-white border border-stone-200 rounded-2xl p-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-start gap-3">
+            <PhotoUpload
+              action={setPetPhoto}
+              idField="petId"
+              idValue={pet.id}
+              currentUrl={photoUrl(pet.photoId) ?? pet.photoUrl}
+              label={pet.name}
+            />
+            <div>
+            <h1 className="text-xl font-black text-stone-900">{pet.name}</h1>
+            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-0.5 text-sm text-stone-500">
               <span>
                 <span className="font-medium text-stone-700">Species:</span>{" "}
                 {formatSpecies(pet.species)}
@@ -142,21 +175,37 @@ export default async function PetDetailPage({ params }: PageProps) {
                   {formatCoatType(pet.coatType)}
                 </span>
               )}
+              {pet.sex !== "UNKNOWN" && (
+                <span>
+                  <span className="font-medium text-stone-700">Sex:</span>{" "}
+                  {pet.sex === "MALE" ? "Male" : "Female"}
+                </span>
+              )}
+            </div>
             </div>
           </div>
           <Link
             href={`/staff/appointments/new?petId=${pet.id}&customerId=${pet.customer.id}`}
-            className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+            className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
           >
             + New Appointment
           </Link>
         </div>
       </div>
 
+      {insights.length > 0 && (
+        <section>
+          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1.5">
+            What past visits show
+          </h2>
+          <InsightList insights={insights} compact />
+        </section>
+      )}
+
       {/* Two-column info grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Owner card */}
-        <div className="bg-white border border-stone-200 rounded-xl p-5">
+        <div className="bg-white border border-stone-200 rounded-xl p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">Owner</h2>
           <p className="font-bold text-stone-900">
             {pet.customer.firstName} {pet.customer.lastName}
@@ -182,7 +231,7 @@ export default async function PetDetailPage({ params }: PageProps) {
         </div>
 
         {/* Health flags */}
-        <div className="bg-white border border-stone-200 rounded-xl p-5">
+        <div className="bg-white border border-stone-200 rounded-xl p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
             Health Flags
           </h2>
@@ -203,7 +252,7 @@ export default async function PetDetailPage({ params }: PageProps) {
         </div>
 
         {/* Grooming notes */}
-        <div className="bg-white border border-stone-200 rounded-xl p-5">
+        <div className="bg-white border border-stone-200 rounded-xl p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
             Grooming Notes
           </h2>
@@ -215,7 +264,7 @@ export default async function PetDetailPage({ params }: PageProps) {
         </div>
 
         {/* Temperament notes */}
-        <div className="bg-white border border-stone-200 rounded-xl p-5">
+        <div className="bg-white border border-stone-200 rounded-xl p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
             Temperament Notes
           </h2>
@@ -231,13 +280,13 @@ export default async function PetDetailPage({ params }: PageProps) {
       <section>
         <h2 className="text-lg font-bold text-stone-800 mb-3">Visit Events</h2>
         {visitEvents.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-8 text-center text-stone-400 text-sm">
+          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
             No visit events recorded.
           </div>
         ) : (
           <div className="bg-white border border-stone-200 rounded-xl overflow-hidden divide-y divide-stone-100">
             {visitEvents.map((event) => (
-              <div key={event.id} className="px-5 py-4 flex items-start gap-4">
+              <div key={event.id} className="px-4 py-2.5 flex items-start gap-3">
                 <span
                   className={`flex-shrink-0 mt-0.5 text-xs font-bold px-2.5 py-1 rounded-full ${
                     visitEventColor[event.eventType] ?? "bg-stone-100 text-stone-500"
@@ -272,7 +321,7 @@ export default async function PetDetailPage({ params }: PageProps) {
       <section>
         <h2 className="text-lg font-bold text-stone-800 mb-3">Appointment History</h2>
         {pet.appointments.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-8 text-center text-stone-400 text-sm">
+          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400 text-sm">
             No appointments yet.
           </div>
         ) : (
@@ -281,17 +330,17 @@ export default async function PetDetailPage({ params }: PageProps) {
               <table className="w-full text-sm">
                 <thead className="bg-stone-50 text-stone-500 text-xs uppercase tracking-widest">
                   <tr>
-                    <th className="px-4 py-3 text-left">Date</th>
-                    <th className="px-4 py-3 text-left">Service</th>
-                    <th className="px-4 py-3 text-left">Station</th>
-                    <th className="px-4 py-3 text-left">Groomer</th>
-                    <th className="px-4 py-3 text-left">Status</th>
+                    <th scope="col" className="px-3 py-2 text-left">Date</th>
+                    <th scope="col" className="px-3 py-2 text-left">Service</th>
+                    <th scope="col" className="px-3 py-2 text-left">Station</th>
+                    <th scope="col" className="px-3 py-2 text-left">Groomer</th>
+                    <th scope="col" className="px-3 py-2 text-left">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
                   {pet.appointments.map((appt) => (
                     <tr key={appt.id} className="hover:bg-stone-50 transition-colors">
-                      <td className="px-4 py-3 text-stone-600 whitespace-nowrap">
+                      <td className="px-3 py-2 text-stone-600 whitespace-nowrap">
                         {new Date(appt.scheduledAt).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
@@ -304,16 +353,16 @@ export default async function PetDetailPage({ params }: PageProps) {
                           })}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-stone-700">
+                      <td className="px-3 py-2 text-stone-700">
                         {formatServiceType(appt.serviceType)}
                       </td>
-                      <td className="px-4 py-3 text-stone-500">
-                        {appt.station?.name ?? <span className="text-stone-300">—</span>}
+                      <td className="px-3 py-2 text-stone-500">
+                        {appt.station?.name ?? <span className="text-stone-400">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-stone-500">
-                        {appt.staff?.name ?? <span className="text-stone-300">—</span>}
+                      <td className="px-3 py-2 text-stone-500">
+                        {appt.staff?.name ?? <span className="text-stone-400">—</span>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
                             statusColor[appt.status] ?? "bg-stone-100 text-stone-500"
