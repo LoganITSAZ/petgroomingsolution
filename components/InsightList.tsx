@@ -1,0 +1,60 @@
+import Link from "next/link";
+import type { Insight } from "@/lib/insights";
+
+/**
+ * Observations with their working shown. Every insight states the numbers it
+ * came from, so staff can tell a real pattern from a coincidence.
+ */
+
+const TONE: Record<Insight["tone"], { border: string; dot: string }> = {
+  neutral: { border: "border-stone-200", dot: "bg-stone-400" },
+  opportunity: { border: "border-emerald-200", dot: "bg-emerald-500" },
+  warning: { border: "border-amber-300", dot: "bg-amber-500" },
+};
+
+export default function InsightList({
+  insights,
+  empty = "Nothing stands out yet — a few more visits and patterns start to show.",
+  compact = false,
+}: {
+  insights: Insight[];
+  empty?: string;
+  compact?: boolean;
+}) {
+  if (insights.length === 0) {
+    return <p className="text-sm text-stone-400">{empty}</p>;
+  }
+
+  return (
+    <ul className={compact ? "space-y-1.5" : "space-y-2"}>
+      {insights.map((insight) => {
+        const tone = TONE[insight.tone];
+        const body = (
+          <>
+            <span className="flex items-baseline gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full ${tone.dot} shrink-0`} />
+              <span className="font-semibold text-stone-900">{insight.title}</span>
+            </span>
+            <span className="block text-stone-600 pl-3.5">{insight.detail}</span>
+            <span className="block text-xs text-stone-400 pl-3.5">{insight.evidence}</span>
+          </>
+        );
+
+        return (
+          <li
+            key={insight.id}
+            className={`text-sm bg-white border rounded-lg px-3 py-2 ${tone.border}`}
+          >
+            {insight.href ? (
+              <Link href={insight.href} className="block hover:opacity-80">
+                {body}
+              </Link>
+            ) : (
+              body
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
