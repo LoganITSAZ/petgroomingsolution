@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { SystemConfig } from "@prisma/client";
+import { DEFAULT_SHOP_NAME, DEFAULT_SHOP_TAGLINE, defaultWaiverText } from "@/lib/branding";
 
 /**
  * Fetch the global system config row.
@@ -11,14 +12,15 @@ export async function getConfig(): Promise<SystemConfig> {
     update: {},
     create: {
       id: "global",
-      shopName: "Gentle Groomer",
+      shopName: DEFAULT_SHOP_NAME,
+      shopTagline: DEFAULT_SHOP_TAGLINE,
       featureOnlineBooking: true,
       featureWalkInPortal: true,
       featureEmailNotify: true,
       featureSmsNotify: false,
       featureWaiverRequired: true,
       waiverVersion: "1.0",
-      waiverText: DEFAULT_WAIVER_TEXT,
+      waiverText: defaultWaiverText(),
       businessHours: DEFAULT_BUSINESS_HOURS,
       bookingLeadHours: 2,
       bookingWindowDays: 30,
@@ -40,6 +42,7 @@ export async function isFeatureEnabled(
     | "featureEmailNotify"
     | "featureSmsNotify"
     | "featureWaiverRequired"
+    | "featureRewards"
   >
 ): Promise<boolean> {
   const config = await getConfig();
@@ -58,19 +61,4 @@ export const DEFAULT_BUSINESS_HOURS = {
   sunday:    null,
 };
 
-export const DEFAULT_WAIVER_TEXT = `
-GENERAL LIABILITY WAIVER — GENTLE GROOMER
-
-By signing this waiver, I acknowledge and agree to the following:
-
-1. I am the legal owner or authorized agent for the pet(s) listed in my account.
-2. I confirm that my pet is current on all required vaccinations.
-3. I understand that grooming involves inherent risks, including stress to the animal.
-4. I release Gentle Groomer and its staff from any liability for injury, illness, escape,
-   or death of my pet that may occur during grooming, except in cases of gross negligence.
-5. I authorize Gentle Groomer staff to seek emergency veterinary care for my pet if
-   deemed necessary, and I agree to be responsible for any costs incurred.
-6. I understand that aggressive or difficult animals may require additional handling fees.
-
-This waiver applies to all future visits until a new version is issued.
-`.trim();
+export const DEFAULT_WAIVER_TEXT = defaultWaiverText();

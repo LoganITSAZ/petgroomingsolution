@@ -36,7 +36,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             id: staff.id,
             email: staff.email,
             name: staff.name,
-            role: staff.role,       // "ADMIN" | "GROOMER"
+            roles: staff.roles, // e.g. ["ADMIN", "GROOMER"]
             userType: "staff" as const,
           };
         }
@@ -50,7 +50,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: customer.id,
           email: customer.email,
           name: `${customer.firstName} ${customer.lastName}`,
-          role: "CUSTOMER",
+          roles: ["CUSTOMER"],
           userType: "customer" as const,
         };
       },

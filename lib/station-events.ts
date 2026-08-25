@@ -10,6 +10,40 @@
  * a shared pub/sub layer.
  */
 
+import { Prisma } from "@prisma/client";
+
+/**
+ * Exactly what the lobby screen is allowed to see.
+ *
+ * `/station/[id]` and its event stream are deliberately unauthenticated — the
+ * Pi has no login — so anyone who can reach the app can read this payload with
+ * only a station id. It is therefore an allowlist of the fields the kiosk
+ * actually renders. Never widen it to `pet: true` or a bare customer include:
+ * that puts an email address and a pet's whole record on a screen facing the
+ * waiting room.
+ */
+export const KIOSK_APPOINTMENT_SELECT = {
+  id: true,
+  status: true,
+  serviceType: true,
+  pet: {
+    select: {
+      name: true,
+      species: true,
+      breed: true,
+      weightLbs: true,
+      groomingNotes: true,
+      healthFlags: true,
+      hasBiteHistory: true,
+      photoUrl: true,
+    },
+  },
+  // Name only: a phone number on a lobby-facing screen is readable by
+  // everyone waiting, and this stream needs no login to read.
+  customer: { select: { firstName: true, lastName: true } },
+  staff: { select: { name: true } },
+} satisfies Prisma.AppointmentSelect;
+
 const subscribers = new Map<string, Set<ReadableStreamDefaultController>>();
 
 /** Register an SSE controller for a station. Returns an unsubscribe function. */
@@ -48,4 +82,15 @@ export function broadcastToStation(stationId: string, data: unknown): void {
       // client disconnected — cleaned up by the stream's abort handler
     }
   });
+}
+
+/**
+ * Snapshot of live SSE connections, for the admin health view.
+ * Per-process, like `subscribers` itself.
+ */
+export function stationSubscriberCounts(): { stationId: string; connections: number }[] {
+  return Array.from(subscribers.entries()).map(([stationId, set]) => ({
+    stationId,
+    connections: set.size,
+  }));
 }

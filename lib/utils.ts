@@ -77,3 +77,132 @@ export function isWithinWalkInWindow(
   }
   return nowMins >= startMins && nowMins < endMins;
 }
+
+/** Milliseconds `timeZone` is ahead of UTC at the given instant. */
+function zoneOffsetMs(at: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(at);
+
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const asIfUtc = Date.UTC(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    get("hour"),
+    get("minute"),
+    get("second")
+  );
+  return asIfUtc - at.getTime();
+}
+
+/** The instant that is midnight in `timeZone` on the given calendar date. */
+function zonedMidnight(utcCalendarMs: number, timeZone: string): Date {
+  // Two passes so a DST transition on the target date still resolves correctly.
+  const first = utcCalendarMs - zoneOffsetMs(new Date(utcCalendarMs), timeZone);
+  return new Date(utcCalendarMs - zoneOffsetMs(new Date(first), timeZone));
+}
+
+/**
+ * Half-open [start, end) covering "today" in the shop's timezone.
+ *
+ * The server may run in UTC, so `new Date().setHours(0,0,0,0)` picks the wrong
+ * day boundary for the shop — use this for any "today" database range.
+ */
+export function shopDayRange(
+  now: Date = new Date(),
+  timeZone: string = SHOP_TIMEZONE
+): { start: Date; end: Date } {
+  const [year, month, day] = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+    .format(now)
+    .split("-")
+    .map(Number);
+
+  return {
+    start: zonedMidnight(Date.UTC(year, month - 1, day), timeZone),
+    end: zonedMidnight(Date.UTC(year, month - 1, day + 1), timeZone),
+  };
+}
+
+/** Format a date in the shop's timezone (server renders in UTC otherwise). */
+export function formatShopDate(
+  date: Date,
+  options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" }
+): string {
+  return new Intl.DateTimeFormat("en-US", { ...options, timeZone: SHOP_TIMEZONE }).format(date);
+}
+
+/** Format a clock time in the shop's timezone, e.g. "9:30 AM". */
+export function formatShopTime(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: SHOP_TIMEZONE,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+/** Shop-local calendar day key, e.g. "2026-08-23". */
+export function shopDayKey(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: SHOP_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+/** Display name for a staff role. */
+export function formatRole(role: string): string {
+  const map: Record<string, string> = {
+    ADMIN: "Admin",
+    GROOMER: "Groomer",
+    BATHER: "Bather",
+    CUSTOMER: "Customer",
+  };
+  return map[role] ?? role;
+}
+
+/** Tailwind classes for a role badge. */
+export function roleBadgeClass(role: string): string {
+  const map: Record<string, string> = {
+    ADMIN: "bg-amber-100 text-amber-800",
+    GROOMER: "bg-stone-100 text-stone-700",
+    BATHER: "bg-sky-100 text-sky-700",
+  };
+  return map[role] ?? "bg-stone-100 text-stone-500";
+}
+
+/**
+ * Roles that mean a person works pets on the floor.
+ *
+ * ADMIN is deliberately absent: it grants access to the admin panel, nothing
+ * more. An account holding only ADMIN is a service account and is never
+ * offered for, or accepted as, an assignment.
+ */
+export const FLOOR_ROLES = ["GROOMER", "BATHER"] as const;
+
+export function isFloorStaff(roles: readonly string[]): boolean {
+  return roles.some((role) => (FLOOR_ROLES as readonly string[]).includes(role));
+}
+
+/** Shop-local clock in 24-hour form, for <input type="time"> values. */
+export function formatShopTime24(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: SHOP_TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+}
