@@ -125,7 +125,7 @@ export default async function ReportsPage({
           </p>
         ) : (
           <table className="w-full text-sm border-collapse">
-            <thead className="sticky top-0 bg-stone-50 border-b border-stone-200">
+            <thead className="sticky top-0 z-10 bg-well border-b border-stone-200">
               <tr>
                 {result.columns.map((column) => (
                   <th
@@ -142,7 +142,7 @@ export default async function ReportsPage({
             </thead>
             <tbody className="divide-y divide-stone-100">
               {result.rows.map((row, rowIndex) => (
-                <tr key={rowIndex} className="hover:bg-stone-50">
+                <tr key={rowIndex} className="hover:bg-well transition-colors">
                   {row.map((value, index) => (
                     <td
                       key={result.columns[index].key}

@@ -3,8 +3,9 @@ import AddressMap from "@/components/AddressMap";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
-import { ThemePreference } from "@prisma/client";
 import PhotoUpload from "@/components/PhotoUpload";
+import ThemeSwitch from "@/components/ThemeSwitch";
+import { readTheme } from "@/lib/theme-preference";
 import { deletePhotoIfUnused, photoUrl, storePhoto } from "@/lib/photos";
 
 // Screen readers announce the title first; without one every page in the
@@ -57,10 +58,8 @@ export default async function PortalProfilePage() {
         ...(namesPosted && { firstName, lastName }),
         ...(phone !== undefined && { phone: phone || null }),
         ...(address !== undefined && { address: address || null }),
-        ...(themePreference !== null && {
-          themePreference:
-            themePreference === ThemePreference.DARK ? ThemePreference.DARK : ThemePreference.LIGHT,
-        }),
+        // A form that does not carry the theme is not editing it.
+        ...(themePreference !== null && { themePreference: readTheme(themePreference) }),
       },
     });
 
@@ -163,7 +162,7 @@ export default async function PortalProfilePage() {
                 type="text"
                 required
                 defaultValue={customer.firstName}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
               />
             </div>
             <div>
@@ -176,7 +175,7 @@ export default async function PortalProfilePage() {
                 type="text"
                 required
                 defaultValue={customer.lastName}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
               />
             </div>
           </div>
@@ -201,7 +200,7 @@ export default async function PortalProfilePage() {
               type="tel"
               defaultValue={customer.phone ?? ""}
               placeholder="e.g. (555) 867-5309"
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
             />
           </div>
 
@@ -215,7 +214,7 @@ export default async function PortalProfilePage() {
               rows={2}
               defaultValue={customer.address ?? ""}
               placeholder="123 Main St, Phoenix, AZ 85020"
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 resize-none"
             />
             {customer.address && (
               <div className="mt-2">
@@ -226,7 +225,7 @@ export default async function PortalProfilePage() {
 
           <button
             type="submit"
-            className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
           >
             Save Changes
           </button>
@@ -236,23 +235,11 @@ export default async function PortalProfilePage() {
       <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
         <div>
           <h2 className="font-bold text-stone-800">Appearance</h2>
-          <p className="text-sm text-stone-500 mt-0.5">Choose the display style for your account.</p>
+          <p className="text-sm text-stone-500 mt-0.5">Saves as soon as you flip it.</p>
         </div>
         <form action={updateProfile} className="flex items-center gap-3">
           <input type="hidden" name="phone" value={customer.phone ?? ""} />
-          <label htmlFor="themePreference" className="text-sm font-semibold text-stone-700">Theme</label>
-          <select
-            id="themePreference"
-            name="themePreference"
-            defaultValue={customer.themePreference}
-            className="border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 bg-white"
-          >
-            <option value={ThemePreference.LIGHT}>Light</option>
-            <option value={ThemePreference.DARK}>Dark</option>
-          </select>
-          <button type="submit" className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold">
-            Save theme
-          </button>
+          <ThemeSwitch value={customer.themePreference} />
         </form>
       </section>
 
@@ -271,7 +258,7 @@ export default async function PortalProfilePage() {
               type="password"
               required
               autoComplete="current-password"
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
             />
           </div>
 
@@ -286,7 +273,7 @@ export default async function PortalProfilePage() {
               required
               minLength={8}
               autoComplete="new-password"
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
             />
             <p className="text-xs text-stone-400 mt-1">Minimum 8 characters.</p>
           </div>
@@ -301,7 +288,7 @@ export default async function PortalProfilePage() {
               type="password"
               required
               autoComplete="new-password"
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
             />
           </div>
 

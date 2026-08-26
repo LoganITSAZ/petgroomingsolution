@@ -6,11 +6,12 @@ import { requireManager } from "@/lib/auth-guards";
 import { nextAvailableVersion, recordRevision } from "@/lib/waiver";
 import { formatShopDate } from "@/lib/utils";
 import VersionField from "./VersionField";
-import { PageShell, PageSection } from "@/components/ui";
+import SaveToast from "@/components/SaveToast";
+import { PageShell, PageSection, StatStrip } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Waiver" };
+export const metadata = { title: "Liability Waiver" };
 
 /**
  * Everything about the liability waiver lives here: the on/off flag, the
@@ -154,228 +155,184 @@ export default async function WaiverPage({ searchParams }: PageProps) {
   return (
     <PageShell
       title="Liability Waiver"
-      subtitle="The single place to turn the waiver on or off, edit its text, set its version, and see who has accepted it."
+      subtitle="The document, who has signed it, and every version you have published"
     >
-
+      {/* Confirmation lands in the middle of the viewport: the save button on
+          this page is below a twenty-row textarea, so a banner at the top was
+          off-screen at the moment it mattered. */}
       {searchParams.saved === "1" && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
-          Waiver saved as version {searchParams.version}.
-          {searchParams.bumped === "1" && (
-            <span className="font-normal">
-              {" "}
-              The text changed, so the version was bumped and every customer will be asked to accept
-              it again.
-            </span>
-          )}
-        </p>
+        <SaveToast
+          message={`Saved as version ${searchParams.version}`}
+          detail={
+            searchParams.bumped === "1"
+              ? "The text changed, so the version moved up. Every customer will be asked to accept it again."
+              : undefined
+          }
+        />
       )}
-
       {searchParams.restored && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
-          Restored version {searchParams.restored}. Customers who already accepted that exact
-          version stay accepted.
-        </p>
+        <SaveToast
+          message={`Restored version ${searchParams.restored}`}
+          detail="Customers who already accepted that exact version stay accepted."
+        />
       )}
+      {errorMessage && <SaveToast tone="error" message="Nothing was saved" detail={errorMessage} />}
 
-      {errorMessage && (
-        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
-          {errorMessage} Nothing was saved.
-        </p>
-      )}
-
-      {/* Acceptance status — live figures, not a projection */}
-      <PageSection title="Acceptance Status">
-        {config.featureWaiverRequired ? (
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-2xl font-black text-stone-900">{activeCustomers}</p>
-              <p className="text-xs text-stone-500 mt-1">Active customers</p>
-            </div>
-            <div>
-              <p className="text-2xl font-black text-green-700">{acceptedCurrent}</p>
-              <p className="text-xs text-stone-500 mt-1">
-                Accepted version {currentVersion ?? "—"}
-              </p>
-            </div>
-            <div>
-              <p
-                className={`text-2xl font-black ${
-                  outstanding > 0 ? "text-amber-700" : "text-stone-400"
-                }`}
-              >
-                {outstanding}
-              </p>
-              <p className="text-xs text-stone-500 mt-1">Awaiting acceptance</p>
-            </div>
-          </div>
-        ) : (
+      {/* Where the waiver stands right now, in one line rather than a block of
+          three big numbers competing with the document below. */}
+      {config.featureWaiverRequired ? (
+        <StatStrip
+          stats={[
+            { label: "Active customers", value: activeCustomers },
+            {
+              label: `Accepted ${currentVersion ?? "—"}`,
+              value: <span className="text-green-700">{acceptedCurrent}</span>,
+            },
+            {
+              label: "Awaiting acceptance",
+              value: (
+                <span className={outstanding > 0 ? "text-amber-700" : "text-stone-400"}>
+                  {outstanding}
+                </span>
+              ),
+            },
+          ]}
+        />
+      ) : (
+        <PageSection tone="muted">
           <p className="text-sm text-stone-500">
-            The waiver is currently switched off — customers are not asked to accept anything.
+            The waiver is switched off — customers are not asked to accept anything.
           </p>
-        )}
-
-        {(revisions.length > 0 || versionGroups.length > 0) && (
-          <div className="mt-3 border-t border-stone-100 pt-4">
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">
-              Version history
-            </p>
-            <ul className="divide-y divide-stone-100">
-              {revisions.map((revision) => {
-                const accepted = acceptancesByVersion.get(revision.version) ?? 0;
-                const isCurrent = revision.version === currentVersion;
-                return (
-                  <li key={revision.id} className="flex items-center justify-between gap-3 py-2.5">
-                    <div className="min-w-0">
-                      <span className="text-sm font-medium text-stone-800">
-                        Version {revision.version}
-                      </span>
-                      {isCurrent && (
-                        <span className="ml-2 bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                          CURRENT
-                        </span>
-                      )}
-                      <span className="block text-xs text-stone-400">
-                        Published {formatShopDate(revision.createdAt)}
-                        {revision.createdBy && ` by ${revision.createdBy.name}`} · {accepted}{" "}
-                        acceptance{accepted !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                    {isCurrent ? (
-                      <span className="text-xs text-stone-400 whitespace-nowrap">In use</span>
-                    ) : (
-                      <form action={restoreRevision}>
-                        <input type="hidden" name="version" value={revision.version} />
-                        <button
-                          type="submit"
-                          className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
-                        >
-                          Restore
-                        </button>
-                      </form>
-                    )}
-                  </li>
-                );
-              })}
-
-              {/* Versions customers signed before revision text was kept */}
-              {versionGroups
-                .filter((group) => !revisions.some((r) => r.version === group.waiverVersion))
-                .map((group) => (
-                  <li
-                    key={group.waiverVersion}
-                    className="flex items-center justify-between gap-3 py-2.5"
-                  >
-                    <div>
-                      <span className="text-sm font-medium text-stone-800">
-                        Version {group.waiverVersion}
-                      </span>
-                      <span className="block text-xs text-stone-400">
-                        {group._count._all} acceptance{group._count._all !== 1 ? "s" : ""} · text not
-                        stored, cannot be restored
-                      </span>
-                    </div>
-                  </li>
-                ))}
-            </ul>
-          </div>
-        )}
-      </PageSection>
+        </PageSection>
+      )}
 
       <form action={saveWaiver}>
-        {/* Requirement switch */}
-        <PageSection title="Requirement">
-          <div className="flex items-start gap-3 py-4">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-stone-800">Waiver Required</p>
-              <p className="text-sm text-stone-500 mt-0.5">
-                Require customers to read and accept the waiver below when they register, and
-                again whenever the version changes.
-              </p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer mt-0.5">
+        {/* The switch and the version sit on one strip: they are the two
+            decisions about the document, and neither is worth its own band. */}
+        <PageSection tone="muted" bodyClassName="space-y-3">
+          <div className="flex items-start gap-3">
+            <label className="relative inline-flex items-center cursor-pointer mt-0.5 flex-none">
               <input
                 type="checkbox"
                 name="featureWaiverRequired"
                 defaultChecked={config.featureWaiverRequired}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-700" />
+              <div className="w-11 h-6 bg-stone-200 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600" />
             </label>
-          </div>
-        </PageSection>
-
-        {/* Version change warning */}
-        <div className="border-t border-stone-100 bg-amber-50 px-3 py-2 flex gap-3">
-          <svg
-            className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
-            />
-          </svg>
-          <div>
-            <p className="text-sm font-semibold text-amber-800">Version Change Warning</p>
-            <p className="text-sm text-amber-700 mt-0.5">
-              Updating the waiver version number will require <strong>all existing customers</strong> to
-              re-accept the waiver before their next appointment. Only increment the version when the
-              waiver content has materially changed.
-            </p>
-          </div>
-        </div>
-
-        <PageSection title="Waiver Document" bodyClassName="space-y-5">
-
-          <VersionField
-            currentVersion={currentVersion ?? "1.0"}
-            nextVersion={nextVersion}
-          />
-
-          {/* Waiver text */}
-          <div className="grid grid-cols-3 gap-3 items-start">
-            <label htmlFor="waiverText" className="text-sm font-medium text-stone-700 pt-2">
-              Waiver Text
-            </label>
-            <div className="col-span-2">
-              <textarea
-                id="waiverText" name="waiverText"
-                defaultValue={config.waiverText ?? ""}
-                rows={20}
-                placeholder="Enter the full waiver text here. Customers will be required to read and accept this before their first appointment…"
-                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-y font-mono leading-relaxed"
-              />
-              <p className="text-xs text-stone-400 mt-1">
-                Plain text. Line breaks are preserved when displayed to customers.
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-stone-800">Require the waiver</p>
+              <p className="text-sm text-stone-500">
+                Customers accept it when they register, and again whenever the version changes.
+                Publishing a new version asks everyone again — so change the text only when it
+                materially changes.
               </p>
             </div>
           </div>
+
+          <div className="border-t border-stone-200 pt-3">
+            <VersionField currentVersion={currentVersion ?? "1.0"} nextVersion={nextVersion} />
+          </div>
         </PageSection>
 
-        {/* How acceptance works */}
-        <PageSection tone="muted" title="About waiver acceptance">
-          <ul className="text-sm text-stone-500 space-y-1 list-disc list-inside">
-            <li>Customers accept the waiver once per version, at registration or after a version change.</li>
-            <li>Each acceptance is stored with a timestamp, the accepted version, and the signing IP.</li>
-            <li>Turning the requirement off leaves existing acceptance records untouched.</li>
-            <li>Requiring the waiver with empty text is rejected — customers would have nothing to sign.</li>
-            <li>Every published version is kept, so an earlier document can be restored under its original number.</li>
-          </ul>
+        {/* The document itself takes the leftover height: it is what the page
+            is for, and a twenty-row box that scrolls the page is worse than one
+            that scrolls itself. */}
+        <PageSection grow padded={false} bodyClassName="flex flex-col">
+          <label
+            htmlFor="waiverText"
+            className="px-3 pt-3 pb-1 font-bold text-stone-700 text-xs uppercase tracking-widest"
+          >
+            Waiver text
+          </label>
+          <textarea
+            id="waiverText"
+            name="waiverText"
+            defaultValue={config.waiverText ?? ""}
+            placeholder="The full waiver text. Customers read and accept this before their first appointment…"
+            className="flex-1 min-h-[16rem] w-full border-0 px-3 py-2 text-sm focus:outline-none focus:ring-0 resize-none font-mono leading-relaxed bg-transparent"
+          />
+          <p className="px-3 pb-2 text-xs text-stone-400">
+            Plain text. Line breaks are kept when it is shown to customers.
+          </p>
         </PageSection>
 
         <PageSection tone="muted" bodyClassName="flex justify-end">
           <button
             type="submit"
-            className="bg-amber-700 hover:bg-amber-800 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-bold transition-colors"
           >
-            Save Waiver
+            Save waiver
           </button>
         </PageSection>
       </form>
+
+      {/* History is a record, not a control, so it sits after the thing it is
+          a record of. */}
+      {(revisions.length > 0 || versionGroups.length > 0) && (
+        <PageSection title="Version history" padded={false}>
+          <ul className="divide-y divide-stone-100">
+            {revisions.map((revision) => {
+              const accepted = acceptancesByVersion.get(revision.version) ?? 0;
+              const isCurrent = revision.version === currentVersion;
+              return (
+                <li key={revision.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <div className="min-w-0">
+                    <span className="text-sm font-bold text-stone-800 tabular-nums">
+                      Version {revision.version}
+                    </span>
+                    {isCurrent && (
+                      <span className="ml-2 bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                        IN USE
+                      </span>
+                    )}
+                    <span className="block text-xs text-stone-500">
+                      Published {formatShopDate(revision.createdAt)}
+                      {revision.createdBy && ` by ${revision.createdBy.name}`} · {accepted}{" "}
+                      acceptance{accepted !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  {!isCurrent && (
+                    <form action={restoreRevision}>
+                      <input type="hidden" name="version" value={revision.version} />
+                      <button
+                        type="submit"
+                        className="text-xs font-bold text-brand-text hover:underline whitespace-nowrap"
+                      >
+                        Restore
+                      </button>
+                    </form>
+                  )}
+                </li>
+              );
+            })}
+
+            {/* Versions signed before revision text was kept. */}
+            {versionGroups
+              .filter((group) => !revisions.some((r) => r.version === group.waiverVersion))
+              .map((group) => (
+                <li key={group.waiverVersion} className="px-3 py-2">
+                  <span className="text-sm font-bold text-stone-800 tabular-nums">
+                    Version {group.waiverVersion}
+                  </span>
+                  <span className="block text-xs text-stone-500">
+                    {group._count._all} acceptance{group._count._all !== 1 ? "s" : ""} · text not
+                    stored, cannot be restored
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </PageSection>
+      )}
+
+      <PageSection tone="muted">
+        <ul className="text-sm text-stone-500 space-y-1 list-disc list-inside">
+          <li>Each acceptance is stored with its timestamp, the version accepted, and the signing IP.</li>
+          <li>Turning the requirement off leaves existing acceptances untouched.</li>
+          <li>Requiring the waiver with no text is rejected — there would be nothing to sign.</li>
+          <li>Every published version is kept, so an earlier document can be restored under its original number.</li>
+        </ul>
+      </PageSection>
     </PageShell>
   );
 }

@@ -25,12 +25,6 @@ export interface ServiceAlert {
   href: string;
 }
 
-export const ALERT_CLASS: Record<AlertSeverity, string> = {
-  info: "bg-stone-100 text-stone-600",
-  warning: "bg-amber-100 text-amber-800",
-  critical: "bg-red-100 text-red-700",
-};
-
 export const ALERT_DOT: Record<AlertSeverity, string> = {
   info: "bg-stone-400",
   warning: "bg-amber-500",

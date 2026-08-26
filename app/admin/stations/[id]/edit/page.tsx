@@ -7,10 +7,11 @@ import { formatStatus } from "@/lib/utils";
 import StationForm from "../../StationForm";
 import { updateStation } from "../../actions";
 import { PageShell } from "@/components/ui";
+import SaveToast from "@/components/SaveToast";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Edit station" };
+export const metadata = { title: "Edit Station" };
 
 const ERRORS: Record<string, string> = {
   name_required: "A station needs a name.",
@@ -62,7 +63,7 @@ export default async function EditStationPage({ params, searchParams }: PageProp
     >
 
       {searchParams.saved === "1" && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           Station saved.
           {kept.length > 0 && (
             <span className="font-normal">
@@ -71,13 +72,13 @@ export default async function EditStationPage({ params, searchParams }: PageProp
               still occupied — they disappear once emptied.
             </span>
           )}
-        </p>
+        </SaveToast>
       )}
 
       {errorMessage && (
-        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
+        <SaveToast tone="error">
           {errorMessage}
-        </p>
+        </SaveToast>
       )}
 
       {occupied.length > 0 && (

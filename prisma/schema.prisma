@@ -79,6 +79,10 @@ model SystemConfig {
   // them earns one `rewardLabel` to hand over at the counter.
   rewardVisitsPerReward Int    @default(8)
   rewardLabel           String @default("A free nail trim")
+  // What one earned reward takes off a bill. Rewards are counted in visits,
+  // but they are paid out in money: a cash amount is the only thing that
+  // applies cleanly to a visit carrying several services.
+  rewardValueCents      Int    @default(1000)
 
   // Payroll
   defaultCommissionPercent Float @default(40) // percent of ticket paid to the groomer
@@ -106,7 +110,7 @@ model Staff {
   // who still works the floor. ADMIN is what unlocks the admin panel.
   roles           StaffRole[]     @default([GROOMER])
   isActive        Boolean         @default(true)
-  themePreference ThemePreference @default(LIGHT)
+  themePreference ThemePreference @default(SYSTEM)
   photoId         String?
 
   // Percent of the services they finish that they are paid. Null falls back to
@@ -240,7 +244,7 @@ model Customer {
   phone           String?
   passwordHash    String
   isActive        Boolean         @default(true)
-  themePreference ThemePreference @default(LIGHT)
+  themePreference ThemePreference @default(SYSTEM)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -253,10 +257,6 @@ model Customer {
   // and geocoding is a lookup on top rather than a set of typed columns.
   address String?
 
-  // Someone else the owner has approved to drop off or collect their pet.
-  altContactName  String?
-  altContactPhone String?
-  altContactEmail String?
 
   // The rate this customer is on. Null means the published catalog price.
   pricingTierId String?
@@ -267,6 +267,8 @@ model Customer {
   preferredStaff    Staff?             @relation("PreferredGroomer", fields: [preferredStaffId], references: [id])
   pricingTier       PricingTier?       @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
   pets              Pet[]
+  // Everyone else the owner has approved to drop off or collect their pets.
+  alternateContacts AlternateContact[]
   appointments      Appointment[]
   waiverAcceptances WaiverAcceptance[]
   rewardEarnings    RewardEarning[]
@@ -275,7 +277,29 @@ model Customer {
   @@map("customers")
 }
 
+// Someone besides the owner who may hand over or collect a pet.
+//
+// A household has more than one — a partner, a dog walker, a neighbour — so
+// they are rows rather than the three columns on the customer they replaced.
+model AlternateContact {
+  id         String   @id @default(cuid())
+  customerId String
+  name       String
+  phone      String?
+  email      String?
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("alternate_contacts")
+}
+
 enum ThemePreference {
+  /// Follow the device. Nothing is stored about which way it resolved — the
+  /// browser decides at paint time, so a laptop that dims at sunset takes the
+  /// back office with it without anyone visiting their profile.
+  SYSTEM
   LIGHT
   DARK
 }
@@ -360,6 +384,7 @@ model Station {
 enum StationRole {
   GROOMER // groom table
   BATHING // wash / bathing station
+  DRYING // dryer or drying table — the step between the bath and the table
   KENNEL // a bank of kennels, laid out as a grid
 }
 
@@ -527,10 +552,15 @@ model Appointment {
   // tier later must not silently reprice a visit already quoted.
   pricingTierId        String?
   pricingDiscountCents Int?
+  // A reward handed over against this visit, snapshotted like the rate above:
+  // redeeming again later, or changing what a reward is worth, must never
+  // reprice a visit the customer has already been quoted.
+  rewardDiscountCents  Int     @default(0)
 
   kennel        Kennel?        @relation(fields: [kennelId], references: [id])
   pricingTier   PricingTier?   @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
   rewardEarning RewardEarning?
+  rewardRedemptions RewardRedemption[]
 
   @@index([scheduledAt, status])
   @@index([stationId, status])
@@ -732,13 +762,23 @@ model RewardRedemption {
   customerId String
   staffId    String? // who handed it over
   label      String // snapshot of the reward on offer at the time
+  // What it was worth when it was handed over, and the visit it came off.
+  // Both are snapshots: the shop can change the reward's value tomorrow.
+  valueCents    Int     @default(0)
+  appointmentId String?
   note       String?
   redeemedAt DateTime @default(now())
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  staff    Staff?   @relation(fields: [staffId], references: [id])
+  customer    Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  staff       Staff?       @relation(fields: [staffId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
   @@index([customerId])
+  // Declared here because 20260825000000_reward_cash_value created it and the
+  // model never said so — the next migration Prisma generated after that
+  // proposed dropping it as drift. rewards.ts looks a redemption up by the
+  // visit it came off, so the index is wanted; the schema just has to say it.
+  @@index([appointmentId])
   @@map("reward_redemptions")
 }
 

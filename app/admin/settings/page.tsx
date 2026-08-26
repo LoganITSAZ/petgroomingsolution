@@ -6,10 +6,11 @@ import { requireManager } from "@/lib/auth-guards";
 import Link from "next/link";
 import AddressMap from "@/components/AddressMap";
 import { PageShell, PageSection } from "@/components/ui";
+import SaveToast from "@/components/SaveToast";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Shop settings" };
+export const metadata = { title: "Shop Settings" };
 
 /**
  * Everything the shop decides about itself, on one page: who it is, which
@@ -46,6 +47,11 @@ async function saveSettings(formData: FormData) {
   );
   const rewardLabel =
     ((formData.get("rewardLabel") as string) ?? "").trim() || "A free nail trim";
+  // Typed in dollars, stored in cents like every other price in the app.
+  const rewardValueCents = Math.max(
+    0,
+    Math.round((parseFloat((formData.get("rewardValueDollars") as string) ?? "10") || 0) * 100)
+  );
 
   // Both sets of flags escalate, so the thresholds have to stay in order — a
   // mis-typed middle value must not invert them.
@@ -84,6 +90,7 @@ async function saveSettings(formData: FormData) {
       featureRewards,
       rewardVisitsPerReward,
       rewardLabel,
+      rewardValueCents,
       overtimeWeeklyHours,
       bookingLeadHours,
       bookingWindowDays,
@@ -105,7 +112,7 @@ async function saveSettings(formData: FormData) {
 }
 
 const FIELD =
-  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400";
+  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm ";
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -179,9 +186,9 @@ export default async function SettingsPage({ searchParams }: PageProps) {
     >
 
       {searchParams.saved === "1" && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           Settings saved successfully.
-        </p>
+        </SaveToast>
       )}
 
       <form action={saveSettings}>
@@ -289,6 +296,25 @@ export default async function SettingsPage({ searchParams }: PageProps) {
           </Field>
 
           <Field
+            name="rewardValueDollars"
+            label="What a reward is worth"
+            hint="Taken off the bill in cash when it is redeemed against a visit. A reward can never take a bill below zero, and the amount is snapshotted onto the visit — changing this never reprices a visit already quoted."
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="text-stone-500">$</span>
+              <input
+                type="number"
+                id="rewardValueDollars"
+                name="rewardValueDollars"
+                defaultValue={((config?.rewardValueCents ?? 1000) / 100).toFixed(2)}
+                min={0}
+                step="0.5"
+                className={FIELD}
+              />
+            </div>
+          </Field>
+
+          <Field
             name="rewardLabel"
             label="What they earn"
             hint="Shown to the customer on their card and to staff at the counter. Each redemption records the wording in force at the time."
@@ -381,7 +407,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
         <PageSection tone="muted" bodyClassName="flex justify-end">
           <button
             type="submit"
-            className="bg-amber-700 hover:bg-amber-800 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
           >
             Save settings
           </button>

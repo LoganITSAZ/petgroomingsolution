@@ -10,7 +10,7 @@ import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Staff" };
+export const metadata = { title: "Manage Staff" };
 
 async function toggleStaffActive(formData: FormData) {
   "use server";
@@ -66,7 +66,7 @@ export default async function StaffPage({ searchParams }: PageProps) {
 
   return (
     <PageShell
-      title="Staff"
+      title="Manage Staff"
       subtitle={
         <>
           {activeCount} of {staffList.length} staff members active · default commission{" "}
@@ -76,7 +76,7 @@ export default async function StaffPage({ searchParams }: PageProps) {
       actions={
         <Link
           href="/admin/staff/new"
-          className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors"
+          className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-semibold transition-colors"
         >
           + Add Staff
         </Link>
@@ -111,7 +111,7 @@ export default async function StaffPage({ searchParams }: PageProps) {
             aria-label="Default commission percent"
             inputMode="decimal"
             defaultValue={config.defaultCommissionPercent}
-            className="w-20 border border-stone-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-20 border border-stone-200 rounded-lg px-3 py-1.5 text-sm"
           />
           <span className="text-sm text-stone-500">%</span>
         </span>
@@ -160,7 +160,7 @@ export default async function StaffPage({ searchParams }: PageProps) {
             </thead>
             <tbody className="divide-y divide-stone-100">
               {staffList.map((staff) => (
-                <tr key={staff.id} className="hover:bg-stone-50 transition-colors">
+                <tr key={staff.id} className="hover:bg-well transition-colors">
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-xs font-bold flex-shrink-0">

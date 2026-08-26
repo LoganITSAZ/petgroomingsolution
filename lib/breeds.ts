@@ -9,25 +9,6 @@ import type { BreedGuide } from "@prisma/client";
  * job aid, never an instruction — the pet's own notes always outrank it.
  */
 
-/** Loose match: "Standard Poodle" and "poodle (toy)" both find "Poodle". */
-export async function guideForBreed(
-  breed: string | null | undefined
-): Promise<BreedGuide | null> {
-  const needle = breed?.trim().toLowerCase();
-  if (!needle) return null;
-
-  const guides = await prisma.breedGuide.findMany();
-  return (
-    guides.find((guide) => guide.breed.toLowerCase() === needle) ??
-    guides.find(
-      (guide) =>
-        needle.includes(guide.breed.toLowerCase()) ||
-        guide.breed.toLowerCase().includes(needle)
-    ) ??
-    null
-  );
-}
-
 /** Guides for several breeds at once, keyed by the breed string given. */
 export async function guidesForBreeds(
   breeds: (string | null | undefined)[]

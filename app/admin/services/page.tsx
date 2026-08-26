@@ -14,8 +14,10 @@ import {
   servicePriceLabel,
 } from "@/lib/pricing";
 import PricingFields from "./PricingFields";
+import ModalButton from "@/components/ModalButton";
 import { formatSpecies } from "@/lib/utils";
 import { PageShell, PageSection } from "@/components/ui";
+import SaveToast from "@/components/SaveToast";
 import {
   adjustBasePrices,
   createService,
@@ -27,7 +29,7 @@ import {
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Services" };
+export const metadata = { title: "Services & Pricing" };
 
 /**
  * The service catalog drives the public pricing page, the booking forms and
@@ -48,7 +50,7 @@ const NOTICES: Record<string, string> = {
 };
 
 const inputClass =
-  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400";
+  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm ";
 
 function ServiceFields({ service }: { service?: Service }) {
   return (
@@ -203,7 +205,7 @@ function SurchargeRow({ surcharge }: { surcharge?: Surcharge }) {
         </label>
         <button
           type="submit"
-          className="bg-amber-700 hover:bg-amber-800 text-white px-3 py-2 rounded-lg text-xs font-semibold"
+          className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-3 py-2 rounded-lg text-xs font-semibold"
         >
           {surcharge ? "Save" : "Add"}
         </button>
@@ -249,20 +251,20 @@ export default async function AdminServicesPage({ searchParams }: PageProps) {
     >
 
       {searchParams.saved && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           Saved {searchParams.saved === "surcharge" ? "surcharge" : searchParams.saved}.
-        </p>
+        </SaveToast>
       )}
       {searchParams.adjusted && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           Repriced {searchParams.adjusted} service
           {searchParams.adjusted === "1" ? "" : "s"} by {searchParams.percent}%.
-        </p>
+        </SaveToast>
       )}
       {searchParams.deleted === "1" && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           Removed.
-        </p>
+        </SaveToast>
       )}
       {searchParams.retired === "1" && (
         <p className="border-t border-stone-100 bg-amber-50 px-3 py-2 text-amber-800 text-sm font-medium">
@@ -271,9 +273,9 @@ export default async function AdminServicesPage({ searchParams }: PageProps) {
         </p>
       )}
       {errorMessage && (
-        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
+        <SaveToast tone="error">
           {errorMessage}
-        </p>
+        </SaveToast>
       )}
 
       {/* Move every base price at once */}
@@ -288,7 +290,7 @@ export default async function AdminServicesPage({ searchParams }: PageProps) {
             aria-label="Adjust all base prices by percent"
             inputMode="decimal"
             placeholder="5"
-            className="w-20 border border-stone-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-20 border border-stone-200 rounded-lg px-3 py-1.5 text-sm"
           />
           <span className="text-sm text-stone-500">%</span>
         </span>
@@ -303,23 +305,27 @@ export default async function AdminServicesPage({ searchParams }: PageProps) {
         </span>
       </form>
 
-      {/* Add */}
-      <details className="border-t border-stone-100">
-        <summary className="px-6 py-4 cursor-pointer text-sm font-semibold text-stone-800">
-          + Add a service
-        </summary>
-        <form action={createService} className="px-6 pb-6 space-y-4 border-t border-stone-100 pt-4">
-          <ServiceFields />
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold"
-            >
-              Add Service
-            </button>
-          </div>
-        </form>
-      </details>
+      {/* Adding is one job, so it gets a dialog rather than an accordion that
+          pushes the catalogue down the page while you fill it in. */}
+      <PageSection tone="muted" bodyClassName="flex justify-end">
+        <ModalButton
+          label="Add a service"
+          title="Add a service"
+          description="It joins the catalogue, the booking forms and the public pricing page."
+        >
+          <form action={createService} className="space-y-4">
+            <ServiceFields />
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-bold transition-colors"
+              >
+                Add service
+              </button>
+            </div>
+          </form>
+        </ModalButton>
+      </PageSection>
 
       {/* Catalog */}
       {services.length === 0 ? (
@@ -371,7 +377,7 @@ export default async function AdminServicesPage({ searchParams }: PageProps) {
                         <div className="flex justify-end">
                           <button
                             type="submit"
-                            className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold"
+                            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-semibold"
                           >
                             Save
                           </button>

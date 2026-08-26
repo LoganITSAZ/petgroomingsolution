@@ -394,18 +394,64 @@ export function readableFill(fill: string, ink: string): string {
  *
  * A fill only has to be legible under whichever foreground onBrand() picks,
  * which says nothing about reading brand-coloured type on a white card — a
- * pale brand is fine as a button and unreadable as a link. This darkens the
+ * pale brand is fine as a button and unreadable as a link. This moves the
  * ramp's 700 against the theme's own surface until it clears AA, and every
  * brand-coloured word on the site paints from it.
+ *
+ * The direction is read off the surface rather than assumed: the same amber
+ * that has to be darkened to read on a white card has to be *lightened* to
+ * read on a near-black one, and a fixed "darken" would paint a dark-mode link
+ * in the same brown as the card behind it.
  */
 export function brandText(tokens: ThemeTokens): string {
+  const darken = luminance(tokens.surface) > 0.18;
   let current = tokens.brand700;
   for (let step = 0; step < 24; step++) {
     if (contrast(current, tokens.surface) >= 4.5) break;
-    // Surfaces here are always light; move the ink away from them.
-    current = scale(current, 0.9);
+    current = scale(current, darken ? 0.9 : 1.12);
   }
   return current;
+}
+
+/**
+ * The dark half of a theme.
+ *
+ * Derived rather than hand-authored: there are a dozen presets and the shop
+ * can also supply its own brand colour, so a second set of typed-in palettes
+ * would be a dozen chances to ship an unreadable one. The brand ramp survives
+ * — a theme is its colour — and only the surfaces and type it sits on swap.
+ * lib/themes.test.ts holds every preset to AA in both modes; a preset that
+ * fails is a preset to hand-tune, not a reason to loosen this.
+ */
+export function darkTokens(tokens: ThemeTokens): ThemeTokens {
+  return {
+    ...tokens,
+    pageBg: "12 10 9",
+    surface: "28 25 23",
+    ink: "245 245 244",
+    muted: "180 174 170",
+    line: "68 64 60",
+    footerBg: "12 10 9",
+    footerInk: "214 211 209",
+  };
+}
+
+/**
+ * Both halves of a theme as a stylesheet.
+ *
+ * The light set can be an inline `style` on the wrapper, but the dark set
+ * cannot — an element has one style attribute — so the public layout emits
+ * this instead and toggles a `dark` class on `#public-root`. Values come from
+ * themeStyle(), so the contrast tokens are resolved per mode: the same brand
+ * needs a different `--brand-text` on a near-black card than on a white one.
+ */
+export function themeCss(tokens: ThemeTokens, selector = "#public-root"): string {
+  const block = (mode: ThemeTokens) =>
+    Object.entries(themeStyle(mode))
+      .map(([name, value]) => `${name}:${value};`)
+      .join("");
+
+  return `${selector}{${block(tokens)}}${selector}.dark{${block(darkTokens(tokens))}}`;
 }
 
 /** CSS custom properties for a theme, applied to a wrapping element. */

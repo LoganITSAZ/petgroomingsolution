@@ -30,25 +30,6 @@ export async function getConfig(): Promise<SystemConfig> {
   });
 }
 
-/**
- * Check whether a specific feature flag is enabled.
- * Accepts the key name of any boolean feature flag on SystemConfig.
- */
-export async function isFeatureEnabled(
-  feature: keyof Pick<
-    SystemConfig,
-    | "featureOnlineBooking"
-    | "featureWalkInPortal"
-    | "featureEmailNotify"
-    | "featureSmsNotify"
-    | "featureWaiverRequired"
-    | "featureRewards"
-  >
-): Promise<boolean> {
-  const config = await getConfig();
-  return config[feature];
-}
-
 // ─── Defaults ──────────────────────────────────────────────
 
 export const DEFAULT_BUSINESS_HOURS = {
@@ -60,5 +41,3 @@ export const DEFAULT_BUSINESS_HOURS = {
   saturday:  { open: "08:00", close: "17:00" },
   sunday:    null,
 };
-
-export const DEFAULT_WAIVER_TEXT = defaultWaiverText();

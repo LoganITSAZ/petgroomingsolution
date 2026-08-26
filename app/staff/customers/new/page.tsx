@@ -7,7 +7,7 @@ import { createCustomer } from "../actions";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "New customer" };
+export const metadata = { title: "New Customer" };
 
 const ERRORS: Record<string, string> = {
   photo_too_large: "Photos have to be 2 MB or smaller.",
@@ -20,7 +20,7 @@ const ERRORS: Record<string, string> = {
 };
 
 const fieldClass =
-  "w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white";
+  "w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800  bg-white";
 
 export default async function NewCustomerPage({
   searchParams,
@@ -203,7 +203,7 @@ export default async function NewCustomerPage({
           </Link>
           <button
             type="submit"
-            className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-semibold"
           >
             Create Customer
           </button>

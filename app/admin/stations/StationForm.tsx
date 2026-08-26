@@ -6,18 +6,24 @@ import { PageSection } from "@/components/ui";
 import { StaffRole, StationRole } from "@prisma/client";
 import TagPicker from "@/components/TagPicker";
 import { MAX_KENNEL_COLUMNS, MAX_KENNEL_ROWS, kennelLabel } from "@/lib/kennels";
+import { formatRole } from "@/lib/utils";
 
 const ROLE_COPY: Record<StationRole, { label: string; description: string }> = {
   GROOMER: {
-    label: "Groomer",
+    label: "Grooming",
     description: "A groom table. Holds one pet at a time and drives the station display.",
   },
   BATHING: {
     label: "Bathing",
     description: "A wash or bathing station. Holds one pet at a time.",
   },
+  DRYING: {
+    label: "Drying",
+    description:
+      "A dryer or drying table — the step between the bath and the groom table. Holds one pet at a time. A shop that dries on the groom table does not need one.",
+  },
   KENNEL: {
-    label: "Kennel Unit",
+    label: "Kennels",
     description:
       "A bank of kennels laid out as a grid. Staff assign each dog to a numbered door instead of the station itself.",
   },
@@ -25,13 +31,6 @@ const ROLE_COPY: Record<StationRole, { label: string; description: string }> = {
 
 // ADMIN and MANAGER are access roles, not floor roles, so neither is offered here.
 const ASSIGNABLE_ROLES: StaffRole[] = [StaffRole.GROOMER, StaffRole.BATHER];
-
-const STAFF_ROLE_LABEL: Record<StaffRole, string> = {
-  ADMIN: "Admin",
-  MANAGER: "Shop manager",
-  GROOMER: "Groomer",
-  BATHER: "Bather",
-};
 
 export interface StationFormValues {
   name: string;
@@ -88,7 +87,7 @@ export default function StationForm({
               required
               defaultValue={initial.name}
               placeholder="Kennel Bank A"
-              className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
             />
             <p className="text-xs text-stone-400 mt-1">
               Used everywhere staff see this station, including the touchscreen.
@@ -153,7 +152,7 @@ export default function StationForm({
           initialIds={initial.allowedRoles}
           options={ASSIGNABLE_ROLES.map((role) => ({
             id: role,
-            label: STAFF_ROLE_LABEL[role],
+            label: formatRole(role),
           }))}
           addLabel="+ Add a role"
           emptyLabel="Anyone on staff"
@@ -190,7 +189,7 @@ export default function StationForm({
                 max={MAX_KENNEL_ROWS}
                 value={rows}
                 onChange={(e) => setRows(Number(e.target.value))}
-                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
               />
             </div>
           </div>
@@ -208,7 +207,7 @@ export default function StationForm({
                 max={MAX_KENNEL_COLUMNS}
                 value={columns}
                 onChange={(e) => setColumns(Number(e.target.value))}
-                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
               />
             </div>
           </div>
@@ -276,7 +275,7 @@ export default function StationForm({
           type="submit"
           name="then"
           value="list"
-          className="bg-amber-700 hover:bg-amber-800 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
+          className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
         >
           {submitLabel}
         </button>

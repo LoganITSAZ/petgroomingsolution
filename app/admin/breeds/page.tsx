@@ -7,7 +7,7 @@ import { deleteBreedGuide, saveBreedGuide } from "./actions";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Breed guide" };
+export const metadata = { title: "Breed Guide" };
 
 /**
  * The breed reference groomers read at the station. Seeded with widely
@@ -23,7 +23,7 @@ const ERRORS: Record<string, string> = {
 };
 
 const inputClass =
-  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400";
+  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm ";
 
 function GuideFields({ guide }: { guide?: BreedGuide }) {
   return (
@@ -137,7 +137,7 @@ export default async function BreedGuidesPage({ searchParams }: PageProps) {
           <div className="flex justify-end">
             <button
               type="submit"
-              className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+              className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold"
             >
               Add Guide
             </button>
@@ -172,7 +172,7 @@ export default async function BreedGuidesPage({ searchParams }: PageProps) {
                   <div className="flex justify-end">
                     <button
                       type="submit"
-                      className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                      className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold"
                     >
                       Save
                     </button>

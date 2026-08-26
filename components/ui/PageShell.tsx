@@ -39,7 +39,7 @@ export function PageShell({
       )}
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-black text-stone-900">{title}</h1>
+          <h1 className="text-xl font-extrabold text-stone-900">{title}</h1>
           {subtitle && <span className="text-sm text-stone-500">{subtitle}</span>}
         </div>
         {actions && <div className="flex items-center gap-2">{actions}</div>}
@@ -60,7 +60,7 @@ export function PageCard({
   return (
     <section
       className={cn(
-        "bg-white border border-stone-200 rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col",
+        "bg-white border border-stone-200/80 rounded-xl shadow-card overflow-hidden flex-1 min-h-0 flex flex-col",
         className
       )}
     >
@@ -104,7 +104,7 @@ export function PageSection({
     <div
       className={cn(
         "border-t border-stone-100 first:border-t-0",
-        tone === "muted" && "bg-stone-50",
+        tone === "muted" && "bg-band",
         grow && "flex-1 min-h-0 flex flex-col",
         className
       )}
@@ -132,6 +132,48 @@ export function PageSection({
   );
 }
 
+/**
+ * A well: the inset a list, a summary or a set of figures sits in. It is a
+ * recess in the page card, not a second card — one fill, one hairline, no
+ * shadow. `bg-well` is a token (app/globals.css) so the shop's whole back
+ * office changes depth in one edit, and dark mode flips it with the variable.
+ *
+ * Empty is empty: a well with nothing in it keeps one line of height and says
+ * nothing, which reads as "nothing here" without wording it.
+ */
+export function Well({
+  as = "div",
+  className,
+  children,
+}: {
+  /** `ul` when the well holds a list, which most of them do. */
+  as?: "div" | "ul";
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const Tag = as;
+  return (
+    <Tag className={cn("min-h-7 rounded-lg border border-well-line bg-well px-3 py-1.5", className)}>
+      {children}
+    </Tag>
+  );
+}
+
+/**
+ * A heading centred in its band with a rule running out to each side. Used
+ * where a band has no toolbar of its own and the heading has to carry the
+ * division.
+ */
+export function RuleHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="h-px flex-1 bg-well-line" />
+      <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">{children}</h2>
+      <span className="h-px flex-1 bg-well-line" />
+    </div>
+  );
+}
+
 /** The small titled box used inside a section — the summary cards pattern. */
 export function Panel({
   title,
@@ -143,7 +185,7 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <div className={cn("border border-stone-200 rounded-lg px-3 py-2 bg-stone-50/60", className)}>
+    <div className={cn("border border-well-line rounded-lg px-3 py-2 bg-well", className)}>
       <h3 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1">{title}</h3>
       {children}
     </div>
@@ -161,7 +203,7 @@ export function StatStrip({
   return (
     <div
       className={cn(
-        "bg-stone-50 border-t border-stone-100 first:border-t-0 px-3 py-2 flex flex-wrap gap-x-5 gap-y-0.5 text-sm text-stone-500",
+        "bg-band border-t border-stone-100 first:border-t-0 px-3 py-2 flex flex-wrap gap-x-5 gap-y-0.5 text-sm text-stone-500",
         className
       )}
     >

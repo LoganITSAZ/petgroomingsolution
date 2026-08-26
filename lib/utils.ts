@@ -79,7 +79,7 @@ export function isWithinWalkInWindow(
 }
 
 /** Milliseconds `timeZone` is ahead of UTC at the given instant. */
-function zoneOffsetMs(at: Date, timeZone: string): number {
+export function zoneOffsetMs(at: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
     hourCycle: "h23",
@@ -201,6 +201,39 @@ export function formatRole(role: string): string {
     CUSTOMER: "Customer",
   };
   return map[role] ?? role;
+}
+
+/**
+ * A station's role names the work done at it, not the person doing it —
+ * "Grooming", the way `Bathing` and `Kennels` already read. `Groomer` was the
+ * odd one out, and it collided with the StaffRole of the same name that
+ * `formatRole()` above renders: on the stations page the section heading and
+ * the person standing at it were the same word for two different things.
+ *
+ * Four screens kept their own copy of this map and disagreed about the third
+ * entry ("Kennels" on the floor, "Kennel Unit" in the admin panel), which is
+ * exactly what the "enum to display string lives in lib/utils" rule exists to
+ * prevent. Everything renders this now.
+ */
+export function formatStationRole(role: string): string {
+  const map: Record<string, string> = {
+    GROOMER: "Grooming",
+    BATHING: "Bathing",
+    DRYING: "Drying",
+    KENNEL: "Kennels",
+  };
+  return map[role] ?? role;
+}
+
+/** Tailwind classes for a station-role badge. */
+export function stationRoleBadgeClass(role: string): string {
+  const map: Record<string, string> = {
+    GROOMER: "bg-amber-100 text-amber-700",
+    BATHING: "bg-sky-100 text-sky-700",
+    DRYING: "bg-violet-100 text-violet-700",
+    KENNEL: "bg-emerald-100 text-emerald-700",
+  };
+  return map[role] ?? "bg-stone-100 text-stone-600";
 }
 
 /** Tailwind classes for a role badge. */

@@ -77,15 +77,15 @@ export default async function AboutPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.22),transparent_48%)]" />
         <div className="relative">
         <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-brand-on-700">A calm visit starts here</p>
-        <h2 className="text-2xl font-black mb-2">Ready to book?</h2>
+        <h2 className="text-2xl font-black mb-2">See what we offer</h2>
         <p className="text-brand-on-700 text-sm mb-6">
-          Schedule online in minutes. We&apos;ll take it from there.
+          Browse our grooming, bathing and add-on services with current pricing.
         </p>
         <Link
-          href="/book"
+          href="/services"
           className="inline-flex items-center justify-center rounded-xl bg-surface px-7 py-3 text-sm font-bold text-brand-text shadow-lg transition hover:-translate-y-0.5 hover:bg-brand-100/40"
         >
-          Book an Appointment
+          View Our Services
         </Link>
         </div>
       </section>

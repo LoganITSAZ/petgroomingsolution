@@ -9,6 +9,25 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        // Set in app/layout.tsx. The stack behind it matters: the face is
+        // fetched, and a shop terminal on a bad connection still has to be
+        // readable while it arrives.
+        sans: [
+          "var(--font-sans)",
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "sans-serif",
+        ],
+      },
+      boxShadow: {
+        // One soft, close shadow rather than a scale nobody would use. It
+        // lifts the page card off the background so the card edge stops
+        // depending entirely on a hairline.
+        card: "0 1px 2px rgb(28 25 23 / 0.04), 0 4px 16px -8px rgb(28 25 23 / 0.10)",
+      },
       colors: {
         // Brand paints from CSS variables so the public site can be rethemed at
         // runtime; app/globals.css holds the amber defaults every other screen
@@ -33,6 +52,14 @@ const config: Config = {
         "brand-on-700": "rgb(var(--brand-on-700) / <alpha-value>)",
         // The brand colour as readable type on a surface — see brandText().
         "brand-text": "rgb(var(--brand-text) / <alpha-value>)",
+        // Back-office surfaces. A page is a white card; a well is the inset a
+        // list or a summary sits in, and a band is a toolbar/summary strip
+        // across the card. Both are tokens rather than `bg-stone-50/60`, so
+        // "make the wells a shade darker" is one edit instead of thirty, and
+        // dark mode overrides one class instead of an opacity-variant regex.
+        well: "rgb(var(--well) / <alpha-value>)",
+        band: "rgb(var(--band) / <alpha-value>)",
+        "well-line": "rgb(var(--well-line) / <alpha-value>)",
         // Public-site surfaces.
         page: "rgb(var(--page-bg) / <alpha-value>)",
         surface: "rgb(var(--surface) / <alpha-value>)",

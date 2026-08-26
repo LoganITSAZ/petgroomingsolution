@@ -4,10 +4,11 @@ import { formatCents } from "@/lib/pricing";
 import { deletePricingTier, savePricingTier } from "./actions";
 import TierFields from "./TierFields";
 import { PageShell, PageSection } from "@/components/ui";
+import SaveToast from "@/components/SaveToast";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Pricing tiers" };
+export const metadata = { title: "Pricing Tiers" };
 
 /**
  * The rates the shop honours below its published prices.
@@ -54,22 +55,22 @@ export default async function PricingTiersPage({ searchParams }: PageProps) {
     >
 
       {searchParams.saved && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           Saved {searchParams.saved}.
-        </p>
+        </SaveToast>
       )}
       {searchParams.deleted != null && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           Rate removed.{" "}
           {Number(searchParams.deleted) > 0
             ? `${searchParams.deleted} customer${Number(searchParams.deleted) !== 1 ? "s are" : " is"} back on list prices. Visits already quoted keep the price they were given.`
             : "Nobody was on it."}
-        </p>
+        </SaveToast>
       )}
       {errorMessage && (
-        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
+        <SaveToast tone="error">
           {errorMessage}
-        </p>
+        </SaveToast>
       )}
 
       <p className="border-t border-stone-100 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -87,7 +88,7 @@ export default async function PricingTiersPage({ searchParams }: PageProps) {
           <div className="flex justify-end">
             <button
               type="submit"
-              className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+              className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold"
             >
               Add Rate
             </button>
@@ -136,7 +137,7 @@ export default async function PricingTiersPage({ searchParams }: PageProps) {
                     <div className="flex justify-end">
                       <button
                         type="submit"
-                        className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                        className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold"
                       >
                         Save
                       </button>

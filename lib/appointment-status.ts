@@ -6,8 +6,6 @@ import { AppointmentStatus } from "@prisma/client";
 import { OCCUPYING_STATUSES } from "@/lib/stations";
 import { syncRewardForVisit } from "@/lib/rewards";
 
-export { STATUS_FLOW, nextStatus } from "@/lib/appointment-flow";
-
 /**
  * One place where a status change happens, so the API route, the kiosk and the
  * staff screens all produce the same side effects: an audit row, the station
@@ -20,6 +18,27 @@ const RELEASES_KENNEL: AppointmentStatus[] = [
   AppointmentStatus.CANCELLED,
   AppointmentStatus.NO_SHOW,
 ];
+
+/**
+ * Repaint one station's kiosk.
+ *
+ * Sends the station's whole list, because several pets can stand at one
+ * station and a single appointment is not enough to redraw the screen. Called
+ * after a status change and after a pet is moved between stations — both
+ * change what that screen should be showing.
+ */
+export async function broadcastStationBoard(stationId: string): Promise<void> {
+  const [station, appointments] = await Promise.all([
+    prisma.station.findUnique({ where: { id: stationId } }),
+    prisma.appointment.findMany({
+      where: { stationId, status: { in: OCCUPYING_STATUSES } },
+      select: KIOSK_APPOINTMENT_SELECT,
+      orderBy: { checkedInAt: "asc" },
+    }),
+  ]);
+  if (!station) return;
+  broadcastToStation(stationId, { type: "status_update", appointments, station });
+}
 
 export async function changeAppointmentStatus({
   appointmentId,
@@ -52,21 +71,7 @@ export async function changeAppointmentStatus({
     },
   });
 
-  if (updated.stationId) {
-    // Send the station's whole list: with several pets at one station, a single
-    // appointment is not enough to repaint the screen.
-    const appointments = await prisma.appointment.findMany({
-      where: { stationId: updated.stationId, status: { in: OCCUPYING_STATUSES } },
-      select: KIOSK_APPOINTMENT_SELECT,
-      orderBy: { checkedInAt: "asc" },
-    });
-
-    broadcastToStation(updated.stationId, {
-      type: "status_update",
-      appointments,
-      station: updated.station,
-    });
-  }
+  if (updated.stationId) await broadcastStationBoard(updated.stationId);
 
   // The punch card follows the visit: finishing earns one, cancelling or a
   // no-show takes it back. Idempotent, so the three finished statuses in a row

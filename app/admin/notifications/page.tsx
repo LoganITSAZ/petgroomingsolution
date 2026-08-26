@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guards";
 import { currentStaffIsAdmin } from "@/lib/staff-roles";
 import { PageShell, PageSection } from "@/components/ui";
+import SaveToast from "@/components/SaveToast";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -73,14 +74,14 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
 
   return (
     <PageShell
-      title="Notification Settings"
+      title="Notifications"
       subtitle="Configure email and SMS delivery settings for customer notifications."
     >
 
       {searchParams.saved === "1" && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           Notification settings saved successfully.
-        </p>
+        </SaveToast>
       )}
 
       <form action={saveNotifications}>
@@ -112,7 +113,7 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
                 id="emailFromAddress" name="emailFromAddress"
                 defaultValue={config?.emailFromAddress ?? ""}
                 placeholder="no-reply@example.com"
-                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
               />
               <p className="text-xs text-stone-400 mt-1">
                 The email address replies will be sent to. Must be verified with your email provider.
@@ -165,7 +166,7 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
                 id="twilioAccountSid" name="twilioAccountSid"
                 defaultValue={config?.twilioAccountSid ?? ""}
                 placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono"
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm font-mono"
               />
             </div>
           </div>
@@ -183,7 +184,7 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
                   config?.twilioAuthToken ? "••••••••••••••••••••••••••••••••" : "Paste auth token"
                 }
                 autoComplete="new-password"
-                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono"
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm font-mono"
               />
               <p className="text-xs text-stone-400 mt-1">
                 {config?.twilioAuthToken
@@ -203,7 +204,7 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
                 id="twilioFromNumber" name="twilioFromNumber"
                 defaultValue={config?.twilioFromNumber ?? ""}
                 placeholder="+15551234567"
-                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
               />
               <p className="text-xs text-stone-400 mt-1">
                 Your Twilio phone number in E.164 format (e.g. +15551234567).
@@ -215,7 +216,7 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
         <PageSection tone="muted" bodyClassName="flex justify-end">
           <button
             type="submit"
-            className="bg-amber-700 hover:bg-amber-800 text-white px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
           >
             Save Notification Settings
           </button>

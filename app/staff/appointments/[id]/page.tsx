@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
 import { AppointmentStatus, StaffRole, StationRole, VisitEventType } from "@prisma/client";
-import { nextStatus } from "@/lib/appointment-status";
+import { nextStatus } from "@/lib/appointment-flow";
 import { getServiceOptions } from "@/lib/appointment-services";
 import {
   KENNELABLE_STATUSES,
@@ -33,6 +33,7 @@ import PhotoStack from "@/components/PhotoStack";
 import InsightList from "@/components/InsightList";
 import { customerInsights, petInsights } from "@/lib/insights";
 import { photoUrl } from "@/lib/photos";
+import { redeemCustomerReward } from "@/app/staff/customers/actions";
 import {
   logVisitEvent,
   moveStatus,
@@ -79,9 +80,18 @@ const NOTICES: Record<string, string> = {
   saved: "Appointment saved.",
   services: "Services updated.",
   event: "Visit event logged.",
+  redeemed: "Reward applied to this bill.",
 };
 
+/** A visit past these is closed: its bill is no longer open to a discount. */
+const SETTLED_FOR_REWARD: AppointmentStatus[] = [
+  AppointmentStatus.PICKED_UP,
+  AppointmentStatus.CANCELLED,
+  AppointmentStatus.NO_SHOW,
+];
+
 const ERRORS: Record<string, string> = {
+  redeem_failed: "That reward could not be applied to this bill.",
   no_next_status: "This visit is already at the end of the groom flow.",
   already_there: "That is already the current status.",
   bad_date: "That date and time could not be read.",
@@ -100,7 +110,7 @@ const ERRORS: Record<string, string> = {
 };
 
 const inputClass =
-  "w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white";
+  "w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800  bg-white";
 
 /** datetime-local wants "YYYY-MM-DDTHH:mm". */
 function toLocalInput(value: Date): string {
@@ -120,7 +130,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
     where: { id: params.id },
     include: {
       pet: true,
-      customer: true,
+      customer: { include: { alternateContacts: { orderBy: { createdAt: "asc" } } } },
       pricingTier: true,
       station: true,
       staff: { select: { id: true, name: true } },
@@ -206,7 +216,10 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
   // What this visit was quoted under. The discount was snapshotted at booking,
   // so editing the rate afterwards never changes what the customer was told.
   const rateDiscountCents = appointment.pricingDiscountCents ?? 0;
-  const quotedCents = Math.max(0, total - rateDiscountCents);
+  // Both discounts are snapshots taken when they were applied, so neither
+  // moves if the tier is edited or the reward's value is changed later.
+  const rewardDiscountCents = appointment.rewardDiscountCents;
+  const quotedCents = Math.max(0, total - rateDiscountCents - rewardDiscountCents);
   const inShop = appointment.checkedInAt != null;
   const elapsedMins = inShop
     ? Math.round((Date.now() - appointment.checkedInAt!.getTime()) / 60000)
@@ -254,16 +267,30 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
           <span>
             ★ Reward ready — {card.label}
             <span className="block text-xs font-normal">
-              {card.available > 1 && `${card.available} available. `}Redeem it on the customer&apos;s
-              profile when they take it.
+              {card.available > 1 && `${card.available} available. `}Worth{" "}
+              {formatCents(card.valueCents)} off this bill.
             </span>
           </span>
-          <Link
-            href={`/staff/customers/${appointment.customerId}`}
-            className="underline font-semibold whitespace-nowrap"
-          >
-            Open profile
-          </Link>
+          <span className="flex items-center gap-3">
+            {!SETTLED_FOR_REWARD.includes(appointment.status) && quotedCents > 0 && (
+              <form action={redeemCustomerReward}>
+                <input type="hidden" name="customerId" value={appointment.customerId} />
+                <input type="hidden" name="appointmentId" value={appointment.id} />
+                <button
+                  type="submit"
+                  className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-800 transition-colors whitespace-nowrap"
+                >
+                  Apply to this bill
+                </button>
+              </form>
+            )}
+            <Link
+              href={`/staff/customers/${appointment.customerId}`}
+              className="underline font-semibold whitespace-nowrap"
+            >
+              Open profile
+            </Link>
+          </span>
         </div>
       )}
 
@@ -334,20 +361,24 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
                       )}
                     </p>
                   </div>
-                  {appointment.customer.altContactName && (
+                  {appointment.customer.alternateContacts.length > 0 && (
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Approved alternate</p>
-                      <p className="text-stone-700">
-                        {appointment.customer.altContactName}
-                        {appointment.customer.altContactPhone && (
-                          <a
-                            href={`tel:${appointment.customer.altContactPhone}`}
-                            className="block text-stone-500 hover:text-amber-700"
-                          >
-                            {appointment.customer.altContactPhone}
-                          </a>
-                        )}
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                        Approved alternates
                       </p>
+                      {appointment.customer.alternateContacts.map((alternate) => (
+                        <p key={alternate.id} className="text-stone-700">
+                          {alternate.name}
+                          {alternate.phone && (
+                            <a
+                              href={`tel:${alternate.phone}`}
+                              className="block text-stone-500 hover:text-amber-700"
+                            >
+                              {alternate.phone}
+                            </a>
+                          )}
+                        </p>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -376,7 +407,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
                 <input type="hidden" name="status" value={next} />
                 <button
                   type="submit"
-                  className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+                  className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
                 >
                   → {formatStatus(next)}
                 </button>
@@ -432,7 +463,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
 
       <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Assignment */}
-        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             Assignment &amp; schedule
           </h2>
@@ -557,7 +588,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
         </section>
 
         {/* Services */}
-        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             Services
           </h2>
@@ -604,6 +635,17 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
                   <span>−{formatCents(rateDiscountCents)}</span>
                 </li>
               )}
+              {rewardDiscountCents > 0 && (
+                <li className="py-2 flex items-center justify-between text-sm text-emerald-800">
+                  <span>
+                    Reward applied
+                    <span className="block text-xs text-stone-500">
+                      Taken off this bill when the reward was redeemed.
+                    </span>
+                  </span>
+                  <span>−{formatCents(rewardDiscountCents)}</span>
+                </li>
+              )}
               {priced.length > 0 && (
                 <li className="py-2 flex items-center justify-between text-sm font-semibold text-stone-900">
                   <span>Estimated from</span>
@@ -640,7 +682,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
 
       <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Visit events */}
-        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             What happened ({appointment.visitEvents.length})
           </h2>
@@ -698,7 +740,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
         </section>
 
         {/* Audit trail */}
-        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             Status history
           </h2>

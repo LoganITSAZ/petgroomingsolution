@@ -4,6 +4,8 @@ import { promotionState } from "@/lib/promotions";
 import { formatShopDate, formatShopTime } from "@/lib/utils";
 import { deletePromotion, savePromotion } from "./actions";
 import { PageShell, PageSection } from "@/components/ui";
+import SaveToast from "@/components/SaveToast";
+import ModalButton from "@/components/ModalButton";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -32,7 +34,7 @@ const STATE_BADGE: Record<string, string> = {
 };
 
 const inputClass =
-  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400";
+  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm ";
 
 /** datetime-local wants "YYYY-MM-DDTHH:mm". */
 function toLocalInput(value: Date | null): string {
@@ -188,37 +190,40 @@ export default async function AdminMarketingPage({ searchParams }: PageProps) {
     >
 
       {searchParams.saved && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           Saved {searchParams.saved}.
-        </p>
+        </SaveToast>
       )}
       {searchParams.deleted === "1" && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           Promotion removed.
-        </p>
+        </SaveToast>
       )}
       {errorMessage && (
-        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
+        <SaveToast tone="error">
           {errorMessage}
-        </p>
+        </SaveToast>
       )}
 
-      <details className="border-t border-stone-100">
-        <summary className="px-6 py-4 cursor-pointer text-sm font-semibold text-stone-800">
-          + New promotion
-        </summary>
-        <form action={savePromotion} className="px-6 pb-6 space-y-4 border-t border-stone-100 pt-4">
-          <PromotionFields services={services} />
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold"
-            >
-              Publish
-            </button>
-          </div>
-        </form>
-      </details>
+      <PageSection tone="muted" bodyClassName="flex justify-end">
+        <ModalButton
+          label="New promotion"
+          title="New promotion"
+          description="An offer is tied to one service and runs between two dates."
+        >
+          <form action={savePromotion} className="space-y-4">
+            <PromotionFields services={services} />
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-bold transition-colors"
+              >
+                Publish
+              </button>
+            </div>
+          </form>
+        </ModalButton>
+      </PageSection>
 
       {services.length === 0 ? (
         <PageSection grow className="text-center text-stone-400 text-sm">
@@ -271,7 +276,7 @@ export default async function AdminMarketingPage({ searchParams }: PageProps) {
                     <div className="flex justify-end">
                       <button
                         type="submit"
-                        className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold"
+                        className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-semibold"
                       >
                         Save
                       </button>

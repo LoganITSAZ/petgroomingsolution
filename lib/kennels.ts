@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
 import { broadcastToStation } from "@/lib/station-events";
-import { AppointmentStatus, StationRole } from "@prisma/client";
+import { AppointmentStatus } from "@prisma/client";
 import { pickupThresholds } from "@/lib/pickups";
 
 /**
@@ -166,21 +166,6 @@ export async function getKennelBoard(stationId: string) {
 }
 
 export type KennelBoard = Awaited<ReturnType<typeof getKennelBoard>>;
-
-/** Every kennel station, each with its board. */
-export async function getKennelStations() {
-  const stations = await prisma.station.findMany({
-    where: { role: StationRole.KENNEL },
-    orderBy: { name: "asc" },
-  });
-
-  return Promise.all(
-    stations.map(async (station) => ({
-      station,
-      kennels: await getKennelBoard(station.id),
-    }))
-  );
-}
 
 /**
  * Whether one more pet fits behind a given door.

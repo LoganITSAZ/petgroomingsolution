@@ -27,7 +27,7 @@ import { OCCUPYING_STATUSES } from "@/lib/stations";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "My shift" };
+export const metadata = { title: "My Shift" };
 
 /**
  * A groomer's own shift, sized for a phone held in one hand: what I am, what I
@@ -203,7 +203,7 @@ export default async function MyShiftPage() {
                   <input type="hidden" name="status" value={step} />
                   <button
                     type="submit"
-                    className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-bold"
+                    className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-bold"
                   >
                     → {formatStatus(step)}
                   </button>

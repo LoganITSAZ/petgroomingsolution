@@ -4,6 +4,7 @@ import Link from "next/link";
 import { signOut } from "@/lib/auth";
 import { getConfig } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
+import SystemThemeScript from "@/components/SystemThemeScript";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -17,7 +18,12 @@ export default async function PortalLayout({ children }: { children: React.React
   ]);
 
   return (
-    <div className={`min-h-screen bg-stone-50 flex flex-col ${customer?.themePreference === "DARK" ? "dark" : ""}`}>
+    <div
+      id="portal-root"
+      className={`min-h-screen bg-stone-50 flex flex-col ${customer?.themePreference === "DARK" ? "dark" : ""}`}
+    >
+      {customer?.themePreference === "SYSTEM" && <SystemThemeScript rootId="portal-root" />}
+
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, AppointmentStatus, AppointmentType, StaffRole, StationRole } from "@prisma/client";
-import { nextStatus } from "@/lib/appointment-status";
+import { BOARD_COLUMNS, boardColumnFor, nextStatus } from "@/lib/appointment-flow";
 import {
   formatServiceType,
   formatShopDate,
@@ -9,8 +9,10 @@ import {
   shopDayKey,
   shopDayRange,
 } from "@/lib/utils";
-import { checkInWithKennel, moveStatus } from "./actions";
+import { checkInWithKennel, moveStatus, moveToColumn } from "./actions";
 import CheckInDialog from "@/components/CheckInDialog";
+import StageRail from "@/components/StageRail";
+import FloorBoard, { type ColumnCapacity } from "@/components/FloorBoard";
 import {
   KENNELABLE_STATUSES,
   compartmentCapacity,
@@ -27,7 +29,7 @@ import {
 } from "@/lib/arrivals";
 import { PICKUP_LEVEL_CLASS, PICKUP_LEVEL_LABEL, formatWait, pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
-import { PageShell, PageSection, Panel, StatStrip } from "@/components/ui";
+import { PageShell, PageSection, StatStrip, Well } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -38,18 +40,6 @@ export const metadata = { title: "Appointments" };
  * leaving the page. Anything deeper happens on the visit's own page.
  */
 
-const statusColor: Record<string, string> = {
-  SCHEDULED: "bg-stone-100 text-stone-600",
-  CHECKED_IN: "bg-blue-100 text-blue-700",
-  IN_PROGRESS: "bg-amber-100 text-amber-700",
-  DRYING: "bg-sky-100 text-sky-700",
-  FINISHING: "bg-purple-100 text-purple-700",
-  COMPLETE: "bg-green-100 text-green-700",
-  READY_PICKUP: "bg-emerald-100 text-emerald-800",
-  PICKED_UP: "bg-stone-100 text-stone-400",
-  CANCELLED: "bg-red-100 text-red-700",
-  NO_SHOW: "bg-red-100 text-red-400",
-};
 
 const IN_SHOP: AppointmentStatus[] = [
   AppointmentStatus.CHECKED_IN,
@@ -128,6 +118,33 @@ interface PageProps {
   searchParams: Partial<Record<keyof Filters, string>> & { error?: string };
 }
 
+/**
+ * One of the three at-a-glance groups above the list. The label carries the
+ * count, so the well below it holds pets and nothing else — and an empty well
+ * reads as "nobody" without a line of wording saying so.
+ */
+function NowWell({
+  label,
+  count,
+  children,
+}: {
+  label: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <h2 className="mb-1 flex items-baseline gap-1.5 text-xs font-bold uppercase tracking-widest text-stone-500">
+        {label}
+        <span className={count > 0 ? "text-stone-800" : "text-stone-400"}>{count}</span>
+      </h2>
+      <Well as="ul" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        {children}
+      </Well>
+    </div>
+  );
+}
+
 export default async function StaffAppointmentsPage({ searchParams }: PageProps) {
   const todayKey = shopDayKey();
   const tomorrowKey = shiftDay(todayKey, 1);
@@ -204,7 +221,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
     }),
     prisma.station.findMany({
       where: { isActive: true, role: { not: StationRole.KENNEL } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, role: true },
       orderBy: { name: "asc" },
     }),
     prisma.kennel.findMany({
@@ -230,13 +247,20 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
       _count: { _all: true },
     }),
     prisma.appointment.findMany({
-      where: { scheduledAt: range, status: { in: [AppointmentStatus.SCHEDULED, ...IN_SHOP] } },
+      // READY_PICKUP joins IN_SHOP here and nowhere else: the board's last
+      // column holds a finished pet whose owner has been told, and the counts
+      // above it still mean what they always did.
+      where: {
+        scheduledAt: range,
+        status: { in: [AppointmentStatus.SCHEDULED, ...IN_SHOP, AppointmentStatus.READY_PICKUP] },
+      },
       select: {
         id: true,
         scheduledAt: true,
         status: true,
         stationId: true,
-        pet: { select: { name: true } },
+        pet: { select: { name: true, hasBiteHistory: true } },
+        customer: { select: { firstName: true, lastName: true } },
       },
       orderBy: { scheduledAt: "asc" },
     }),
@@ -258,13 +282,56 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
   ];
 
   const listQuery = queryString(filters);
+
+  /*
+   * The three live bands answer "what is happening in the shop right now" over
+   * the whole range. The moment the counter narrows to one groomer, station,
+   * type or name they are asking a different question, and the bands answer a
+   * set they can no longer see — so the page becomes the list alone. The view
+   * and date are navigation, not a filter: the bands follow the range.
+   */
+  const isFiltered =
+    Boolean(filters.q || filters.staffId || filters.stationId || filters.type) ||
+    filters.group !== DEFAULT_GROUP;
   const now = new Date();
   const arrivingNext = operationalAppointments
     .filter((appointment) => appointment.status === AppointmentStatus.SCHEDULED && appointment.scheduledAt >= now)
     .slice(0, 4);
-  const noStation = operationalAppointments.filter(
-    (appointment) => IN_SHOP.includes(appointment.status) && !appointment.stationId
-  );
+  /*
+   * The board's chips: every pet actually in the shop, wherever it is standing.
+   * Pets that have not arrived are not on it — there is nothing to place yet —
+   * and a station that is full simply shows the pet that is holding it.
+   */
+  const stationsById = new Map(stations.map((station) => [station.id, station]));
+  const boardPets = operationalAppointments
+    .filter((appointment) => boardColumnFor(appointment.status) !== null)
+    .map((appointment) => ({
+      id: appointment.id,
+      petName: appointment.pet.name,
+      ownerName: `${appointment.customer.firstName} ${appointment.customer.lastName}`,
+      columnKey: boardColumnFor(appointment.status)?.key ?? BOARD_COLUMNS[0].key,
+      stationName: appointment.stationId
+        ? (stationsById.get(appointment.stationId)?.name ?? null)
+        : null,
+      hasBiteHistory: appointment.pet.hasBiteHistory,
+    }));
+  const waiting = boardPets.filter((pet) => pet.columnKey === BOARD_COLUMNS[0].key);
+
+  /*
+   * How full each stage is. A column backed by stations reads "2/4"; a column
+   * with none — the shop that dries on the groom table, or has not added a
+   * drying station yet — is left out and its header just counts heads.
+   */
+  const boardCapacity: Record<string, ColumnCapacity> = {};
+  for (const column of BOARD_COLUMNS) {
+    if (!column.stationRole) continue;
+    const ofRole = stations.filter((station) => station.role === column.stationRole);
+    if (ofRole.length === 0) continue;
+    boardCapacity[column.key] = {
+      used: boardPets.filter((pet) => pet.columnKey === column.key).length,
+      capacity: ofRole.length,
+    };
+  }
 
   /*
    * Compartments with room, offered when a pet arrives. Room is per customer,
@@ -301,7 +368,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
     filters.type,
   ].filter(Boolean).length;
   const selectClass =
-    "border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-stone-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400";
+    "border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-stone-800 bg-white shadow-sm ";
 
   /*
    * Today and Tomorrow are the same day view on two dates, so the arrows keep
@@ -322,28 +389,58 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
     { label: VIEWS.month, patch: { view: "month" }, active: filters.view === "month" },
   ];
 
+  /*
+    The tabs change what the card is showing, so they stay on its toolbar.
+    Booking creates something new instead, which is the page's action — it sits
+    beside the title, where every other screen keeps its action.
+  */
   const viewTabs = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-0.5 rounded-lg border border-well-line bg-well p-0.5">
       {tabs.map((tab) => (
         <Link
           key={tab.label}
           href={`/staff/appointments${queryString(filters, tab.patch)}`}
-          className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+          className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
             tab.active
-              ? "bg-stone-800 text-white"
-              : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+              ? "bg-stone-800 text-white shadow-sm"
+              : "text-stone-600 hover:bg-white hover:text-stone-900"
           }`}
         >
           {tab.label}
         </Link>
       ))}
-      <Link
-        href="/staff/appointments/new"
-        className="bg-amber-700 hover:bg-amber-800 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
-      >
-        + New
-      </Link>
     </div>
+  );
+
+  /*
+    Filters is a control on the toolbar, and the panel it opens is a band across
+    the whole card — a <details> cannot straddle the two, and this page is a
+    server component with no client JS of its own. A checkbox its label toggles
+    does it in CSS: the input is the `peer`, the label is the button, and the
+    panel below shows on `peer-checked`. `defaultChecked` opens it when filters
+    are already applied, so nothing is narrowing the list invisibly.
+  */
+  const filtersToggle = (
+    <label
+      htmlFor="filters-open"
+      className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-well-line bg-white px-2.5 py-1.5 text-xs font-semibold text-stone-700 shadow-sm transition-colors hover:bg-well peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2"
+    >
+      Filters
+      {activeFilters > 0 && (
+        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+          {activeFilters}
+        </span>
+      )}
+    </label>
+  );
+
+  const newVisit = (
+    <Link
+      href="/staff/appointments/new"
+      className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-3 py-1.5 rounded-lg text-sm font-semibold shadow-sm transition-colors whitespace-nowrap"
+    >
+      + New
+    </Link>
   );
 
   return (
@@ -352,65 +449,64 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
       the counts for the range are a single control — split across separate
       cards they read as unrelated things floating on the page.
     */
-    <PageShell title="Appointments" subtitle={`${appointments.length} shown`}>
+    <PageShell
+      title="Appointments"
+      subtitle={`${appointments.length} shown`}
+      actions={newVisit}
+    >
+        <input
+          id="filters-open"
+          type="checkbox"
+          className="peer sr-only"
+          defaultChecked={activeFilters > 0}
+          aria-label="Show filters"
+        />
         {/* The day being read and the views that change it, on one line */}
-        <div className="px-2 py-1.5 flex items-center gap-2 flex-wrap">
+        <div className="bg-band px-2 py-1.5 flex items-center gap-2 flex-wrap">
           <div className="flex flex-1 items-center gap-1">
           {filters.view === "day" ? (
             <>
               <Link
                 href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, -1) })}`}
                 aria-label="Previous day"
-                className="px-2 py-1 rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+                className="px-2 py-1 rounded-lg text-stone-500 hover:bg-white hover:text-stone-800 transition-colors"
               >
                 ←
               </Link>
+              {/*
+                The date, and only the date. "Today" and "Tomorrow" are the two
+                tabs to the right, which light up on these same dates — saying
+                it here as well named the day twice and gave the shop two
+                controls for going back to today.
+              */}
               <span className="text-sm font-semibold text-stone-800">
-                {filters.date === todayKey ? (
-                  <>
-                    Today —{" "}
-                    {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
-                  </>
-                ) : (
-                  <Link
-                    href={`/staff/appointments${queryString(filters, { date: todayKey })}`}
-                    title="Back to today"
-                    className="hover:text-amber-700"
-                  >
-                    {filters.date === tomorrowKey && "Tomorrow — "}
-                    {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
-                  </Link>
-                )}
+                {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
               </span>
               <Link
                 href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, 1) })}`}
                 aria-label="Next day"
-                className="px-2 py-1 rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+                className="px-2 py-1 rounded-lg text-stone-500 hover:bg-white hover:text-stone-800 transition-colors"
               >
                 →
               </Link>
             </>
           ) : (
-            <span className="flex-1 text-sm font-semibold text-stone-800">
-              {VIEWS[filters.view]} from{" "}
-              {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
+            <span className="flex-1 px-2 text-sm font-semibold text-stone-800">
+              From {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
             </span>
           )}
           </div>
           {viewTabs}
+          {filtersToggle}
         </div>
 
-        {/* Filters — collapsed by default, opened when any are applied */}
-        <details open={activeFilters > 0} className="border-t border-stone-100">
-          <summary className="px-3 py-2 cursor-pointer text-sm font-semibold text-stone-700 flex items-center gap-2">
-            Filters
-            {activeFilters > 0 && (
-              <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                {activeFilters}
-              </span>
-            )}
-          </summary>
-          <form method="GET" className="px-3 pb-3 pt-1 border-t border-stone-100 flex flex-wrap items-center gap-2">
+        {/* The panel the toggle above opens. `peer-checked` is what connects the
+            two — the toggle is a control on the toolbar and the panel is a band
+            under it, which a <details> cannot span. */}
+        <form
+          method="GET"
+          className="hidden peer-checked:flex px-3 py-2 border-t border-stone-100 flex-wrap items-center gap-2"
+        >
             <input type="hidden" name="view" value={filters.view} />
             <input
               name="q"
@@ -460,46 +556,76 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
                 Reset
               </Link>
             )}
-          </form>
-        </details>
+        </form>
 
         {/* Counts for the range, regardless of the current filter */}
         <StatStrip stats={summary} />
 
-        <PageSection className="grid gap-2 lg:grid-cols-3">
-        <Panel title={`Waiting for pickup (${pickupList.pets.length})`}>
-          {pickupList.pets.length === 0 ? (
-            <p className="text-sm text-stone-400">Nobody waiting.</p>
-          ) : (
-            <ul className="space-y-0.5 text-sm">
-              {pickupList.pets.slice(0, 4).map((pet) => (
-                <li key={pet.appointmentId}>
-                  <Link href={`/staff/appointments/${pet.appointmentId}`} className="flex items-center justify-between gap-2 hover:text-amber-700">
-                    <span className="font-semibold truncate">{pet.petName}</span>
-                    <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${PICKUP_LEVEL_CLASS[pet.level]}`} title={PICKUP_LEVEL_LABEL[pet.level]}>
-                      {formatWait(pet.waitingMins)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-        <Panel title={`In the shop, no station (${noStation.length})`}>
-          {noStation.length === 0 ? <p className="text-sm text-stone-400">Everyone is at a station.</p> : (
-            <ul className="space-y-0.5 text-sm">
-              {noStation.map((appointment) => <li key={appointment.id}><Link href={`/staff/appointments/${appointment.id}`} className="font-semibold hover:text-amber-700">{appointment.pet.name}</Link></li>)}
-            </ul>
-          )}
-        </Panel>
-        <Panel title={`Arriving next (${arrivingNext.length})`}>
-          {arrivingNext.length === 0 ? <p className="text-sm text-stone-400">Nothing else booked today.</p> : (
-            <ul className="space-y-0.5 text-sm">
-              {arrivingNext.map((appointment) => <li key={appointment.id}><Link href={`/staff/appointments/${appointment.id}`} className="flex items-center justify-between gap-2 hover:text-amber-700"><span className="font-semibold truncate">{appointment.pet.name}</span><span className="shrink-0 text-stone-500">{formatShopTime(appointment.scheduledAt)}</span></Link></li>)}
-            </ul>
-          )}
-        </Panel>
-        </PageSection>
+        {!isFiltered && (
+          /*
+            Three questions the counter is asked all day, side by side on one
+            band. Stacked as three bands they pushed the list itself below the
+            fold on a shop terminal, and the answer to each is usually a couple
+            of names — a column each is the whole of it.
+          */
+          <PageSection>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <NowWell label="Waiting for pickup" count={pickupList.pets.length}>
+                {pickupList.pets.slice(0, 4).map((pet) => (
+                  <li key={pet.appointmentId}>
+                    <Link
+                      href={`/staff/appointments/${pet.appointmentId}`}
+                      className="flex items-center gap-1.5 hover:text-brand-text"
+                    >
+                      <span className="font-semibold truncate">{pet.petName}</span>
+                      <span
+                        className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${PICKUP_LEVEL_CLASS[pet.level]}`}
+                        title={PICKUP_LEVEL_LABEL[pet.level]}
+                      >
+                        {formatWait(pet.waitingMins)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </NowWell>
+              <NowWell label="Arriving next" count={arrivingNext.length}>
+                {arrivingNext.map((appointment) => (
+                  <li key={appointment.id}>
+                    <Link
+                      href={`/staff/appointments/${appointment.id}`}
+                      className="flex items-center gap-1.5 hover:text-brand-text"
+                    >
+                      <span className="font-semibold truncate">{appointment.pet.name}</span>
+                      <span className="shrink-0 text-stone-500">
+                        {formatShopTime(appointment.scheduledAt)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </NowWell>
+            </div>
+          </PageSection>
+        )}
+
+        {!isFiltered && stations.length > 0 && (
+          /*
+            The floor, arranged by hand. It answers what the "no station" list
+            used to — the Waiting column is that list — and lets it be fixed in
+            the same glance instead of on each pet's own page.
+          */
+          <PageSection tone="muted">
+            <h2 className="mb-1.5 flex items-baseline gap-1.5 text-xs font-bold uppercase tracking-widest text-stone-500">
+              Where everyone is standing
+              <span className={waiting.length > 0 ? "text-amber-700" : "text-stone-400"}>
+                {waiting.length} waiting
+              </span>
+              <span className="ml-auto font-medium normal-case tracking-normal text-stone-400">
+                Drag a pet to a stage, or tap it and choose
+              </span>
+            </h2>
+            <FloorBoard pets={boardPets} capacity={boardCapacity} move={moveToColumn} />
+          </PageSection>
+        )}
 
         {searchParams.error === "not_found" && (
           <div className="mx-3 mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-red-800 text-sm font-medium">
@@ -509,15 +635,31 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
 
         {/* List — takes whatever height is left and scrolls inside the card */}
         {appointments.length === 0 ? (
-          <PageSection grow className="text-center text-stone-400 text-sm">
-            Nothing matches those filters.
+          <PageSection grow className="text-center text-sm">
+            <p className="text-stone-500">
+              {isFiltered
+                ? "Nothing matches those filters."
+                : filters.view === "day"
+                  ? "Nothing booked for this day."
+                  : "Nothing booked in this range."}
+            </p>
+            {/* Only the filtered case gets a way out — booking is already the
+                "+ New" button on the toolbar above. */}
+            {isFiltered && (
+              <Link
+                href="/staff/appointments"
+                className="mt-2 inline-block font-semibold text-brand-text hover:underline"
+              >
+                Clear the filters
+              </Link>
+            )}
           </PageSection>
         ) : (
           <PageSection grow scroll padded={false}>
             <table className="w-full text-sm text-center">
-              <thead className="bg-stone-50 text-stone-500 text-[10px] uppercase tracking-widest sticky top-0 z-10">
+              <thead className="bg-well text-stone-500 text-[10px] uppercase tracking-widest sticky top-0 z-10 shadow-[0_1px_0_rgb(var(--well-line))]">
                 <tr>
-                  <th scope="col" className="px-3 py-2">Status</th>
+                  <th scope="col" className="px-3 py-2 text-left">Stage</th>
                   <th scope="col" className="px-3 py-2">When</th>
                   <th scope="col" className="px-3 py-2">Pet</th>
                   <th scope="col" className="px-3 py-2">Owner</th>
@@ -542,24 +684,25 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
                           .join(", ")
                       : formatServiceType(appt.serviceType);
                   return (
-                    <tr key={appt.id} className="hover:bg-stone-50">
-                      <td className="px-3 py-1.5 whitespace-nowrap">
+                    <tr key={appt.id} className="hover:bg-well transition-colors">
+                      <td className="px-3 py-1.5 whitespace-nowrap text-left">
                         {(() => {
                           const arrivalAlert = lateness && lateness !== "on_time";
-                          const label = arrivalAlert
-                            ? `${ARRIVAL_LABEL[lateness]} · ${minutesLate(appt.scheduledAt)}m`
-                            : formatStatus(appt.status);
                           return (
-                            <span
-                              className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black ${
-                                arrivalAlert
-                                  ? ARRIVAL_CLASS[lateness]
-                                  : statusColor[appt.status] ?? "bg-stone-100 text-stone-500"
-                              }`}
-                              title={label}
-                              aria-label={label}
-                            >
-                              {arrivalAlert ? "!" : "•"}
+                            <span className="inline-flex items-center gap-1.5">
+                              {/* Lateness is the one thing that outranks progress:
+                                  a pet that has not arrived is not moving along
+                                  the rail at all. */}
+                              {arrivalAlert && (
+                                <span
+                                  className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black ${ARRIVAL_CLASS[lateness]}`}
+                                  title={`${ARRIVAL_LABEL[lateness]} · ${minutesLate(appt.scheduledAt)}m`}
+                                  aria-label={`${ARRIVAL_LABEL[lateness]} by ${minutesLate(appt.scheduledAt)} minutes`}
+                                >
+                                  !
+                                </span>
+                              )}
+                              <StageRail status={appt.status} />
                             </span>
                           );
                         })()}
@@ -567,7 +710,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
                       <td className="px-3 py-1.5 whitespace-nowrap">
                         <Link
                           href={`/staff/appointments/${appt.id}`}
-                          className={`font-medium hover:text-amber-700 ${
+                          className={`font-medium hover:text-brand-text ${
                             lateness ? ARRIVAL_TEXT_CLASS[lateness] : "text-stone-800"
                           }`}
                         >
@@ -582,7 +725,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
                       <td className="px-3 py-1.5">
                         <Link
                           href={`/staff/pets/${appt.pet.id}`}
-                          className="font-semibold text-stone-900 hover:text-amber-700"
+                          className="font-semibold text-stone-900 hover:text-brand-text"
                         >
                           {appt.pet.name}
                         </Link>
@@ -595,7 +738,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
                       <td className="px-3 py-1.5 text-stone-600 whitespace-nowrap">
                         <Link
                           href={`/staff/customers/${appt.customer.id}`}
-                          className="hover:text-amber-700"
+                          className="hover:text-brand-text"
                         >
                           {appt.customer.firstName} {appt.customer.lastName}
                         </Link>
@@ -630,7 +773,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
                             <input type="hidden" name="listQuery" value={listQuery} />
                             <button
                               type="submit"
-                              className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+                              className="rounded-md border border-well-line bg-white px-2 py-1 text-xs font-semibold text-brand-text transition-colors hover:bg-well"
                             >
                               → {formatStatus(next)}
                             </button>

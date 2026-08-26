@@ -11,6 +11,7 @@ import {
 } from "@/lib/themes";
 import { saveAppearance } from "./actions";
 import { PageShell, PageSection } from "@/components/ui";
+import SaveToast from "@/components/SaveToast";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -108,14 +109,14 @@ export default async function AppearancePage({ searchParams }: PageProps) {
     >
 
       {searchParams.saved === "1" && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           Appearance saved.
-        </p>
+        </SaveToast>
       )}
       {errorMessage && (
-        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
+        <SaveToast tone="error">
           {errorMessage}
-        </p>
+        </SaveToast>
       )}
 
       {/* Live preview of the resolved theme */}
@@ -207,7 +208,7 @@ export default async function AppearancePage({ searchParams }: PageProps) {
               name="themeBannerText"
               defaultValue={config.themeBannerText ?? ""}
               placeholder="Holiday hours: closed Dec 25"
-              className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
             />
             <span className="block text-xs text-stone-400 mt-1">
               Shown across the top of every public page.
@@ -218,7 +219,7 @@ export default async function AppearancePage({ searchParams }: PageProps) {
         <PageSection tone="muted" bodyClassName="flex justify-end">
           <button
             type="submit"
-            className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-semibold"
           >
             Save Appearance
           </button>

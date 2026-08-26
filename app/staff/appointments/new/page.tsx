@@ -20,7 +20,7 @@ import { bookingRateSnapshot } from "@/lib/pricing-tiers";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "New appointment" };
+export const metadata = { title: "New Appointment" };
 
 interface PageProps {
   searchParams: { customerId?: string; petId?: string };
@@ -247,7 +247,7 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
               name="scheduledAt"
               type="datetime-local"
               defaultValue={defaultDtLocal}
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
             />
             <p className="text-xs text-stone-400 mt-1">
               Clear it to stamp the time the appointment is saved — for someone already at the
@@ -297,7 +297,7 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
               name="visitNotes"
               rows={3}
               placeholder="Any special instructions for this visit…"
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 resize-none"
             />
           </div>
 
@@ -305,7 +305,7 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
           <div className="flex items-center gap-3 pt-2">
             <button
               type="submit"
-              className="bg-amber-700 hover:bg-amber-800 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+              className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
             >
               Create Appointment
             </button>

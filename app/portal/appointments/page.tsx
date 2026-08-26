@@ -54,7 +54,7 @@ export default async function PortalAppointmentsPage() {
         </div>
         <Link
           href="/portal/appointments/new"
-          className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+          className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
         >
           + Book Appointment
         </Link>

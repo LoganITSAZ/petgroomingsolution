@@ -113,7 +113,7 @@ export default function TagPicker({
           type: "button",
           "data-role": "remove",
           class:
-            "text-stone-400 hover:text-red-600 leading-none px-1 rounded-full focus:outline-none focus:ring-2 focus:ring-amber-400",
+            "text-stone-400 hover:text-red-600 leading-none px-1 rounded-full ",
           "aria-label": `Remove ${option.label} ${noun}`,
           text: "×",
         })

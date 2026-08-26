@@ -5,7 +5,7 @@ import { DiscountKind, type PricingTier } from "@prisma/client";
 import { centsToInput } from "@/lib/pricing";
 
 const inputClass =
-  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400";
+  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm ";
 
 /**
  * A rate is either a percentage or a fixed sum, never both, so only the field

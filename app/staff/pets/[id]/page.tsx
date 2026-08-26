@@ -184,7 +184,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
           </div>
           <Link
             href={`/staff/appointments/new?petId=${pet.id}&customerId=${pet.customer.id}`}
-            className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
           >
             + New Appointment
           </Link>
@@ -200,7 +200,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
       {/* Two-column info grid */}
       <PageSection bodyClassName="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Owner card */}
-        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <div className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">Owner</h2>
           <p className="font-bold text-stone-900">
             {pet.customer.firstName} {pet.customer.lastName}
@@ -226,7 +226,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
         </div>
 
         {/* Health flags */}
-        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <div className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
             Health Flags
           </h2>
@@ -247,7 +247,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
         </div>
 
         {/* Grooming notes */}
-        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <div className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
             Grooming Notes
           </h2>
@@ -259,7 +259,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
         </div>
 
         {/* Temperament notes */}
-        <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <div className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
             Temperament Notes
           </h2>
@@ -274,7 +274,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
       {/* Visit event log */}
       <PageSection title="Visit Events">
         {visitEvents.length === 0 ? (
-          <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4 text-center text-stone-400 text-sm">
+          <div className="border border-stone-200 rounded-lg bg-well p-4 text-center text-stone-400 text-sm">
             No visit events recorded.
           </div>
         ) : (
@@ -314,14 +314,14 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
       {/* Appointment history */}
       <PageSection title="Appointment History">
         {pet.appointments.length === 0 ? (
-          <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4 text-center text-stone-400 text-sm">
+          <div className="border border-stone-200 rounded-lg bg-well p-4 text-center text-stone-400 text-sm">
             No appointments yet.
           </div>
         ) : (
           <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-stone-50 text-stone-500 text-xs uppercase tracking-widest">
+                <thead className="bg-well text-stone-500 text-xs uppercase tracking-widest">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-left">Date</th>
                     <th scope="col" className="px-3 py-2 text-left">Service</th>
@@ -332,7 +332,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
                 </thead>
                 <tbody className="divide-y divide-stone-100">
                   {pet.appointments.map((appt) => (
-                    <tr key={appt.id} className="hover:bg-stone-50 transition-colors">
+                    <tr key={appt.id} className="hover:bg-well transition-colors">
                       <td className="px-3 py-2 text-stone-600 whitespace-nowrap">
                         {new Date(appt.scheduledAt).toLocaleDateString("en-US", {
                           month: "short",

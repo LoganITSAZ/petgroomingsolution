@@ -1,7 +1,8 @@
 import Link from "next/link";
 import MobileMenu from "@/components/MobileMenu";
 import { getConfig } from "@/lib/config";
-import { resolveTheme, themeStyle } from "@/lib/themes";
+import PublicThemeToggle, { NO_FLASH_SCRIPT } from "@/components/PublicThemeToggle";
+import { resolveTheme, themeCss } from "@/lib/themes";
 import { SHOP_TIMEZONE } from "@/lib/utils";
 
 // SystemConfig is edited at runtime from /admin, so these pages must not be
@@ -66,7 +67,42 @@ export default async function PublicLayout({ children }: { children: React.React
   const hours = summariseHours((config.businessHours as Hours) ?? {});
 
   return (
-    <div style={themeStyle(theme.tokens)} className="public-shell min-h-screen flex flex-col text-ink">
+    <div id="public-root" className="public-shell min-h-screen flex flex-col text-ink">
+      {/* Both halves of the theme. An element has one style attribute, so the
+          dark set cannot ride along inline — see themeCss(). */}
+      <style dangerouslySetInnerHTML={{ __html: themeCss(theme.tokens) }} />
+      <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
+
+      {/*
+        The refraction half of the glass. feTurbulence generates a slow fractal
+        field and feDisplacementMap bends the backdrop by it, so the background
+        shifts where a panel's edge crosses it. The three passes run the same
+        field at falling strengths and keep one colour channel each — that
+        split is the chromatic fringe real glass throws at its rim. Referenced
+        from .glass-panel in globals.css; browsers without displacement on a
+        backdrop simply ignore the url() and keep the blur.
+      */}
+      <svg aria-hidden="true" focusable="false" className="pointer-events-none absolute h-0 w-0">
+        <defs>
+          <filter id="liquid-glass" x="-15%" y="-15%" width="130%" height="130%" colorInterpolationFilters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency="0.007 0.011" numOctaves={2} seed={7} result="field" />
+            <feDisplacementMap in="SourceGraphic" in2="field" scale={26} xChannelSelector="R" yChannelSelector="G" result="red" />
+            <feDisplacementMap in="SourceGraphic" in2="field" scale={18} xChannelSelector="R" yChannelSelector="G" result="green" />
+            <feDisplacementMap in="SourceGraphic" in2="field" scale={10} xChannelSelector="R" yChannelSelector="G" result="blue" />
+            <feColorMatrix in="red" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="redOnly" />
+            <feColorMatrix in="green" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="greenOnly" />
+            <feColorMatrix in="blue" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blueOnly" />
+            <feBlend in="redOnly" in2="greenOnly" mode="screen" result="rg" />
+            <feBlend in="rg" in2="blueOnly" mode="screen" />
+          </filter>
+
+          <filter id="liquid-glass-subtle" x="-15%" y="-15%" width="130%" height="130%" colorInterpolationFilters="sRGB">
+            <feTurbulence type="fractalNoise" baseFrequency="0.009 0.013" numOctaves={2} seed={3} result="field" />
+            <feDisplacementMap in="SourceGraphic" in2="field" scale={12} xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+        </defs>
+      </svg>
+
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
@@ -101,7 +137,9 @@ export default async function PublicLayout({ children }: { children: React.React
                 Book Now
               </Link>
             )}
+            <PublicThemeToggle className="ml-1" />
           </nav>
+          <PublicThemeToggle className="md:hidden mr-1 ml-auto" />
           <MobileMenu
             className="md:hidden"
             label="Open main navigation"

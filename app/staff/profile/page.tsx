@@ -2,14 +2,15 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
-import { ThemePreference } from "@prisma/client";
 import { PageShell, PageSection } from "@/components/ui";
 import PhotoUpload from "@/components/PhotoUpload";
+import ThemeSwitch from "@/components/ThemeSwitch";
+import { readTheme } from "@/lib/theme-preference";
 import { deletePhotoIfUnused, photoUrl, storePhoto } from "@/lib/photos";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "My profile" };
+export const metadata = { title: "My Profile" };
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function StaffProfilePage({
       where: { id: current.user.id },
       data: {
         name,
-        themePreference: themePreference === ThemePreference.DARK ? ThemePreference.DARK : ThemePreference.LIGHT,
+        themePreference: readTheme(themePreference),
       },
     });
     redirect("/staff/profile?saved=1");
@@ -86,7 +87,7 @@ export default async function StaffProfilePage({
 
   return (
     <PageShell
-      title="Your profile"
+      title="My Profile"
       subtitle="Manage your account details and workspace appearance."
       className="max-w-2xl flex-none"
     >
@@ -106,14 +107,14 @@ export default async function StaffProfilePage({
             <span className="block text-sm font-semibold text-stone-700 mb-1">Email</span>
             <p className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm text-stone-500">{staff.email}</p>
           </div>
-          <div>
-            <label htmlFor="themePreference" className="block text-sm font-semibold text-stone-700 mb-1">Theme</label>
-            <select id="themePreference" name="themePreference" defaultValue={staff.themePreference} className="border border-stone-300 rounded-lg px-3 py-2 text-sm">
-              <option value={ThemePreference.LIGHT}>Light</option>
-              <option value={ThemePreference.DARK}>Dark</option>
-            </select>
-          </div>
           <button className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold">Save profile</button>
+        </form>
+
+        {/* Its own form, so flipping the switch does not submit — or fail
+            validation on — the name field beside it. */}
+        <form action={updateProfile} className="mt-4 border-t border-stone-100 pt-4">
+          <input type="hidden" name="name" value={staff.name} />
+          <ThemeSwitch value={staff.themePreference} />
         </form>
       </PageSection>
 

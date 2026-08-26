@@ -46,7 +46,7 @@ export default async function PortalPetsPage() {
         </div>
         <Link
           href="/portal/pets/new"
-          className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+          className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
         >
           + Add a Pet
         </Link>
@@ -59,7 +59,7 @@ export default async function PortalPetsPage() {
           <p className="text-stone-500 mb-3">You haven&apos;t added any pets yet.</p>
           <Link
             href="/portal/pets/new"
-            className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
           >
             Add your first pet →
           </Link>

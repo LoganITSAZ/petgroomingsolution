@@ -61,13 +61,21 @@ export async function createCustomer(formData: FormData): Promise<void> {
       phone: field("phone") || null,
       address: field("address") || null,
       preferredStaffId: field("preferredStaffId") || null,
-      altContactName: field("altContactName") || null,
-      altContactPhone: field("altContactPhone") || null,
-      altContactEmail: field("altContactEmail") || null,
       photoId: customerPhoto && "id" in customerPhoto ? customerPhoto.id : null,
       // No password means no portal sign-in: store an unusable random hash
       // rather than something guessable.
       passwordHash: await bcrypt.hash(password || randomBytes(32).toString("hex"), 12),
+      ...(field("altContactName")
+        ? {
+            alternateContacts: {
+              create: {
+                name: field("altContactName"),
+                phone: field("altContactPhone") || null,
+                email: field("altContactEmail").toLowerCase() || null,
+              },
+            },
+          }
+        : {}),
       ...(petName
         ? {
             pets: {
@@ -165,29 +173,52 @@ export async function setPetPhoto(formData: FormData): Promise<void> {
   redirect(`/staff/pets/${petId}?photo=1`);
 }
 
-/** The person the owner has approved to drop off or collect their pet. */
-export async function setAlternateContact(formData: FormData): Promise<void> {
+/**
+ * Add or edit one of the people approved to drop off or collect.
+ *
+ * One action for both, same as `savePet`: an `alternateId` means editing.
+ */
+export async function saveAlternateContact(formData: FormData): Promise<void> {
   await requireStaff();
 
-  const customerId = (formData.get("customerId") as string | null) ?? "";
   const field = (name: string) => ((formData.get(name) as string | null) ?? "").trim();
+  const customerId = field("customerId");
+  const alternateId = field("alternateId");
+  const name = field("name");
 
-  const email = field("altContactEmail").toLowerCase();
+  if (!customerId) redirect("/staff/customers?error=not_found");
+  if (!name) redirect(`/staff/customers/${customerId}?error=alt_name`);
+
+  const email = field("email").toLowerCase();
   if (email && !email.includes("@")) {
     redirect(`/staff/customers/${customerId}?error=alt_email`);
   }
 
-  await prisma.customer.update({
-    where: { id: customerId },
-    data: {
-      altContactName: field("altContactName") || null,
-      altContactPhone: field("altContactPhone") || null,
-      altContactEmail: email || null,
-    },
-  });
+  const data = { name, phone: field("phone") || null, email: email || null };
+
+  if (alternateId) {
+    // Scoped to the owner so a stray id cannot edit someone else's list.
+    await prisma.alternateContact.updateMany({ where: { id: alternateId, customerId }, data });
+  } else {
+    await prisma.alternateContact.create({ data: { ...data, customerId } });
+  }
 
   revalidatePath(`/staff/customers/${customerId}`);
   redirect(`/staff/customers/${customerId}?alt=1`);
+}
+
+/** Withdraw approval from one person. */
+export async function removeAlternateContact(formData: FormData): Promise<void> {
+  await requireStaff();
+
+  const customerId = ((formData.get("customerId") as string | null) ?? "").trim();
+  const alternateId = ((formData.get("alternateId") as string | null) ?? "").trim();
+  if (!customerId || !alternateId) redirect("/staff/customers?error=not_found");
+
+  await prisma.alternateContact.deleteMany({ where: { id: alternateId, customerId } });
+
+  revalidatePath(`/staff/customers/${customerId}`);
+  redirect(`/staff/customers/${customerId}?alt_removed=1`);
 }
 
 /** Where a customer is. Free text — the map is a lookup on top, not a format. */
@@ -240,15 +271,100 @@ export async function redeemCustomerReward(formData: FormData): Promise<void> {
 
   const customerId = ((formData.get("customerId") as string | null) ?? "").trim();
   const note = ((formData.get("note") as string | null) ?? "").trim();
+  // Optional: applying the reward to an open visit takes it off that bill
+  // instead of handing it over at the counter.
+  const appointmentId = ((formData.get("appointmentId") as string | null) ?? "").trim();
   if (!customerId) redirect("/staff/customers?error=not_found");
 
-  const result = await redeemReward({ customerId, staffId, note });
+  const result = await redeemReward({
+    customerId,
+    staffId,
+    note,
+    appointmentId: appointmentId || null,
+  });
 
   revalidatePath(`/staff/customers/${customerId}`);
   revalidatePath("/portal");
+  // Applying a reward to a bill is done from the visit, so that is where the
+  // person doing it is looking when it lands.
+  if (appointmentId) {
+    revalidatePath(`/staff/appointments/${appointmentId}`);
+    redirect(
+      result.ok
+        ? `/staff/appointments/${appointmentId}?redeemed=1`
+        : `/staff/appointments/${appointmentId}?error=redeem_failed`
+    );
+  }
   redirect(
     result.ok
       ? `/staff/customers/${customerId}?redeemed=1`
       : `/staff/customers/${customerId}?error=redeem_failed`
   );
+}
+
+/**
+ * Add or edit a pet from the owner's profile.
+ *
+ * One action for both: the modal posts a `petId` when it is editing and
+ * nothing when it is adding, which is the only difference between the two.
+ */
+export async function savePet(formData: FormData): Promise<void> {
+  await requireStaff();
+
+  const field = (name: string) => ((formData.get(name) as string | null) ?? "").trim();
+  const customerId = field("customerId");
+  const petId = field("petId");
+  const name = field("name");
+
+  if (!customerId) redirect("/staff/customers?error=not_found");
+  if (!name) redirect(`/staff/customers/${customerId}?error=pet_name`);
+
+  const weightRaw = field("weightLbs");
+  const weightLbs = weightRaw ? Number(weightRaw) : null;
+  if (weightLbs != null && (!Number.isFinite(weightLbs) || weightLbs <= 0)) {
+    redirect(`/staff/customers/${customerId}?error=bad_weight`);
+  }
+
+  const speciesRaw = field("species");
+  const coatRaw = field("coatType");
+  const data = {
+    name,
+    species: Object.values(Species).includes(speciesRaw as Species)
+      ? (speciesRaw as Species)
+      : Species.DOG,
+    breed: field("breed") || null,
+    weightLbs,
+    coatType: Object.values(CoatType).includes(coatRaw as CoatType) ? (coatRaw as CoatType) : null,
+    groomingNotes: field("groomingNotes") || null,
+    temperamentNotes: field("temperamentNotes") || null,
+  };
+
+  if (petId) {
+    // Scoped to the owner so a stray id cannot edit somebody else's pet.
+    await prisma.pet.updateMany({ where: { id: petId, customerId }, data });
+  } else {
+    await prisma.pet.create({ data: { ...data, customerId } });
+  }
+
+  revalidatePath(`/staff/customers/${customerId}`);
+  redirect(`/staff/customers/${customerId}?pet=1`);
+}
+
+/**
+ * Take a pet off the profile.
+ *
+ * Deactivated, never deleted: its visits are the shop's history and the pet
+ * may come back. Every list already filters on `isActive`.
+ */
+export async function removePet(formData: FormData): Promise<void> {
+  await requireStaff();
+
+  const customerId = ((formData.get("customerId") as string | null) ?? "").trim();
+  const petId = ((formData.get("petId") as string | null) ?? "").trim();
+  if (!customerId || !petId) redirect("/staff/customers?error=not_found");
+
+  await prisma.pet.updateMany({ where: { id: petId, customerId }, data: { isActive: false } });
+
+  revalidatePath(`/staff/customers/${customerId}`);
+  redirect(`/staff/customers/${customerId}?pet_removed=1`);
 }

@@ -158,7 +158,7 @@ export default async function StaffSchedulePage({ searchParams }: PageProps) {
             <caption className="sr-only">
               Shifts for the week of {formatShopDate(weekStart, { month: "long", day: "numeric" })}
             </caption>
-            <thead className="bg-stone-50 text-stone-500 text-[10px] uppercase tracking-widest">
+            <thead className="bg-well text-stone-500 text-[10px] uppercase tracking-widest">
               <tr>
                 <th scope="col" className="px-3 py-2 text-left sticky left-0 bg-stone-50">
                   Staff

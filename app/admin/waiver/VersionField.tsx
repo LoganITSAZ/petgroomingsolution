@@ -3,9 +3,16 @@
 import { useState } from "react";
 
 /**
- * Version is derived by default — editing the text publishes the next number
- * automatically. Manual entry exists so an admin can put an exact number back,
- * which is what restoring an earlier document needs.
+ * Version, in one row.
+ *
+ * It used to be two stacked radios with a paragraph each and a permanently
+ * visible input that was disabled most of the time — three controls and four
+ * lines of prose for a decision that is almost always "leave it alone".
+ *
+ * Now the choice is a segmented control and only the consequence of the
+ * current choice is shown: automatic says which number saving will publish,
+ * manual gives you the box to type one. The radios are still radios, so the
+ * form posts the same `versionMode` and arrow keys still work.
  */
 export default function VersionField({
   currentVersion,
@@ -16,55 +23,62 @@ export default function VersionField({
 }) {
   const [manual, setManual] = useState(false);
 
+  const segment = (value: boolean, label: string) => (
+    <label
+      className={[
+        "px-3 py-1 text-sm rounded-md cursor-pointer transition-colors",
+        manual === value
+          ? "bg-white text-stone-900 font-semibold shadow-sm"
+          : "text-stone-600 hover:text-stone-900",
+      ].join(" ")}
+    >
+      <input
+        type="radio"
+        name="versionMode"
+        value={value ? "manual" : "auto"}
+        checked={manual === value}
+        onChange={() => setManual(value)}
+        className="sr-only"
+      />
+      {label}
+    </label>
+  );
+
   return (
-    <div className="grid grid-cols-3 gap-3 items-start">
-      <span className="text-sm font-medium text-stone-700 pt-2">Waiver Version</span>
-      <div className="col-span-2 space-y-3">
-        <label className="flex items-start gap-2 cursor-pointer">
-          <input
-            type="radio"
-            name="versionMode"
-            value="auto"
-            checked={!manual}
-            onChange={() => setManual(false)}
-            className="mt-1 accent-amber-700"
-          />
-          <span className="text-sm text-stone-700">
-            Version automatically
-            <span className="block text-xs text-stone-400">
-              Currently {currentVersion}. Saving changed text publishes {nextVersion}; saving
-              without touching the text keeps {currentVersion}.
-            </span>
-          </span>
-        </label>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <span className="text-sm font-medium text-stone-700">Version</span>
 
-        <label className="flex items-start gap-2 cursor-pointer">
-          <input
-            type="radio"
-            name="versionMode"
-            value="manual"
-            checked={manual}
-            onChange={() => setManual(true)}
-            className="mt-1 accent-amber-700"
-          />
-          <span className="text-sm text-stone-700">
-            Set the version myself
-            <span className="block text-xs text-stone-400">
-              For restoring an earlier document under its original number.
-            </span>
-          </span>
-        </label>
+      <div
+        role="radiogroup"
+        aria-label="How the version is set"
+        className="inline-flex items-center gap-0.5 bg-stone-100 rounded-lg p-0.5"
+      >
+        {segment(false, "Automatic")}
+        {segment(true, "Set manually")}
+      </div>
 
+      {manual ? (
         <input
           type="text"
           name="waiverVersion"
           aria-label="Waiver version"
           defaultValue={currentVersion}
-          disabled={!manual}
           placeholder="1.0"
-          className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:bg-stone-50 disabled:text-stone-400"
+          className="w-28 border border-stone-200 rounded-lg px-2 py-1 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
-      </div>
+      ) : (
+        <span className="text-sm text-stone-500">
+          Now <span className="font-semibold text-stone-700 tabular-nums">{currentVersion}</span> ·
+          changed text publishes{" "}
+          <span className="font-semibold text-stone-700 tabular-nums">{nextVersion}</span>
+        </span>
+      )}
+
+      <span className="text-xs text-stone-400 basis-full">
+        {manual
+          ? "Restoring an earlier document under its original number is the reason this exists."
+          : "Saving without touching the text keeps the current number, so nobody re-accepts for nothing."}
+      </span>
     </div>
   );
 }

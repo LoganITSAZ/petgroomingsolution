@@ -14,17 +14,22 @@ import { auth } from "@/lib/auth";
 import { PRESENCE_CLASS, PRESENCE_LABEL, floorRoster } from "@/lib/presence";
 import { describeShifts, isOnShiftNow, scheduleGaps, todaysShifts, weekDays } from "@/lib/schedule";
 import StaffProfileDialog, { type StaffProfile } from "@/components/StaffProfileDialog";
-import { currentStaffIsAdmin } from "@/lib/staff-roles";
+import { currentStaffCanManage, currentStaffIsAdmin } from "@/lib/staff-roles";
 import { LEADERBOARD_WINDOW_DAYS, getLeaderboard } from "@/lib/analytics";
 import { formatCents } from "@/lib/pricing";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Team" };
+export const metadata = { title: "Staff" };
 
 /**
- * Floor view of the team: who is on which pet, and how their day is going.
- * Hiring, deactivating and password resets stay in the admin panel.
+ * Floor view of the staff: who is on which pet, and how their day is going.
+ * Hiring, deactivating and password resets stay in the admin panel, which is
+ * why that screen is "Manage Staff" and this one is just "Staff".
+ *
+ * The route is still /staff/team. A URL is not verbiage the shop reads, and
+ * /staff/staff stutters — renaming the segment would break saved links on the
+ * groomers' phones to no visible end.
  */
 
 const ON_FLOOR: AppointmentStatus[] = [
@@ -48,6 +53,7 @@ const statusColor: Record<string, string> = {
 export default async function StaffTeamPage() {
   const session = await auth();
   const isAdmin = session?.user ? await currentStaffIsAdmin() : false;
+  const canSeeAnalytics = session?.user ? await currentStaffCanManage() : false;
   const { start, end } = shopDayRange();
 
   const days = weekDays();
@@ -153,7 +159,7 @@ export default async function StaffTeamPage() {
 
   return (
     <PageShell
-      title="Team"
+      title="Staff"
       subtitle={
         <>
           {working} of {active.length} on the floor working a pet
@@ -272,7 +278,7 @@ export default async function StaffTeamPage() {
             };
 
             return (
-              <StaffProfileDialog key={member.id} profile={profile}>
+              <StaffProfileDialog key={member.id} profile={profile} canSeeAnalytics={canSeeAnalytics}>
                 <span className="flex items-center justify-between gap-3">
                   {/* Who */}
                   <span className="w-44 shrink-0 min-w-0">

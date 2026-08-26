@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import {
   formatShopDate,
+  formatStationRole,
   formatStatus,
   shopDayRange,
 } from "@/lib/utils";
@@ -15,7 +16,8 @@ import { describeShifts, isOnShiftNow, scheduleGaps, todaysShifts } from "@/lib/
 import { applySuggestion } from "./presence-actions";
 import { pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
-import { PageShell, PageSection } from "@/components/ui";
+import { PageShell, PageSection, Panel, StatStrip } from "@/components/ui";
+import { currentStaffCanManage } from "@/lib/staff-roles";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -51,11 +53,6 @@ const statusColor: Record<string, string> = {
   PICKED_UP: "bg-stone-100 text-stone-400",
 };
 
-const ROLE_HEADING: Record<StationRole, string> = {
-  GROOMER: "Groomer",
-  BATHING: "Bathing",
-  KENNEL: "Kennels",
-};
 
 function minutesSince(from: Date | null): number | null {
   return from ? Math.max(0, Math.round((Date.now() - from.getTime()) / 60000)) : null;
@@ -84,6 +81,7 @@ export default async function StaffDashboard({
     alerts,
     shifts,
     gaps,
+    canManageShop,
   ] = await Promise.all([
     prisma.appointment.findMany({
       where: { scheduledAt: { gte: start, lt: end } },
@@ -144,6 +142,7 @@ export default async function StaffDashboard({
     serviceAlerts(),
     todaysShifts(),
     scheduleGaps(),
+    currentStaffCanManage(),
   ]);
 
   // ── Today at a glance ─────────────────────────────────────────
@@ -177,7 +176,7 @@ export default async function StaffDashboard({
   const segment = (role: StationRole) => {
     const list = workStations.filter((s) => s.role === role);
     return {
-      label: ROLE_HEADING[role],
+      label: formatStationRole(role),
       total: list.reduce((n, station) => n + stationCapacity(station), 0),
       used: list.reduce((n, station) => n + (occupantsByStation.get(station.id)?.length ?? 0), 0),
     };
@@ -186,6 +185,7 @@ export default async function StaffDashboard({
   const capacitySegments = [
     segment(StationRole.GROOMER),
     segment(StationRole.BATHING),
+    segment(StationRole.DRYING),
     { label: "Kennels", total: kennelTotal, used: kennelOccupied },
   ].filter((s) => s.total > 0);
 
@@ -248,155 +248,134 @@ export default async function StaffDashboard({
   return (
     <PageShell
       title={formatShopDate(now, { weekday: "long", month: "long", day: "numeric" })}
-      subtitle={`${active.length} on the books`}
+      actions={
+        <Link
+          href="/staff/appointments"
+          className="text-sm font-bold px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors"
+        >
+          Full schedule
+        </Link>
+      }
     >
-      {/* The day at a glance: what is booked, what needs chasing, how full */}
-      <PageSection tone="muted">
-        <div className="flex items-start justify-between gap-6 flex-wrap">
-          <div className="flex-1 min-w-[20rem]">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-sm text-stone-500">
-              <span>{active.length} on the books</span>
-              {counts.map(({ label, value }) => (
-                <span key={label}>
-                  <span className="font-bold text-stone-800">{value}</span> {label}
-                </span>
-              ))}
-              {cancelled.length > 0 && (
-                <span className="text-stone-400">{cancelled.length} cancelled / no-show</span>
-              )}
-              <Link href="/staff/appointments" className="text-stone-400 hover:text-stone-700 underline">
-                full schedule
-              </Link>
-            </div>
+      {/*
+        The day, in four bands that each answer one question: what is on,
+        what is wrong, how full, who is here. It used to be one flex row of
+        four panels with min-widths totalling wider than the screen, so the
+        order they wrapped in changed with the window and nothing lined up.
+      */}
+      <StatStrip
+        stats={[
+          { label: "On the books", value: active.length },
+          ...counts.map(({ label, value }) => ({ label, value })),
+          ...(cancelled.length > 0
+            ? [{ label: "Cancelled / no-show", value: cancelled.length }]
+            : []),
+        ]}
+      />
 
-            {/*
-              Today's counts read against the days behind them: the same
-              arithmetic /staff/analytics runs, over three days, so the floor
-              can tell an odd morning from a pattern without leaving the page.
-            */}
-            <div className="mt-2 pt-2 border-t border-stone-200/70">
-              <div className="flex items-baseline justify-between gap-3">
-                <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">
-                  Insights ({SNAPSHOT_DAYS} Day)
-                </h2>
-                <Link
-                  href="/staff/analytics"
-                  className="text-xs text-stone-400 hover:text-stone-700 underline"
-                >
-                  full analytics
-                </Link>
-              </div>
-              <dl className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {snapshotFigures.map(({ label, value, hint }) => (
-                  <div
-                    key={label}
-                    className="border border-stone-200 rounded-lg bg-white px-3 py-2"
-                  >
-                    <dd className="text-lg font-black text-stone-900 leading-tight">{value}</dd>
-                    <dt className="text-xs text-stone-600">{label}</dt>
-                    <p className="text-[11px] text-stone-400">{hint}</p>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          </div>
-
-          {/* Service-level problems, beside the capacity they usually cause */}
-          <div className="flex-1 min-w-[16rem] max-w-md">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">
-                Alerts
+      <PageSection padded={false}>
+        <div className="grid gap-3 px-3 py-3 lg:grid-cols-3">
+          {/* What needs chasing, given the most room: it is the only band
+              here that asks someone to do something. */}
+          <Panel
+            title={
+              <span className="flex items-baseline justify-between gap-3">
+                <span>Needs attention</span>
+                {alerts.length > 0 && (
+                  <span className="font-medium normal-case tracking-normal text-stone-500">
+                    {alerts.filter((alert) => alert.severity === "critical").length} critical
+                  </span>
+                )}
               </span>
-              {alerts.length > 0 && (
-                <span className="text-xs text-stone-400">
-                  {alerts.filter((alert) => alert.severity === "critical").length} critical
-                </span>
-              )}
-            </div>
+            }
+            className="lg:col-span-2"
+          >
             {alerts.length === 0 ? (
-              <p className="text-sm text-stone-400 mt-1.5">
-                Nothing needs chasing — no late pickups, arrivals or overruns.
+              <p className="text-sm text-stone-500">
+                Nothing to chase — no late pickups, no unclaimed arrivals, nothing overrunning.
               </p>
             ) : (
-              <ul className="mt-1.5 space-y-1">
-                {alerts.slice(0, 4).map((alert) => (
+              <ul className="space-y-1">
+                {alerts.slice(0, 5).map((alert) => (
                   <li key={alert.id}>
                     <Link
                       href={alert.href}
-                      className="flex items-baseline gap-2 text-sm hover:opacity-80"
+                      className="flex items-baseline gap-2 text-sm rounded-md -mx-1 px-1 py-0.5 hover:bg-white transition-colors"
                     >
                       <span
                         className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${ALERT_DOT[alert.severity]}`}
                       />
                       <span className="min-w-0">
-                        <span className="font-semibold text-stone-800">{alert.title}</span>
-                        <span className="block text-xs text-stone-500 truncate">
-                          {alert.detail}
-                        </span>
+                        <span className="font-bold text-stone-800">{alert.title}</span>{" "}
+                        <span className="text-stone-500">{alert.detail}</span>
                       </span>
                     </Link>
                   </li>
                 ))}
-                {alerts.length > 4 && (
-                  <li className="text-xs text-stone-400 pl-3.5">
-                    +{alerts.length - 4} more
-                  </li>
+                {alerts.length > 5 && (
+                  <li className="text-xs text-stone-500 pl-3.5">+{alerts.length - 5} more</li>
                 )}
               </ul>
             )}
-          </div>
+          </Panel>
 
-          <div className="w-56">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">
-                Capacity
+          <Panel
+            title={
+              <span className="flex items-baseline justify-between gap-3">
+                <span>Capacity</span>
+                <span className={`text-sm font-black normal-case tracking-normal ${capacityState.tone}`}>
+                  {capacityState.label}
+                </span>
               </span>
-              <span className={`text-lg font-black leading-none ${capacityState.tone}`}>
-                {capacityState.label}
-              </span>
-            </div>
-            <div className="h-1.5 rounded-full bg-stone-200 overflow-hidden mt-2">
+            }
+          >
+            <div className="h-1.5 rounded-full bg-stone-200 overflow-hidden">
               <div
                 className={`h-full ${capacityState.bar}`}
                 style={{ width: `${Math.min(capacityPercent, 100)}%` }}
               />
             </div>
-            <div className="mt-1 space-y-0.5 text-xs text-stone-500">
+            <div className="mt-1.5 space-y-0.5 text-xs text-stone-600">
               {capacitySegments.map(({ label, used, total }) => (
                 <span
                   key={label}
                   className={`flex items-center justify-between gap-3 ${
-                    used >= total ? "text-red-600 font-semibold" : ""
+                    used >= total ? "text-red-600 font-bold" : ""
                   }`}
                 >
                   <span>{label}</span>
-                  <span>{used}/{total}</span>
+                  <span className="tabular-nums">
+                    {used}/{total}
+                  </span>
                 </span>
               ))}
               <span className="flex items-center justify-between gap-3">
                 <span>Groomers on a pet</span>
-                <span>{groomersOnAPet}/{groomers.length}</span>
+                <span className="tabular-nums">
+                  {groomersOnAPet}/{groomers.length}
+                </span>
               </span>
             </div>
-          </div>
+          </Panel>
+        </div>
 
-          <div className="w-56">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">
-                Floor
-              </span>
-              <Link href="/staff/team" className="text-xs text-stone-400 hover:text-stone-600 underline">
-                Team
-              </Link>
-            </div>
-            <p className="text-xs text-stone-500 mt-1">
+        {/* Who is here. Chips wrap on their own, so this band gets the full
+            width rather than a fixed column that squeezed them to two abreast. */}
+        <div className="border-t border-stone-100 px-3 py-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">Floor</h2>
+            <span className="text-xs text-stone-500">
               {roster.filter((member) => member.state !== "OFF_SHIFT").length} signed in ·{" "}
-              {roster.filter((member) => isOnShiftNow(shifts.get(member.id))).length} scheduled now
-            </p>
-            {roster.length === 0 ? (
-              <p className="text-xs text-stone-400 mt-1.5">No floor staff on file.</p>
-            ) : (
-              <div className="flex flex-wrap gap-1 mt-1.5">
+              {roster.filter((member) => isOnShiftNow(shifts.get(member.id))).length} scheduled now ·{" "}
+              <Link href="/staff/team" className="hover:text-stone-800 underline">
+                staff
+              </Link>
+            </span>
+          </div>
+          {roster.length === 0 ? (
+            <p className="text-sm text-stone-500 mt-1.5">No floor staff on file.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1 mt-2">
               {roster.map((member) => {
                 const href = member.working
                   ? `/staff/appointments/${member.working.appointmentId}`
@@ -417,7 +396,7 @@ export default async function StaffDashboard({
                     ]
                       .filter(Boolean)
                       .join(" · ")}
-                    className={`inline-flex items-baseline gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition-opacity hover:opacity-80 ${PRESENCE_CLASS[member.state]}`}
+                    className={`inline-flex items-baseline gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold transition-opacity hover:opacity-80 ${PRESENCE_CLASS[member.state]}`}
                   >
                     <span>{member.name}</span>
                     <span className="font-normal opacity-70">
@@ -426,20 +405,46 @@ export default async function StaffDashboard({
                   </Link>
                 );
               })}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
+          {gaps.filter((gap) => gap.kind === "expected").length > 0 && (
+            <p className="mt-2 text-sm text-amber-700">
+              <span className="font-bold">Scheduled but not signed in:</span>{" "}
+              {gaps
+                .filter((gap) => gap.kind === "expected")
+                .map((gap) => gap.staffName)
+                .join(", ")}
+            </p>
+          )}
         </div>
 
-        {gaps.filter((gap) => gap.kind === "expected").length > 0 && (
-          <p className="mt-2 pt-2 border-t border-stone-100 text-sm text-amber-700">
-            <span className="font-semibold">Scheduled but not signed in:</span>{" "}
-            {gaps
-              .filter((gap) => gap.kind === "expected")
-              .map((gap) => gap.staffName)
-              .join(", ")}
-          </p>
-        )}
+        {/* The trend behind today's numbers, last. */}
+        <div className="border-t border-stone-100 px-3 py-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">
+              Last {SNAPSHOT_DAYS} days
+            </h2>
+            {canManageShop && (
+              <Link
+                href="/staff/analytics"
+                className="text-xs text-stone-500 hover:text-stone-800 underline"
+              >
+                full analytics
+              </Link>
+            )}
+          </div>
+          <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {snapshotFigures.map(({ label, value, hint }) => (
+              <div key={label} className="rounded-lg border border-stone-200 bg-well px-3 py-2">
+                <dd className="text-lg font-black text-stone-900 leading-tight tabular-nums">
+                  {value}
+                </dd>
+                <dt className="text-xs font-medium text-stone-700">{label}</dt>
+                <p className="text-[11px] text-stone-500">{hint}</p>
+              </div>
+            ))}
+          </dl>
+        </div>
       </PageSection>
 
       {searchParams.assigned === "1" && (
@@ -470,7 +475,7 @@ export default async function StaffDashboard({
           hint={`${blockers.readyStaff} ready · ${blockers.waitingPets} waiting · ${blockers.openStations} station${blockers.openStations === 1 ? "" : "s"} open`}
         >
           {suggestions.length === 0 ? (
-            <p className="text-sm text-stone-500 border border-stone-200 rounded-lg bg-stone-50/60 px-3 py-2">
+            <p className="text-sm text-stone-500 border border-stone-200 rounded-lg bg-well px-3 py-2">
               {blockers.blocked}
             </p>
           ) : (
@@ -563,14 +568,14 @@ export default async function StaffDashboard({
 
       {/* The board — one vertical column for each kind of station */}
       <PageSection grow scroll bodyClassName="grid gap-4 lg:grid-cols-3 items-start">
-        {[StationRole.GROOMER, StationRole.BATHING].map((role) => {
+        {[StationRole.GROOMER, StationRole.BATHING, StationRole.DRYING].map((role) => {
         const list = workStations.filter((s) => s.role === role);
         if (list.length === 0) return null;
 
         return (
           <section key={role}>
             <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-2">
-              {ROLE_HEADING[role]}{" "}
+              {formatStationRole(role)}{" "}
             <span className="text-stone-400">
               ({list.reduce((n, station) => n + (occupantsByStation.get(station.id)?.length ?? 0), 0)}
               /{list.reduce((n, station) => n + stationCapacity(station), 0)})
@@ -667,7 +672,7 @@ export default async function StaffDashboard({
         {kennelStations.length > 0 && (
           <section>
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-2">
-            {ROLE_HEADING.KENNEL}{" "}
+            {formatStationRole("KENNEL")}{" "}
             <span className="text-stone-400">
               ({kennelStations.length} unit{kennelStations.length !== 1 ? "s" : ""} ·{" "}
               {kennelOccupied}/{kennelTotal} in use

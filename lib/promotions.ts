@@ -3,17 +3,6 @@ import type { Promotion, Service } from "@prisma/client";
 
 export type PromotionWithService = Promotion & { service: Service };
 
-/**
- * Promotions are date-windowed: a promo is live when it is active and now
- * falls inside [startsAt, endsAt). Either bound may be open.
- */
-export function isLive(promotion: Promotion, now: Date = new Date()): boolean {
-  if (!promotion.isActive) return false;
-  if (promotion.startsAt && promotion.startsAt > now) return false;
-  if (promotion.endsAt && promotion.endsAt <= now) return false;
-  return true;
-}
-
 /** Live promotions for one audience, in display order. */
 export async function livePromotions(
   audience: "site" | "staff",

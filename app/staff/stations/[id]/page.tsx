@@ -21,6 +21,7 @@ import {
   formatServiceType,
   formatShopDate,
   formatShopTime,
+  formatStationRole,
   formatStatus,
   shopDayRange,
 } from "@/lib/utils";
@@ -31,11 +32,6 @@ import { currentStaffIsAdmin } from "@/lib/staff-roles";
 // app reads as the same document (WCAG 2.4.2).
 export const metadata = { title: "Station" };
 
-const ROLE_LABEL: Record<StationRole, string> = {
-  GROOMER: "Groomer",
-  BATHING: "Bathing",
-  KENNEL: "Kennel Unit",
-};
 
 const statusColor: Record<string, string> = {
   SCHEDULED: "bg-stone-100 text-stone-600",
@@ -102,8 +98,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                 firstName: true,
                 lastName: true,
                 phone: true,
-                altContactName: true,
-                altContactPhone: true,
+                alternateContacts: { select: { id: true, name: true }, orderBy: { createdAt: "asc" } },
               },
             },
             staff: { select: { name: true } },
@@ -141,7 +136,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
       className="max-w-5xl w-full"
       subtitle={
         <>
-          {ROLE_LABEL[station.role]}
+          {formatStationRole(station.role)}
           {!isKennel && ` · ${occupants.length}/${capacity} pets`}
           {station.allowedRoles.length > 0 &&
             ` · ${station.allowedRoles.map(formatRole).join(" or ")} only`}
@@ -274,7 +269,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                         name="appointmentId"
                         aria-label="Pet to place in this kennel"
                         defaultValue=""
-                        className="w-full border border-stone-200 rounded-lg px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        className="w-full border border-stone-200 rounded-lg px-2 py-1.5 text-xs bg-white"
                       >
                         <option value="">Select a pet…</option>
                         {canJoin.map((appt) => (
@@ -395,10 +390,11 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                                 {appt.customer.phone}
                               </a>
                             )}
-                            {appt.customer.altContactName && (
+                            {appt.customer.alternateContacts.length > 0 && (
                               <span className="text-stone-400">
                                 {" "}
-                                · also approved: {appt.customer.altContactName}
+                                · also approved:{" "}
+                                {appt.customer.alternateContacts.map((a) => a.name).join(", ")}
                               </span>
                             )}
                           </p>
@@ -542,7 +538,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
         ) : (
           <div className="border border-stone-200 rounded-lg overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-stone-50 text-stone-500 text-xs uppercase tracking-widest">
+              <thead className="bg-well text-stone-500 text-xs uppercase tracking-widest">
                 <tr>
                   <th scope="col" className="px-3 py-2 text-left">Time</th>
                   <th scope="col" className="px-3 py-2 text-left">Pet</th>

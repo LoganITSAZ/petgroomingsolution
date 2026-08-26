@@ -23,6 +23,13 @@ const FINISHED_STATUSES: AppointmentStatus[] = [
   AppointmentStatus.PICKED_UP,
 ];
 
+/** A visit that is done with: its bill is no longer open to a discount. */
+const SETTLED: AppointmentStatus[] = [
+  AppointmentStatus.PICKED_UP,
+  AppointmentStatus.CANCELLED,
+  AppointmentStatus.NO_SHOW,
+];
+
 /** A visit that ended this way was never served, so it never earned a punch. */
 const UNEARNS: AppointmentStatus[] = [
   AppointmentStatus.CANCELLED,
@@ -47,6 +54,10 @@ export interface RewardCard {
   toNext: number;
   /** What the customer gets, in the shop's words. */
   label: string;
+  /** What one reward takes off a bill, in cents. */
+  valueCents: number;
+  /** What every reward waiting is worth together, in cents. */
+  availableValueCents: number;
 }
 
 const OFF: RewardCard = {
@@ -59,16 +70,20 @@ const OFF: RewardCard = {
   progress: 0,
   toNext: 0,
   label: "",
+  valueCents: 0,
+  availableValueCents: 0,
 };
 
 function buildCard(
   punches: number,
   redeemed: number,
   perReward: number,
-  label: string
+  label: string,
+  valueCents: number
 ): RewardCard {
   // A mis-saved setting must not divide by zero or hand out a reward a visit.
   const per = Math.max(1, Math.floor(perReward));
+  const value = Math.max(0, Math.round(valueCents));
   const earned = Math.floor(punches / per);
   const available = Math.max(0, earned - redeemed);
 
@@ -83,7 +98,31 @@ function buildCard(
     progress: available > 0 ? per : punches % per,
     toNext: available > 0 ? 0 : per - (punches % per),
     label,
+    valueCents: value,
+    availableValueCents: available * value,
   };
+}
+
+/**
+ * What a reward takes off a bill.
+ *
+ * A punch card is counted in visits, but it is paid out in money — a visit
+ * carries several services and "a free nail trim" does not divide across
+ * them. The discount is a cash amount, and it can never exceed the bill: a
+ * reward is money off, not money back, so an $8 visit against a $10 reward
+ * settles at zero rather than owing the customer $2.
+ *
+ * Applied to what is left after any negotiated rate, because the rate is the
+ * price the customer was quoted and the reward comes off that price.
+ */
+export function rewardDiscountFor(
+  billCents: number,
+  valueCents: number,
+  rewards = 1
+): number {
+  const value = Math.max(0, Math.round(valueCents));
+  const count = Math.max(0, Math.floor(rewards));
+  return Math.min(Math.max(0, billCents), value * count);
 }
 
 /** One customer's card. Returns a disabled card when the feature is off. */
@@ -96,7 +135,13 @@ export async function rewardCard(customerId: string): Promise<RewardCard> {
     prisma.rewardRedemption.count({ where: { customerId } }),
   ]);
 
-  return buildCard(punches, redeemed, config.rewardVisitsPerReward, config.rewardLabel);
+  return buildCard(
+    punches,
+    redeemed,
+    config.rewardVisitsPerReward,
+    config.rewardLabel,
+    config.rewardValueCents
+  );
 }
 
 /**
@@ -137,7 +182,8 @@ export async function rewardCards(customerIds: string[]): Promise<Map<string, Re
         punchCount.get(id) ?? 0,
         redeemedCount.get(id) ?? 0,
         config.rewardVisitsPerReward,
-        config.rewardLabel
+        config.rewardLabel,
+        config.rewardValueCents
       )
     );
   }
@@ -180,27 +226,81 @@ export async function redeemReward({
   customerId,
   staffId,
   note,
+  appointmentId,
 }: {
   customerId: string;
   staffId?: string | null;
   note?: string | null;
-}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  /** Take it off this visit's bill. Omitted, it is handed over at the counter. */
+  appointmentId?: string | null;
+}): Promise<{ ok: true; discountCents: number } | { ok: false; reason: string }> {
   const config = await getConfig();
   if (!config.featureRewards) return { ok: false, reason: "Rewards are switched off." };
 
   const card = await rewardCard(customerId);
   if (card.available < 1) return { ok: false, reason: "This customer has no reward to redeem." };
 
-  await prisma.rewardRedemption.create({
-    data: {
-      customerId,
-      staffId: staffId ?? undefined,
-      label: config.rewardLabel,
-      note: note?.trim() || undefined,
-    },
+  // Applying it to a visit is the whole point of a cash reward, so the visit
+  // has to be this customer's and it has to still be open — repricing a
+  // visit the customer has already collected and paid for is not a discount,
+  // it is an edit to history.
+  let discountCents = 0;
+  let visitId: string | undefined;
+
+  if (appointmentId) {
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: {
+        id: true,
+        customerId: true,
+        status: true,
+        pricingDiscountCents: true,
+        rewardDiscountCents: true,
+        services: { select: { priceCents: true } },
+      },
+    });
+
+    if (!appointment || appointment.customerId !== customerId) {
+      return { ok: false, reason: "That visit does not belong to this customer." };
+    }
+    if (SETTLED.includes(appointment.status)) {
+      return { ok: false, reason: "That visit is already closed." };
+    }
+
+    const listCents = appointment.services.reduce((sum, line) => sum + (line.priceCents ?? 0), 0);
+    const afterRate = Math.max(
+      0,
+      listCents - (appointment.pricingDiscountCents ?? 0) - appointment.rewardDiscountCents
+    );
+    discountCents = rewardDiscountFor(afterRate, config.rewardValueCents);
+
+    if (discountCents === 0) {
+      return { ok: false, reason: "There is nothing left on that bill to discount." };
+    }
+    visitId = appointment.id;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.rewardRedemption.create({
+      data: {
+        customerId,
+        staffId: staffId ?? undefined,
+        label: config.rewardLabel,
+        valueCents: discountCents,
+        appointmentId: visitId,
+        note: note?.trim() || undefined,
+      },
+    });
+
+    if (visitId) {
+      await tx.appointment.update({
+        where: { id: visitId },
+        data: { rewardDiscountCents: { increment: discountCents } },
+      });
+    }
   });
 
-  return { ok: true };
+  return { ok: true, discountCents };
 }
 
 /** The card's history, newest first, for the customer's page. */

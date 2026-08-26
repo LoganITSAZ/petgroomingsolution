@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Admin" };
+export const metadata = { title: "System Status" };
 
 /**
  * Admin overview = health of the application and the server it runs on.
@@ -48,9 +48,23 @@ function describeDatabaseUrl(raw: string | undefined): string {
   }
 }
 
+/**
+ * The dot is the only thing separating a healthy row from a failing one, and
+ * colour alone is not a signal (WCAG 1.4.1) — a screen reader gets nothing and
+ * red/green is the commonest form of colour blindness. The dot carries the
+ * state as text for assistive tech; sighted users read it from the dot.
+ */
 function StatusDot({ ok, warn = false }: { ok: boolean; warn?: boolean }) {
   const color = ok ? (warn ? "bg-amber-500" : "bg-green-500") : "bg-red-500";
-  return <span className={`inline-block w-2 h-2 rounded-full ${color} flex-shrink-0`} />;
+  const state = ok ? (warn ? "Warning" : "OK") : "Problem";
+  return (
+    <span
+      role="img"
+      aria-label={state}
+      title={state}
+      className={`inline-block w-2 h-2 rounded-full ${color} flex-shrink-0`}
+    />
+  );
 }
 
 function Row({
@@ -218,7 +232,7 @@ export default async function AdminOverview() {
 
       <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Database */}
-        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-2">
             Database
           </h2>
@@ -264,7 +278,7 @@ export default async function AdminOverview() {
         </section>
 
         {/* Runtime */}
-        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-2">
             Runtime
           </h2>
@@ -290,7 +304,7 @@ export default async function AdminOverview() {
         </section>
 
         {/* Station displays */}
-        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-2">
             Station Displays (SSE)
           </h2>
@@ -323,7 +337,7 @@ export default async function AdminOverview() {
         </section>
 
         {/* Integrations */}
-        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="text-base font-semibold text-stone-800 border-b border-stone-100 pb-3 mb-2">
             Integrations
           </h2>

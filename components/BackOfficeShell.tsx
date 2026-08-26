@@ -3,11 +3,13 @@ import { canManage, getStaffRoles } from "@/lib/staff-roles";
 import { isFloorStaff } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
+import SystemThemeScript from "@/components/SystemThemeScript";
 import PresenceSwitcher from "@/components/PresenceSwitcher";
 import MobileMenu from "@/components/MobileMenu";
 import { setMyPresence } from "@/app/staff/presence-actions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import NavLink from "@/components/NavLink";
 
 /**
  * One back office, one shell. Staff and admin screens are the same product to
@@ -30,20 +32,23 @@ const NAV = [
   { href: "/staff/appointments", label: "Appointments" },
   { href: "/staff/customers", label: "Customers" },
   { href: "/staff/stations", label: "Stations" },
-  { href: "/staff/team", label: "Team" },
+  { href: "/staff/team", label: "Staff" },
   { href: "/staff/schedule", label: "Schedule" },
   { href: "/staff/services", label: "Services" },
-  { href: "/staff/analytics", label: "Analytics" },
+  { href: "/staff/resources", label: "Resources" },
 ];
 
 const ADMIN_NAV = [
   { href: "/admin/services", label: "Services & Pricing" },
   { href: "/admin/pricing", label: "Pricing Tiers" },
-  { href: "/admin/staff", label: "Staff" },
+  { href: "/admin/staff", label: "Manage Staff" },
   { href: "/admin/schedule", label: "Edit Schedule" },
-  { href: "/admin/stations", label: "Stations" },
-  { href: "/admin/breeds", label: "Breed Guide" },
+  { href: "/admin/stations", label: "Manage Stations" },
   { href: "/admin/marketing", label: "Marketing" },
+  // Analytics keeps its /staff URL — a groomer's saved link should not
+  // break — but it is a shop screen: it carries the leaderboard and every
+  // groomer's estimated pay.
+  { href: "/staff/analytics", label: "Analytics" },
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/appearance", label: "Appearance" },
   { href: "/admin/settings", label: "Shop Settings" },
@@ -82,14 +87,11 @@ export default async function BackOfficeShell({ children }: { children: React.Re
 
   const links = (
     <>
-      {(onFloor ? [...NAV.slice(0, 1), { href: "/staff/me", label: "My shift" }, ...NAV.slice(1)] : NAV).map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          className="block px-3 py-2 rounded-lg hover:bg-stone-700 transition-colors"
-        >
-          {item.label}
-        </Link>
+      <p className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-stone-400 uppercase">
+        Floor
+      </p>
+      {(onFloor ? [...NAV.slice(0, 1), { href: "/staff/me", label: "My Shift" }, ...NAV.slice(1)] : NAV).map((item) => (
+        <NavLink key={item.href} href={item.href} label={item.label} />
       ))}
       {canManageShop && (
         <>
@@ -98,13 +100,7 @@ export default async function BackOfficeShell({ children }: { children: React.Re
             Shop
           </p>
           {ADMIN_NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block px-3 py-2 rounded-lg hover:bg-stone-700 transition-colors"
-            >
-              {item.label}
-            </Link>
+            <NavLink key={item.href} href={item.href} label={item.label} />
           ))}
         </>
       )}
@@ -115,13 +111,7 @@ export default async function BackOfficeShell({ children }: { children: React.Re
             Admin
           </p>
           {TECHNICAL_NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block px-3 py-2 rounded-lg hover:bg-stone-700 transition-colors"
-            >
-              {item.label}
-            </Link>
+            <NavLink key={item.href} href={item.href} label={item.label} />
           ))}
         </>
       )}
@@ -129,7 +119,12 @@ export default async function BackOfficeShell({ children }: { children: React.Re
   );
 
   return (
-    <div className={`app-dense min-h-screen bg-stone-100 md:flex ${me?.themePreference === "DARK" ? "dark" : ""}`}>
+    <div
+      id="back-office-root"
+      className={`app-dense min-h-screen bg-stone-100 md:flex ${me?.themePreference === "DARK" ? "dark" : ""}`}
+    >
+      {me?.themePreference === "SYSTEM" && <SystemThemeScript rootId="back-office-root" />}
+
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>

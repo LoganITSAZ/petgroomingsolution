@@ -5,7 +5,7 @@ import { PageShell } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "New station" };
+export const metadata = { title: "Add Station" };
 
 const ERRORS: Record<string, string> = {
   name_required: "A station needs a name.",

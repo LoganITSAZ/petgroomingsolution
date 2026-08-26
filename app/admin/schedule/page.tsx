@@ -14,10 +14,11 @@ import { getConfig } from "@/lib/config";
 import { formatShopDate, formatShopTime24, shopDayKey } from "@/lib/utils";
 import { deleteShift, generateWeek, saveShift } from "./actions";
 import { PageShell, PageSection } from "@/components/ui";
+import SaveToast from "@/components/SaveToast";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Schedule" };
+export const metadata = { title: "Edit Schedule" };
 
 /**
  * The week's rota: staff down the side, days across. Shifts are edited in
@@ -85,11 +86,11 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   const prevWeek = shopDayKey(new Date(weekStart.getTime() - 7 * DAY_MS));
   const nextWeek = shopDayKey(new Date(weekStart.getTime() + 7 * DAY_MS));
   const inputClass =
-    "w-full border border-stone-200 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400";
+    "w-full border border-stone-200 rounded px-1.5 py-1 text-xs ";
 
   return (
     <PageShell
-      title="Schedule"
+      title="Edit Schedule"
       subtitle={
         <>
           {shifts.length} shift{shifts.length !== 1 ? "s" : ""} this week across {staff.length}{" "}
@@ -123,14 +124,14 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     >
 
       {(searchParams.saved || searchParams.deleted || searchParams.generated) && (
-        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+        <SaveToast>
           {searchParams.generated ? "Week filled from the pattern." : "Schedule updated."}
-        </p>
+        </SaveToast>
       )}
       {errorMessage && (
-        <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
+        <SaveToast tone="error">
           {errorMessage}
-        </p>
+        </SaveToast>
       )}
 
       {/* What to look at before this week is worked */}
@@ -255,7 +256,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       ) : (
         <PageSection grow scroll padded={false} bodyClassName="overflow-auto">
           <table className="w-full text-sm">
-            <thead className="bg-stone-50 text-stone-500 text-[10px] uppercase tracking-widest">
+            <thead className="bg-well text-stone-500 text-[10px] uppercase tracking-widest">
               <tr>
                 <th scope="col" className="px-3 py-2 text-left sticky left-0 bg-stone-50">Staff</th>
                 {days.map((day) => (

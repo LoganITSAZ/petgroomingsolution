@@ -5,16 +5,27 @@ import { shopInsights } from "@/lib/insights";
 import InsightList from "@/components/InsightList";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
+import { currentStaffCanManage } from "@/lib/staff-roles";
+import { redirect } from "next/navigation";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
 export const metadata = { title: "Analytics" };
 
 /**
- * Business analytics and the groomer leaderboard, open to all staff — the floor
- * works better when it can see the shop's numbers, not only its own day. The
- * staff dashboard still shows the per-groomer counts for today; this is the
- * whole shop over a range.
+ * Business analytics and the groomer leaderboard, for managers and admins.
+ *
+ * It sits under Shop rather than Floor because of what is on it: the
+ * leaderboard ranks the team against each other and the pay columns put every
+ * groomer's estimated earnings on one screen. That is a management view of the
+ * shop, not a tool for the floor.
+ *
+ * The staff dashboard still shows the per-groomer counts for today, and
+ * /staff/team still shows a groomer their own numbers — nobody lost sight of
+ * their own work. This is the whole shop over a range.
+ *
+ * Gated here as well as hidden from the sidebar: hiding a link is
+ * presentation, and this URL was open to the whole team until now.
  */
 
 export const dynamic = "force-dynamic";
@@ -30,6 +41,8 @@ interface PageProps {
 }
 
 export default async function AnalyticsPage({ searchParams }: PageProps) {
+  if (!(await currentStaffCanManage())) redirect("/staff");
+
   const requested = Number(searchParams.range);
   const rangeDays = (RANGES as readonly number[]).includes(requested) ? requested : 30;
 
@@ -120,7 +133,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
 
       <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Volume */}
-        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             Finished per day
           </h2>
@@ -153,7 +166,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
         </section>
 
         {/* Money and mix */}
-        <section className="border border-stone-200 rounded-lg bg-stone-50/60 p-4">
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
             Service mix
           </h2>
@@ -259,14 +272,14 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           </p>
         </div>
         {ranked.length === 0 ? (
-          <div className="border border-stone-200 rounded-lg bg-stone-50/60 p-4 text-center text-stone-400 text-sm">
+          <div className="border border-stone-200 rounded-lg bg-well p-4 text-center text-stone-400 text-sm">
             No finished visits credited to a groomer yet.
           </div>
         ) : (
           <div className="border border-stone-200 rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-stone-50 text-stone-500 text-[10px] uppercase tracking-widest">
+                <thead className="bg-well text-stone-500 text-[10px] uppercase tracking-widest">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-left">#</th>
                     <th scope="col" className="px-3 py-2 text-left">Groomer</th>

@@ -113,7 +113,7 @@ export default async function StaffCustomersPage({ searchParams }: PageProps) {
             aria-label="Search owners and pets"
             defaultValue={q}
             placeholder="Search owners and pets…"
-            className="flex-1 min-w-[16rem] border border-stone-300 rounded-lg px-3 py-1.5 text-sm text-stone-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="flex-1 min-w-[16rem] border border-stone-300 rounded-lg px-3 py-1.5 text-sm text-stone-800 bg-white"
           />
           <button
             type="submit"
@@ -123,7 +123,7 @@ export default async function StaffCustomersPage({ searchParams }: PageProps) {
           </button>
           <Link
             href="/staff/customers/new"
-            className="bg-amber-700 hover:bg-amber-800 text-white px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
           >
             + New
           </Link>
@@ -156,7 +156,7 @@ export default async function StaffCustomersPage({ searchParams }: PageProps) {
               <Link
                 key={customer.id}
                 href={`/staff/customers/${customer.id}`}
-                className="flex items-center gap-3 px-3 py-2 hover:bg-stone-50 transition-colors"
+                className="flex items-center gap-3 px-3 py-2 hover:bg-well transition-colors"
               >
                 {/* Owner */}
                 <span className="min-w-0 w-56 shrink-0">

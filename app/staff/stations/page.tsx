@@ -1,7 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { StationRole } from "@prisma/client";
 import { KENNELABLE_STATUSES, kennelDemand } from "@/lib/kennels";
-import { formatRole, formatServiceType, formatStatus, shopDayRange } from "@/lib/utils";
+import {
+  formatRole,
+  formatServiceType,
+  formatStationRole,
+  formatStatus,
+  shopDayRange,
+} from "@/lib/utils";
 import { stationCapacity } from "@/lib/stations";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
@@ -18,11 +24,6 @@ export const metadata = { title: "Stations" };
 
 const OCCUPYING = KENNELABLE_STATUSES.filter((status) => status !== "READY_PICKUP");
 
-const ROLE_HEADING: Record<StationRole, string> = {
-  GROOMER: "Groomer",
-  BATHING: "Bathing",
-  KENNEL: "Kennels",
-};
 
 
 /** Minutes since a moment, or null when it never started. */
@@ -99,6 +100,7 @@ export default async function StaffStationsPage({
 
   const grooming = singleOccupancy(StationRole.GROOMER);
   const bathing = singleOccupancy(StationRole.BATHING);
+  const drying = singleOccupancy(StationRole.DRYING);
   const kennelUnits = byRole(StationRole.KENNEL);
   const kennelTotal = kennelUnits.reduce(
     (n, s) => n + s.kennels.filter((k) => k.isActive).length * demand.perCompartment,
@@ -112,6 +114,7 @@ export default async function StaffStationsPage({
   const summary = [
     grooming.list.length > 0 ? `${grooming.used}/${grooming.capacity} grooming in use` : null,
     bathing.list.length > 0 ? `${bathing.used}/${bathing.capacity} bathing in use` : null,
+    drying.list.length > 0 ? `${drying.used}/${drying.capacity} drying in use` : null,
     kennelTotal > 0 ? `${kennelOccupied}/${kennelTotal} kennels occupied` : null,
   ].filter(Boolean);
 
@@ -125,7 +128,7 @@ export default async function StaffStationsPage({
             href="/admin/stations"
             className="text-sm text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
           >
-            Add or edit stations →
+            Manage Stations →
           </Link>
         ) : null
       }
@@ -136,16 +139,17 @@ export default async function StaffStationsPage({
         </PageSection>
       )}
 
-      {/* One pet at a time: grooming, then bathing */}
+      {/* One pet at a time: grooming, bathing, then drying */}
       {[
         { role: StationRole.GROOMER, ...grooming },
         { role: StationRole.BATHING, ...bathing },
+        { role: StationRole.DRYING, ...drying },
       ].map(({ role, list, used, capacity }) =>
         list.length === 0 ? null : (
           <PageSection
             key={role}
             tone="muted"
-            title={ROLE_HEADING[role]}
+            title={formatStationRole(role)}
             hint={`${used}/${capacity} in use`}
             bodyClassName="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"
           >
@@ -234,7 +238,7 @@ export default async function StaffStationsPage({
       {kennelUnits.length > 0 && (
         <PageSection
           tone="muted"
-          title={ROLE_HEADING.KENNEL}
+          title={formatStationRole("KENNEL")}
           hint={`${kennelUnits.length} unit${kennelUnits.length !== 1 ? "s" : ""} · ${kennelOccupied}/${kennelTotal} occupied`}
           bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3"
         >
@@ -323,9 +327,9 @@ export default async function StaffStationsPage({
 
       {active.length === 0 && (
         <PageSection grow className="text-center text-stone-400 text-sm">
-          Nothing active yet. An admin can add one from{" "}
+          Nothing active yet. An admin adds one on{" "}
           <Link href="/admin/stations/new" className="text-amber-700 hover:underline">
-            the admin panel
+            Manage Stations
           </Link>
           .
         </PageSection>
@@ -340,7 +344,7 @@ export default async function StaffStationsPage({
           {inactive.map((station) => (
             <div key={station.id} className="px-4 py-2 flex items-center justify-between">
               <span className="text-stone-500">{station.name}</span>
-              <span className="text-xs text-stone-400">{ROLE_HEADING[station.role]}</span>
+              <span className="text-xs text-stone-400">{formatStationRole(station.role)}</span>
             </div>
           ))}
         </PageSection>

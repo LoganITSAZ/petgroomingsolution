@@ -55,7 +55,7 @@ export default async function PortalNewAppointmentPage() {
           </label>
           <button
             type="submit"
-            className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-semibold"
           >
             Accept and continue
           </button>
@@ -179,7 +179,7 @@ export default async function PortalNewAppointmentPage() {
           </p>
           <Link
             href="/portal/pets/new"
-            className="mt-3 inline-block bg-amber-700 hover:bg-amber-800 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors"
+            className="mt-3 inline-block bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-semibold transition-colors"
           >
             Add a Pet
           </Link>
@@ -197,7 +197,7 @@ export default async function PortalNewAppointmentPage() {
                 name="petId"
                 required
                 defaultValue=""
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 bg-white"
               >
                 <option value="" disabled>Select a pet…</option>
                 {pets.map((p) => (
@@ -228,7 +228,7 @@ export default async function PortalNewAppointmentPage() {
                 required
                 min={toDateInput(minDate)}
                 max={toDateInput(maxDate)}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
               />
               <p className="mt-1 text-xs text-stone-400">
                 Available up to {config.bookingWindowDays ?? 30} days in advance.
@@ -249,7 +249,7 @@ export default async function PortalNewAppointmentPage() {
                 max="17:00"
                 step={1800}
                 defaultValue="09:00"
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
               />
               <p className="mt-1 text-xs text-stone-400">Business hours: 8:00 AM – 5:00 PM</p>
             </div>
@@ -264,14 +264,14 @@ export default async function PortalNewAppointmentPage() {
                 name="visitNotes"
                 rows={3}
                 placeholder="Anything we should know for this visit…"
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 resize-none"
               />
             </div>
 
             <div className="flex items-center gap-3 pt-1">
               <button
                 type="submit"
-                className="bg-amber-700 hover:bg-amber-800 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+                className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors"
               >
                 Request Appointment
               </button>

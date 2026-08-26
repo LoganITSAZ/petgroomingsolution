@@ -1,17 +1,48 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
+import { getConfig } from "@/lib/config";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+/**
+ * One face, carried on a CSS variable so Tailwind's `font-sans` resolves to it
+ * everywhere — public site, back office and kiosk alike.
+ *
+ * Plus Jakarta Sans over the usual neutral grotesque: this is a shop tool with
+ * a warm amber identity and pets on every screen, and its humanist shapes read
+ * as friendly at 15px without going soft. The wide weight range is what lets
+ * the dense screens build hierarchy with weight instead of with more borders.
+ */
+const sans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
+});
 
-export const metadata: Metadata = {
-  title: {
-    default: "Pet Grooming Shop",
-    template: "%s | Pet Grooming Shop",
-  },
-  description: "Pet grooming appointments, customer care, and shop operations.",
-  metadataBase: new URL(process.env.NEXTAUTH_URL ?? "http://localhost"),
-};
+/**
+ * The shop names its own tabs.
+ *
+ * "Pet Grooming Shop" was this app's name, not the shop's — a customer with
+ * six tabs open saw the developer's placeholder where the business should be,
+ * and so did every bookmark. `shopName` is already the single place the shop's
+ * name is typed (it signs the email too), so the title template reads from it.
+ *
+ * Reading SystemConfig here makes every page that inherits the template
+ * request-time rather than build-time, which is the same rule the config-reading
+ * pages already follow: a static title would freeze the old name into the
+ * bundle until the next deploy, which is exactly the bug being fixed.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const config = await getConfig();
+  const name = config.shopName?.trim() || "Pet Grooming Shop";
+
+  return {
+    title: { default: name, template: `%s | ${name}` },
+    description:
+      config.shopTagline?.trim() ||
+      "Pet grooming appointments, customer care, and shop operations.",
+    metadataBase: new URL(process.env.NEXTAUTH_URL ?? "http://localhost"),
+  };
+}
 
 export default function RootLayout({
   children,
@@ -19,8 +50,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html lang="en" className={sans.variable}>
+      <body className="font-sans antialiased">{children}</body>
     </html>
   );
 }

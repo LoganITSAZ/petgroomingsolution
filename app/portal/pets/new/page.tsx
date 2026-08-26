@@ -67,7 +67,7 @@ export default async function NewPetPage() {
             type="text"
             required
             placeholder="e.g. Biscuit"
-            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
           />
         </div>
 
@@ -81,7 +81,7 @@ export default async function NewPetPage() {
             name="species"
             required
             defaultValue=""
-            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
           >
             <option value="" disabled>Select species…</option>
             <option value="DOG">Dog 🐶</option>
@@ -100,7 +100,7 @@ export default async function NewPetPage() {
             name="breed"
             type="text"
             placeholder="e.g. Golden Retriever"
-            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
           />
         </div>
 
@@ -114,7 +114,7 @@ export default async function NewPetPage() {
               id="dateOfBirth"
               name="dateOfBirth"
               type="date"
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
             />
           </div>
           <div>
@@ -128,7 +128,7 @@ export default async function NewPetPage() {
               step="0.1"
               min="0"
               placeholder="e.g. 35"
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
             />
           </div>
         </div>
@@ -142,7 +142,7 @@ export default async function NewPetPage() {
             id="coatType"
             name="coatType"
             defaultValue=""
-            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
           >
             <option value="">Select coat type…</option>
             <option value="SHORT">Short</option>
@@ -165,7 +165,7 @@ export default async function NewPetPage() {
             name="groomingNotes"
             rows={3}
             placeholder="Standing instructions for every visit, e.g. 'trim ears short, sensitive around paws'"
-            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-y"
+            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 resize-y"
           />
         </div>
 
@@ -173,7 +173,7 @@ export default async function NewPetPage() {
         <div className="flex items-center gap-3 pt-1">
           <button
             type="submit"
-            className="bg-amber-700 hover:bg-amber-800 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
           >
             Add Pet
           </button>

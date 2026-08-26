@@ -21,6 +21,7 @@ const PATCHABLE_FIELDS = new Set([
   "featureRewards",
   "rewardVisitsPerReward",
   "rewardLabel",
+  "rewardValueCents",
   "waiverText",
   "waiverVersion",
   "businessHours",

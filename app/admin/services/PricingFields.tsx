@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PricingMode } from "@prisma/client";
-import { PRICE_STEP_CENTS } from "@/lib/pricing";
+import { PRICE_STEP_CENTS, formatCents } from "@/lib/pricing";
 
 /**
  * Two ways to price a service: one base price the sizes are derived from, or
@@ -11,12 +11,7 @@ import { PRICE_STEP_CENTS } from "@/lib/pricing";
  */
 
 const inputClass =
-  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400";
-
-function money(cents: number): string {
-  const dollars = cents / 100;
-  return dollars % 1 === 0 ? `$${dollars.toFixed(0)}` : `$${dollars.toFixed(2)}`;
-}
+  "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm ";
 
 function derive(base: number, multiplier: number): number {
   const step = PRICE_STEP_CENTS;
@@ -128,7 +123,7 @@ export default function PricingFields({ initial }: { initial: PricingInitial }) 
                 {preview.map((row) => (
                   <span key={row.label} className="text-stone-600">
                     {row.label}{" "}
-                    <span className="font-semibold text-stone-900">{money(row.cents)}</span>
+                    <span className="font-semibold text-stone-900">{formatCents(row.cents)}</span>
                   </span>
                 ))}
                 <span className="text-xs text-stone-400">rounded to the nearest $5</span>

@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --radius: 0.5rem;
+    --radius: 0.625rem;
 
     /* Theme defaults: a warm amber. The public site overrides
        these per request from the theme chosen in the admin panel; every other
@@ -21,6 +21,15 @@
     --brand-on-600: 28 25 23;
     --brand-on-700: 255 255 255;
     --brand-text: 146 65 12;
+    /* Back-office surfaces. The white page card is the ground; a well is the
+       inset panels and summary lists sit in, a band is a toolbar or count
+       strip across the card. These were `bg-stone-50/60` over white, which
+       composites to about #FCFCFC — too faint to read as a container at arm's
+       length on a shop terminal. Warm greys, a hair off the stone ramp, so a
+       well reads as a recess in the card rather than a second card. */
+    --well: 243 242 238;
+    --band: 249 248 245;
+    --well-line: 226 223 217;
     --page-bg: 250 250 249;
     --surface: 255 255 255;
     --ink: 28 25 23;
@@ -36,6 +45,12 @@
 
   .dark {
     color-scheme: dark;
+    /* Same roles, flipped: the card is #1f2937, so a well recedes below it and
+       a band sits just above. Painting the variables means `bg-well` needs no
+       `.dark` override of its own. */
+    --well: 24 32 45;
+    --band: 38 48 63;
+    --well-line: 55 65 81;
   }
 
   /* ── Dark surfaces ──────────────────────────────────────────────────────
@@ -99,6 +114,35 @@
   .dark .bg-indigo-100 { background-color: #312e81; }
   .dark .bg-violet-50 { background-color: #2e1065; }
   .dark .bg-violet-100 { background-color: #4c1d95; }
+
+  /* Opacity variants of the fills above. `bg-stone-50/60` is a different class
+     from `bg-stone-50`, so none of the rules above touch it — the nested-card
+     idiom the whole back office uses (see PageShell's Panel) kept its light
+     fill over the dark card and composited to about #a2a6ab, which put the
+     near-white `text-stone-800` heading on it at 2.3:1 and the `text-stone-500`
+     labels at roughly 1.1:1. The rule: an opacity variant takes its solid
+     partner's dark value. Translucency is a light-mode nicety — on a dark
+     surface it only muddies the fill.
+
+     Deliberately not listed: `bg-stone-900/*` and `bg-stone-800/*`. Those are
+     modal scrims and kiosk overlays, where the transparency is the point. */
+  .dark [class*="bg-white/"] { background-color: #1f2937; }
+  .dark [class*="bg-stone-50/"] { background-color: #111827; }
+  .dark [class*="bg-stone-100/"] { background-color: #1f2937; }
+  .dark [class*="bg-amber-50/"] { background-color: #451a03; }
+  .dark [class*="bg-amber-100/"] { background-color: #78350f; }
+  .dark [class*="bg-red-50/"] { background-color: #450a0a; }
+  .dark [class*="bg-green-50/"] { background-color: #052e16; }
+  .dark [class*="bg-emerald-50/"] { background-color: #022c22; }
+  .dark [class*="bg-sky-50/"] { background-color: #082f49; }
+  .dark [class*="bg-blue-50/"] { background-color: #172554; }
+  .dark [class*="bg-purple-50/"] { background-color: #3b0764; }
+  .dark [class*="bg-yellow-50/"] { background-color: #422006; }
+  .dark [class*="bg-orange-50/"] { background-color: #431407; }
+  .dark [class*="bg-rose-50/"] { background-color: #4c0519; }
+  .dark [class*="bg-teal-50/"] { background-color: #042f2e; }
+  .dark [class*="bg-indigo-50/"] { background-color: #1e1b4b; }
+  .dark [class*="bg-violet-50/"] { background-color: #2e1065; }
 
   /* Saturated text. The 600–900 shades are dark-on-dark once the surface
      flips, so every one of them lands on its 300 — at least 5:1 against both
@@ -180,6 +224,36 @@
     --brand-text: 252 211 77;
   }
 
+  /* Native <dialog> centres itself, but only once it is told it may fill the
+     viewport it is centring in. */
+  .app-modal {
+    margin: auto;
+    max-height: calc(100vh - 2rem);
+  }
+  .app-modal[open] {
+    animation: app-modal-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes app-modal-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.985); }
+    to   { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .app-modal[open] { animation: none; }
+  }
+
+  /* The centred save confirmation. It arrives quickly and leaves on its own,
+     so the motion has to read as an arrival rather than an animation. */
+  .save-toast {
+    animation: save-toast-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes save-toast-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to   { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .save-toast { animation: none; }
+  }
+
   .dark input,
   .dark textarea,
   .dark select { background-color: #111827; color: #f9fafb; border-color: #4b5563; }
@@ -187,6 +261,10 @@
   .dark textarea::placeholder { color: #a8b0bb; }
   .dark .hover\:bg-stone-50:hover,
   .dark .hover\:bg-stone-100:hover { background-color: #374151; }
+  /* A white hover on a band reads as "lifted" in light mode; on a dark card the
+     lift is a step lighter, not a step whiter. `bg-well`/`bg-band` need no rule
+     here — they paint from variables the .dark block above redefines. */
+  .dark .hover\:bg-white:hover { background-color: #374151; }
   .dark .hover\:bg-amber-50:hover { background-color: #451a03; }
 }
 
@@ -198,21 +276,125 @@
      warm in amber and still feels intentional in every other brand preset. */
   .public-shell {
     @apply relative isolate overflow-hidden bg-page;
+    /*
+      Glass refracts what is behind it. Two soft gradients on near-white gave
+      it nothing to bend, which is why the panels read as plain translucent
+      boxes — the effect was working and there was nothing to see. These add an
+      off-axis brand pool and a wide conic sheen, so an edge crossing them
+      actually shifts.
+    */
     background-image:
-      radial-gradient(circle at 8% 3%, rgb(var(--brand-100) / 0.7), transparent 25rem),
-      radial-gradient(circle at 95% 17%, rgb(var(--brand-300) / 0.24), transparent 23rem);
+      /* A fine dot field. Displacing a smooth gradient moves nothing the eye
+         can see — refraction is only legible against detail, so the glass is
+         given something with a frequency to bend. Far too faint to read as a
+         pattern; it exists to be distorted. */
+      repeating-radial-gradient(circle at 0 0, rgb(var(--brand-900) / 0.05) 0 1px, transparent 1px 14px),
+      radial-gradient(circle at 8% 3%, rgb(var(--brand-100) / 0.75), transparent 25rem),
+      radial-gradient(circle at 95% 17%, rgb(var(--brand-300) / 0.3), transparent 23rem),
+      radial-gradient(circle at 18% 72%, rgb(var(--brand-500) / 0.18), transparent 32rem),
+      radial-gradient(circle at 72% 88%, rgb(var(--brand-300) / 0.2), transparent 28rem);
+    background-attachment: fixed;
   }
 
+  /* The pale end of a brand ramp is near-white, which washes out over a
+     near-black page. Dark mode keeps the same colours and pulls them back. */
+  .public-shell.dark {
+    background-image:
+      repeating-radial-gradient(circle at 0 0, rgb(255 255 255 / 0.045) 0 1px, transparent 1px 14px),
+      radial-gradient(circle at 8% 3%, rgb(var(--brand-700) / 0.45), transparent 25rem),
+      radial-gradient(circle at 95% 17%, rgb(var(--brand-600) / 0.24), transparent 23rem),
+      radial-gradient(circle at 18% 72%, rgb(var(--brand-500) / 0.16), transparent 32rem),
+      radial-gradient(circle at 72% 88%, rgb(var(--brand-700) / 0.28), transparent 28rem);
+  }
+
+  /*
+    Liquid glass.
+    ─────────────
+    Three things together read as glass, and the blur is the least of them:
+    the backdrop is *saturated* as well as blurred (glass concentrates the
+    colour behind it), the edge is *displaced* by an SVG filter so the
+    background bends where the panel stops, and a specular rim runs light
+    along the top-left and dark along the bottom-right. The rim is most of
+    what the eye actually reads; the displacement is what stops it looking
+    like frosted plastic. Filter defs live in the public layout.
+  */
   .glass-panel {
-    @apply border border-white/70 bg-surface/75 shadow-xl shadow-brand-900/5;
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
+    @apply border border-white/70 bg-surface/75;
+    background-image: linear-gradient(
+      152deg,
+      rgb(255 255 255 / 0.55),
+      rgb(255 255 255 / 0.05) 38%,
+      transparent 62%,
+      rgb(255 255 255 / 0.22)
+    );
+    backdrop-filter: blur(14px) saturate(1.7);
+    -webkit-backdrop-filter: blur(14px) saturate(1.7);
+    box-shadow:
+      inset 1.5px 1.5px 0 -0.5px rgb(255 255 255 / 0.75),
+      inset -1px -1px 0 -0.5px rgb(var(--brand-900) / 0.12),
+      inset 0 0 24px -6px rgb(255 255 255 / 0.35),
+      0 20px 45px -22px rgb(var(--brand-900) / 0.45);
   }
 
   .glass-panel-subtle {
-    @apply border border-white/60 bg-surface/55 shadow-lg shadow-brand-900/5;
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    @apply border border-white/60 bg-surface/60;
+    background-image: linear-gradient(152deg, rgb(255 255 255 / 0.4), transparent 55%);
+    backdrop-filter: blur(10px) saturate(1.4);
+    -webkit-backdrop-filter: blur(10px) saturate(1.4);
+    box-shadow:
+      inset 1px 1px 0 -0.5px rgb(255 255 255 / 0.6),
+      inset -1px -1px 0 -0.5px rgb(var(--brand-900) / 0.1),
+      0 14px 30px -20px rgb(var(--brand-900) / 0.4);
+  }
+
+  /* Displacement on a backdrop is Chromium-only today. Safari and Firefox
+     keep the blur, the saturation and the rim above, which is the whole
+     effect bar the refraction — so this is additive, never a fallback. */
+  @supports (backdrop-filter: url("#liquid-glass")) {
+    .glass-panel {
+      backdrop-filter: blur(14px) saturate(1.7) url("#liquid-glass");
+      -webkit-backdrop-filter: blur(14px) saturate(1.7) url("#liquid-glass");
+    }
+
+    .glass-panel-subtle {
+      backdrop-filter: blur(10px) saturate(1.4) url("#liquid-glass-subtle");
+      -webkit-backdrop-filter: blur(10px) saturate(1.4) url("#liquid-glass-subtle");
+    }
+  }
+
+  /* A white rim on a dark card is a white line, not a highlight. Dark mode
+     keeps the same three ingredients and drops every one of them a stop —
+     paired override, same rule as the back office block above. */
+  .dark .glass-panel,
+  .dark .glass-panel-subtle {
+    @apply border-white/10;
+    background-image: linear-gradient(152deg, rgb(255 255 255 / 0.09), transparent 55%);
+    box-shadow:
+      inset 1.5px 1.5px 0 -0.5px rgb(255 255 255 / 0.14),
+      inset -1px -1px 0 -0.5px rgb(0 0 0 / 0.5),
+      0 20px 45px -22px rgb(0 0 0 / 0.8);
+  }
+
+  .dark .glass-panel {
+    @apply bg-surface/70;
+  }
+
+  .dark .glass-panel-subtle {
+    @apply bg-surface/55;
+  }
+
+  /* Refraction is decoration. Someone who has asked for less movement, or is
+     reading through a translucent panel with low vision, gets a plain opaque
+     card instead — the text is the point. */
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    .glass-panel,
+    .glass-panel-subtle {
+      @apply bg-surface border-line;
+      background-image: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      box-shadow: 0 10px 30px -20px rgb(var(--brand-900) / 0.5);
+    }
   }
 
   .public-eyebrow {
@@ -238,10 +420,50 @@
   .app-dense {
     font-size: 0.9375rem; /* 15px */
     line-height: 1.4;
+    /*
+      The back office is columns of times, prices, counts and durations. Tabular
+      figures make every one of them line up without a class on each cell, and
+      stop a total shifting sideways as it ticks over a digit. The public site
+      is prose and keeps proportional figures.
+    */
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.006em;
+  }
+
+  /* Headings carry the hierarchy, so they get the tighter tracking the face
+     was drawn for at display sizes. */
+  .app-dense h1,
+  .app-dense h2 {
+    letter-spacing: -0.018em;
   }
 
   .app-dense table {
     line-height: 1.35;
+  }
+
+  /*
+    One focus ring, everywhere.
+    Controls were carrying their own `focus:ring-amber-400`, which meant a
+    themed shop got an amber ring on a green button, and anything that forgot
+    the class got the browser default. :focus-visible keeps it off a mouse
+    click and on for a keyboard.
+  */
+  :focus-visible {
+    outline: 2px solid rgb(var(--brand-500));
+    outline-offset: 2px;
+    border-radius: var(--radius);
+  }
+
+  /* Form controls share one resting state so a row of them lines up. */
+  .app-dense input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .app-dense select,
+  .app-dense textarea {
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .app-dense input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover,
+  .app-dense select:hover,
+  .app-dense textarea:hover {
+    border-color: rgb(214 211 209); /* stone-300 */
   }
 
   /* Keyboard-only jump past the nav. Off-screen until focused. */

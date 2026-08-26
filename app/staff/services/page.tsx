@@ -97,7 +97,7 @@ export default async function StaffServicesPage() {
 
                 return (
                   <details key={service.id} className="group">
-                    <summary className="px-3 py-2 cursor-pointer flex items-center justify-between gap-3 hover:bg-stone-50">
+                    <summary className="px-3 py-2 cursor-pointer flex items-center justify-between gap-3 hover:bg-well transition-colors">
                       <span className="min-w-0">
                         <span className="font-semibold text-stone-900">{service.name}</span>
                         {service.walkInEligible && (
