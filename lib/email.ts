@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import { getConfig } from "@/lib/config";
-import { DEFAULT_SHOP_NAME } from "@/lib/branding";
+import { DEFAULT_SHOP_NAME, SHOP_MAIL_DOMAIN } from "@/lib/branding";
 
 /**
  * Lazily constructed Resend client.
@@ -25,7 +25,7 @@ async function getFrom(): Promise<string> {
   // set and drift out of step with it.
   return config.emailFromAddress
     ? `${config.shopName} <${config.emailFromAddress}>`
-    : process.env.EMAIL_FROM ?? `${DEFAULT_SHOP_NAME} <no-reply@example.com>`;
+    : process.env.EMAIL_FROM ?? `${DEFAULT_SHOP_NAME} <no-reply@${SHOP_MAIL_DOMAIN}>`;
 }
 
 export async function sendBookingConfirmation({

@@ -9,6 +9,7 @@ import {
   DEFAULT_SHOP_TAGLINE,
   DEFAULT_SHOP_PHONE,
   DEFAULT_SHOP_WEBSITE,
+  DEFAULT_ADMIN_EMAIL,
   defaultWaiverText,
 } from "../lib/branding";
 
@@ -17,7 +18,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("🌱 Seeding database…");
 
-  const adminEmail = process.env.ADMIN_EMAIL?.trim() || "admin@example.com";
+  const adminEmail = process.env.ADMIN_EMAIL?.trim() || DEFAULT_ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD || "changeme123";
 
   // System config

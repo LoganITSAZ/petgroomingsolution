@@ -7,6 +7,20 @@ export const DEFAULT_SHOP_ADDRESS = process.env.SHOP_ADDRESS?.trim() || null;
 export const DEFAULT_SHOP_WEBSITE = process.env.SHOP_WEBSITE?.trim() || null;
 export const DEFAULT_EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS?.trim() || null;
 
+/**
+ * The first-boot admin login, when ADMIN_EMAIL is not set.
+ *
+ * Takes the shop's own domain when there is one — example.com is somebody
+ * else's domain and a real shop should never be handed an address on it.
+ * Falls back to a .local address, which cannot be routed anywhere.
+ */
+export const SHOP_MAIL_DOMAIN =
+  DEFAULT_SHOP_EMAIL?.split("@")[1]?.trim() ||
+  DEFAULT_SHOP_WEBSITE?.replace(/^https?:\/\//, "").split("/")[0]?.replace(/^www\./, "").trim() ||
+  "gentlegroomer.local";
+
+export const DEFAULT_ADMIN_EMAIL = `admin@${SHOP_MAIL_DOMAIN}`;
+
 export function defaultWaiverText(shopName = DEFAULT_SHOP_NAME): string {
   return `
 GENERAL LIABILITY WAIVER — ${shopName.toUpperCase()}

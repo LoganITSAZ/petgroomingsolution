@@ -17,6 +17,9 @@
     "db:migrate:dev": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:demo": "tsx prisma/demo.ts",
+    "dev:test": "DATABASE_URL=\"${TEST_DATABASE_URL:-postgresql://postgres@localhost:5432/gentlegroomer_test}\" node scripts/dev-server.mjs",
+    "db:test:reset": "bash scripts/test-db.sh",
     "test": "vitest run"
   },
   "dependencies": {

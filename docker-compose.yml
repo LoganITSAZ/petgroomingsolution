@@ -43,7 +43,8 @@ services:
       SHOP_WEBSITE: ${SHOP_WEBSITE:-}
       EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-}
       EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      # Empty falls back to admin@<the shop's own domain> — see lib/branding.ts.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme123}
     depends_on:
       db:
