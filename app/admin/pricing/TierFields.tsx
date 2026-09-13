@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DiscountKind, type PricingTier } from "@prisma/client";
-import { centsToInput } from "@/lib/pricing";
+import { centsToInput, formatCents } from "@/lib/pricing";
+import { EXAMPLE_LIST_CENTS, tierDiscountCents } from "@/lib/pricing-tiers-math";
 
 const inputClass =
   "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm ";
@@ -14,6 +15,41 @@ const inputClass =
  */
 export default function TierFields({ tier, idPrefix }: { tier?: PricingTier; idPrefix: string }) {
   const [kind, setKind] = useState<DiscountKind>(tier?.discountKind ?? DiscountKind.PERCENT);
+  const previewRef = useRef<HTMLSpanElement>(null);
+
+  // Live preview: recomputes with the same arithmetic the server uses
+  // (lib/pricing-tiers-math.ts), so typing a percent or amount updates the
+  // worked example with no round trip.
+  useEffect(() => {
+    const preview = previewRef.current;
+    if (!preview) return;
+    const percent = document.getElementById(`${idPrefix}-percent`) as HTMLInputElement | null;
+    const amount = document.getElementById(`${idPrefix}-amount`) as HTMLInputElement | null;
+
+    const recompute = () => {
+      const discountCents = tierDiscountCents(EXAMPLE_LIST_CENTS, {
+        id: "",
+        name: "",
+            note: null,
+            isActive: true,
+                discountKind: kind,
+                discountPercent: kind === DiscountKind.PERCENT ? Number(percent?.value) || 0 : null,
+                    discountCents:
+                    kind === DiscountKind.AMOUNT ? Math.round((Number(amount?.value) || 0) * 100) : null,
+      });
+      preview.textContent =
+      discountCents > 0
+          ? `${formatCents(EXAMPLE_LIST_CENTS)} visit \u2192 ${formatCents(EXAMPLE_LIST_CENTS - discountCents)}`
+          : "No discount yet";
+    };
+
+    recompute();
+    const controller = new AbortController();
+    for (const field of [percent, amount]) {
+      field?.addEventListener("input", recompute, { signal: controller.signal });
+    }
+    return () => controller.abort();
+  }, [kind, idPrefix]);
 
   return (
     <div className="space-y-3">
@@ -70,6 +106,10 @@ export default function TierFields({ tier, idPrefix }: { tier?: PricingTier; idP
           </label>
         )}
       </div>
+
+      <p className="text-xs text-stone-500" aria-live="polite">
+        <span ref={previewRef} />
+      </p>
 
       <label className="text-sm block" htmlFor={`${idPrefix}-note`}>
         <span className="block font-medium text-stone-700 mb-1">Why this rate exists</span>

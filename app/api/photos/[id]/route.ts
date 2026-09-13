@@ -10,13 +10,13 @@ import { NextResponse } from "next/server";
  * kiosk is unauthenticated, so it keeps using `Pet.photoUrl` for anything it
  * needs to display.
  */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const photo = await prisma.photo.findUnique({ where: { id: params.id } });
+  const photo = await prisma.photo.findUnique({ where: { id: (await params).id } });
   if (!photo) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

@@ -225,9 +225,12 @@ export default function RegisterForm({
           {/* Waiver */}
           {waiverRequired && waiverText && (
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
+              {/* Not a <label>: this captions the scrollable document below,
+                  which is not a form control. The accept checkbox has its own
+                  label. */}
+              <p className="block text-sm font-medium text-stone-700 mb-2">
                 Liability Waiver
-              </label>
+              </p>
               <div
                 ref={waiverBoxRef}
                 className="h-40 overflow-y-auto border border-stone-300 rounded-lg px-3 py-2 text-xs text-stone-600 bg-stone-50 whitespace-pre-wrap leading-relaxed"

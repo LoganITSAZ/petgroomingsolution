@@ -13,6 +13,7 @@ import {
 import { getConfig } from "@/lib/config";
 import { formatShopDate, formatShopTime24, shopDayKey } from "@/lib/utils";
 import { deleteShift, generateWeek, saveShift } from "./actions";
+import ScheduleWeekSync from "./ScheduleWeekSync";
 import { PageShell, PageSection } from "@/components/ui";
 import SaveToast from "@/components/SaveToast";
 
@@ -39,16 +40,17 @@ const ERRORS: Record<string, string> = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface PageProps {
-  searchParams: {
+  searchParams: Promise<{
     week?: string;
     saved?: string;
     deleted?: string;
     generated?: string;
     error?: string;
-  };
+  }>;
 }
 
-export default async function SchedulePage({ searchParams }: PageProps) {
+export default async function SchedulePage(props: PageProps) {
+  const searchParams = await props.searchParams;
   // The week is anchored on a day key so paging is stable across timezones.
   const anchor = searchParams.week ? new Date(`${searchParams.week}T12:00:00Z`) : new Date();
   const days = weekDays(anchor);
@@ -188,7 +190,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           <input type="hidden" name="week" value={weekKey} />
 
           <div>
-            <p className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-1">Who</p>
+            <p className="text-xs font-bold text-stone-500 tracking-tight mb-1">Who</p>
             <div className="flex flex-wrap gap-2">
               {staff.map((member) => (
                 <label key={member.id} className="flex items-center gap-1.5 text-sm text-stone-700">
@@ -205,7 +207,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           </div>
 
           <div>
-            <p className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-1">Days</p>
+            <p className="text-xs font-bold text-stone-500 tracking-tight mb-1">Days</p>
             <div className="flex flex-wrap gap-2">
               {days.map((day) => (
                 <label
@@ -255,8 +257,9 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         </PageSection>
       ) : (
         <PageSection grow scroll padded={false} bodyClassName="overflow-auto">
+          <ScheduleWeekSync>
           <table className="w-full text-sm">
-            <thead className="bg-well text-stone-500 text-[10px] uppercase tracking-widest">
+            <thead className="bg-well text-stone-500 text-[10px] tracking-tight">
               <tr>
                 <th scope="col" className="px-3 py-2 text-left sticky left-0 bg-stone-50">Staff</th>
                 {days.map((day) => (
@@ -268,9 +271,13 @@ export default async function SchedulePage({ searchParams }: PageProps) {
             </thead>
             <tbody className="divide-y divide-stone-100">
               {staff.map((member) => (
-                <tr key={member.id} className="align-top">
+                <tr key={member.id} className="align-top" data-staff={member.id}>
                   <td className="px-3 py-2 font-semibold text-stone-900 whitespace-nowrap sticky left-0 bg-white">
                     {member.name}
+                    <label className="flex items-center gap-1 text-[10px] font-normal text-stone-400">
+                      <input type="checkbox" data-role="row-sync-toggle" className="accent-amber-700" />
+                      Same time every day
+                    </label>
                     <span className="block text-[10px] font-normal text-stone-400">
                       {member.roles.map((role) => role.toLowerCase()).join(" · ")}
                     </span>
@@ -337,8 +344,20 @@ export default async function SchedulePage({ searchParams }: PageProps) {
                             <input type="hidden" name="week" value={weekKey} />
                             <input type="hidden" name="staffId" value={member.id} />
                             <input type="hidden" name="day" value={dayKey} />
-                            <input type="time" name="start" defaultValue="08:00" className={inputClass} />
-                            <input type="time" name="end" defaultValue="17:00" className={inputClass} />
+                            <input
+                              type="time"
+                              name="start"
+                              data-role="empty-start"
+                              defaultValue="08:00"
+                              className={inputClass}
+                            />
+                            <input
+                              type="time"
+                              name="end"
+                              data-role="empty-end"
+                              defaultValue="17:00"
+                              className={inputClass}
+                            />
                             <button
                               type="submit"
                               className="text-[11px] font-semibold text-stone-400 hover:text-amber-700"
@@ -354,6 +373,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
               ))}
             </tbody>
           </table>
+          </ScheduleWeekSync>
         </PageSection>
       )}
     </PageShell>

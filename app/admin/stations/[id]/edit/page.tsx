@@ -22,11 +22,13 @@ const ERRORS: Record<string, string> = {
 };
 
 interface PageProps {
-  params: { id: string };
-  searchParams: { saved?: string; error?: string; kept?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; kept?: string }>;
 }
 
-export default async function EditStationPage({ params, searchParams }: PageProps) {
+export default async function EditStationPage(props: PageProps) {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
   const station = await prisma.station.findUnique({
     where: { id: params.id },
     include: {

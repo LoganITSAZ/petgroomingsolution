@@ -58,10 +58,6 @@ export function stageIndexFor(status: AppointmentStatus | string): number {
   return VISIT_STAGES.findIndex((stage) => stage.statuses.includes(status as AppointmentStatus));
 }
 
-export function stageFor(status: AppointmentStatus | string): VisitStage | null {
-  return VISIT_STAGES[stageIndexFor(status)] ?? null;
-}
-
 export interface BoardColumn {
   key: string;
   /** The shop's word for the column, and for the place a pet stands in it. */

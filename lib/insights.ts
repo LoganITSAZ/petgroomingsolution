@@ -59,7 +59,7 @@ export interface CustomerRhythm {
   averageTicketCents: number | null;
 }
 
-export async function customerRhythm(customerId: string): Promise<CustomerRhythm> {
+async function customerRhythm(customerId: string): Promise<CustomerRhythm> {
   const [history, upcoming] = await Promise.all([
     prisma.appointment.findMany({
       where: { customerId, status: { in: [...FINISHED_STATUSES, AppointmentStatus.NO_SHOW] } },
@@ -247,7 +247,7 @@ export async function petInsights(petId: string): Promise<Insight[]> {
 // ─── Shop-level ──────────────────────────────────────────────
 
 /** Services most often booked alongside a given one. */
-export async function serviceAttachments(): Promise<
+async function serviceAttachments(): Promise<
   { serviceType: string; partner: string; together: number; share: number }[]
 > {
   const visits = await prisma.appointment.findMany({
@@ -291,7 +291,7 @@ export async function serviceAttachments(): Promise<
 }
 
 /** The hours the shop is actually busiest, in shop time. */
-export async function peakHours(days = 60): Promise<{ hour: number; visits: number }[]> {
+async function peakHours(days = 60): Promise<{ hour: number; visits: number }[]> {
   const since = new Date(Date.now() - days * DAY_MS);
   const visits = await prisma.appointment.findMany({
     where: { scheduledAt: { gte: since } },
@@ -316,7 +316,7 @@ export async function peakHours(days = 60): Promise<{ hour: number; visits: numb
 }
 
 /** Kennel pressure over the coming week. */
-export async function kennelForecast(
+async function kennelForecast(
   daysAhead = 7
 ): Promise<{ day: Date; committed: number; capacity: number; tight: boolean }[]> {
   const out: { day: Date; committed: number; capacity: number; tight: boolean }[] = [];

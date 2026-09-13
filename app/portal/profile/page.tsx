@@ -7,6 +7,7 @@ import PhotoUpload from "@/components/PhotoUpload";
 import ThemeSwitch from "@/components/ThemeSwitch";
 import { readTheme } from "@/lib/theme-preference";
 import { deletePhotoIfUnused, photoUrl, storePhoto } from "@/lib/photos";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -129,14 +130,8 @@ export default async function PortalProfilePage() {
   }
 
   return (
-    <div className="max-w-xl space-y-8">
-      <div>
-        <h1 className="text-xl font-black text-stone-900">My Profile</h1>
-        <p className="text-stone-500 text-sm mt-0.5">Manage your account details.</p>
-      </div>
-
-      <section className="bg-white border border-stone-200 rounded-xl p-4">
-        <h2 className="font-bold text-stone-800 mb-3">Profile photo</h2>
+    <PageShell title="My Profile" subtitle="Your account details." className="max-w-xl">
+      <PageSection title="Profile photo">
         <PhotoUpload
           action={updatePhoto}
           idField="customerId"
@@ -144,12 +139,9 @@ export default async function PortalProfilePage() {
           currentUrl={photoUrl(customer.photoId)}
           label={`${customer.firstName} ${customer.lastName}`}
         />
-      </section>
+      </PageSection>
 
-      {/* Profile form */}
-      <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-5">
-        <h2 className="font-bold text-stone-800">Personal Information</h2>
-
+      <PageSection title="Personal information">
         <form action={updateProfile} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -182,8 +174,9 @@ export default async function PortalProfilePage() {
 
           {/* Email (read-only) */}
           <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">Email</label>
-            <p className="text-sm text-stone-500 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2">
+            {/* Read-only text, not a control — a <label> here names nothing. */}
+            <p className="block text-sm font-semibold text-stone-700 mb-1">Email</p>
+            <p className="text-sm text-stone-500 bg-well border border-well-line rounded-lg px-3 py-2">
               {customer.email}
             </p>
             <p className="text-xs text-stone-400 mt-1">Email cannot be changed here. Contact us if needed.</p>
@@ -227,27 +220,25 @@ export default async function PortalProfilePage() {
             type="submit"
             className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
           >
-            Save Changes
+            Save changes
           </button>
         </form>
-      </section>
+      </PageSection>
 
-      <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-3">
-        <div>
-          <h2 className="font-bold text-stone-800">Appearance</h2>
-          <p className="text-sm text-stone-500 mt-0.5">Saves as soon as you flip it.</p>
-        </div>
+      <PageSection title="Appearance" hint="Saves as soon as you flip it." tone="muted">
         <form action={updateProfile} className="flex items-center gap-3">
           <input type="hidden" name="phone" value={customer.phone ?? ""} />
           <ThemeSwitch value={customer.themePreference} />
         </form>
-      </section>
+      </PageSection>
 
-      {/* Change password */}
-      <section className="bg-white border border-stone-200 rounded-xl p-4 space-y-5">
-        <h2 className="font-bold text-stone-800">Change Password</h2>
-
-        <form action={changePassword} className="space-y-3">
+      {/* Set once and rarely touched, so it is closed until it is wanted. */}
+      <PageSection>
+        <details className="disclosure">
+          <summary className="font-display text-[0.8125rem] font-bold tracking-tight text-stone-600">
+            Change password
+          </summary>
+        <form action={changePassword} className="mt-3 space-y-3">
           <div>
             <label htmlFor="currentPassword" className="block text-sm font-semibold text-stone-700 mb-1">
               Current Password
@@ -296,10 +287,11 @@ export default async function PortalProfilePage() {
             type="submit"
             className="bg-stone-700 hover:bg-stone-800 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
           >
-            Change Password
+            Change password
           </button>
         </form>
-      </section>
-    </div>
+        </details>
+      </PageSection>
+    </PageShell>
   );
 }

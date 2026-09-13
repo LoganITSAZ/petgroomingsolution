@@ -23,7 +23,7 @@ const RESULT_LIMIT = 200;
 
 
 interface PageProps {
-  searchParams: { q?: string };
+  searchParams: Promise<{ q?: string }>;
 }
 
 function petMatchesQuery(pet: { name: string; breed: string | null }, q: string): boolean {
@@ -35,7 +35,8 @@ function petMatchesQuery(pet: { name: string; breed: string | null }, q: string)
   );
 }
 
-export default async function StaffCustomersPage({ searchParams }: PageProps) {
+export default async function StaffCustomersPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const q = searchParams.q?.trim() ?? "";
 
   // Pets shown (and, when a pet filter is active, the pets a customer must have)

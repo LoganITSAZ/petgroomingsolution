@@ -14,10 +14,11 @@ const ERRORS: Record<string, string> = {
 };
 
 interface PageProps {
-  searchParams: { error?: string };
+  searchParams: Promise<{ error?: string }>;
 }
 
-export default function NewStationPage({ searchParams }: PageProps) {
+export default async function NewStationPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
 
   return (

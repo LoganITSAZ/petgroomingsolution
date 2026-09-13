@@ -1,1 +1,1 @@
-export { PageShell, PageCard, PageSection, Panel, RuleHeading, StatStrip, Well } from "./PageShell";
+export { PageShell, PageSection, Panel, StatStrip, Well } from "./PageShell";

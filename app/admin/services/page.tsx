@@ -215,17 +215,18 @@ function SurchargeRow({ surcharge }: { surcharge?: Surcharge }) {
 }
 
 interface PageProps {
-  searchParams: {
+  searchParams: Promise<{
     saved?: string;
     error?: string;
     deleted?: string;
     retired?: string;
     adjusted?: string;
     percent?: string;
-  };
+  }>;
 }
 
-export default async function AdminServicesPage({ searchParams }: PageProps) {
+export default async function AdminServicesPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const [services, surcharges, bookedCounts] = await Promise.all([
     prisma.service.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     prisma.surcharge.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }] }),
@@ -348,12 +349,12 @@ export default async function AdminServicesPage({ searchParams }: PageProps) {
                       <span className="min-w-0">
                         <span className="font-semibold text-stone-900">{service.name}</span>
                         {!service.isActive && (
-                          <span className="ml-2 text-[10px] font-bold text-stone-400 uppercase">
+                          <span className="ml-2 text-[10px] font-bold text-stone-400 ">
                             Retired
                           </span>
                         )}
                         {service.walkInEligible && (
-                          <span className="ml-2 text-[10px] font-bold text-emerald-700 uppercase">
+                          <span className="ml-2 text-[10px] font-bold text-emerald-700 ">
                             Walk-in
                           </span>
                         )}

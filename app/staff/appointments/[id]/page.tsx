@@ -20,6 +20,7 @@ import {
   formatShopTime,
   formatSpecies,
   formatStatus,
+  statusBadgeClass,
 } from "@/lib/utils";
 import {
   ARRIVAL_CLASS,
@@ -52,18 +53,6 @@ export const metadata = { title: "Visit" };
  * happened, and read the audit trail.
  */
 
-const statusColor: Record<string, string> = {
-  SCHEDULED: "bg-stone-100 text-stone-600",
-  CHECKED_IN: "bg-blue-100 text-blue-700",
-  IN_PROGRESS: "bg-amber-100 text-amber-700",
-  DRYING: "bg-sky-100 text-sky-700",
-  FINISHING: "bg-purple-100 text-purple-700",
-  COMPLETE: "bg-green-100 text-green-700",
-  READY_PICKUP: "bg-emerald-100 text-emerald-800",
-  PICKED_UP: "bg-stone-100 text-stone-400",
-  CANCELLED: "bg-red-100 text-red-700",
-  NO_SHOW: "bg-red-100 text-red-400",
-};
 
 const eventLabel: Record<VisitEventType, string> = {
   REWASH: "Re-wash",
@@ -110,7 +99,7 @@ const ERRORS: Record<string, string> = {
 };
 
 const inputClass =
-  "w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800  bg-white";
+  "w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 bg-white";
 
 /** datetime-local wants "YYYY-MM-DDTHH:mm". */
 function toLocalInput(value: Date): string {
@@ -121,11 +110,13 @@ function toLocalInput(value: Date): string {
 }
 
 interface PageProps {
-  params: { id: string };
-  searchParams: Record<string, string | undefined>;
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }
 
-export default async function AppointmentDetailPage({ params, searchParams }: PageProps) {
+export default async function AppointmentDetailPage(props: PageProps) {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
   const appointment = await prisma.appointment.findUnique({
     where: { id: params.id },
     include: {
@@ -222,7 +213,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
   const quotedCents = Math.max(0, total - rateDiscountCents - rewardDiscountCents);
   const inShop = appointment.checkedInAt != null;
   const elapsedMins = inShop
-    ? Math.round((Date.now() - appointment.checkedInAt!.getTime()) / 60000)
+    ? Math.round((new Date().getTime() - appointment.checkedInAt!.getTime()) / 60000)
     : null;
 
   return (
@@ -235,7 +226,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
 
       {appointment.pet.hasBiteHistory && (
         <div className="border-t border-stone-100 bg-red-600 text-white px-3 py-2.5 font-bold text-sm flex items-center gap-3">
-          <span className="text-xl">⚠</span> BITE HISTORY — handle with extreme caution
+          <span className="text-xl" aria-hidden="true">⚠</span> BITE HISTORY — handle with extreme caution
         </div>
       )}
 
@@ -258,7 +249,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
       {/* What the counter has to know before it quotes or hands the pet back. */}
       {appointment.customer.pricingNotes && (
         <div className="border-t border-stone-100 bg-amber-50 px-3 py-2 text-amber-800 text-sm">
-          <span className="font-bold uppercase tracking-wide text-xs block">Pricing note</span>
+          <span className="font-bold tracking-tight text-xs block">Pricing note</span>
           <span className="whitespace-pre-wrap">{appointment.customer.pricingNotes}</span>
         </div>
       )}
@@ -325,7 +316,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
                 </h1>
                 <span
                   className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                    statusColor[appointment.status] ?? "bg-stone-100 text-stone-500"
+                    statusBadgeClass(appointment.status)
                   }`}
                 >
                   {formatStatus(appointment.status)}
@@ -337,7 +328,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
 
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Pet</p>
+                  <p className="text-[10px] font-bold tracking-tight text-stone-400">Pet</p>
                   <p className="text-stone-700">
                     {formatSpecies(appointment.pet.species)}
                     {appointment.pet.breed ? ` · ${appointment.pet.breed}` : ""}
@@ -346,7 +337,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
                 </div>
                 <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Owner</p>
+                    <p className="text-[10px] font-bold tracking-tight text-stone-400">Owner</p>
                     <p className="text-stone-700">
                       <Link
                         href={`/staff/customers/${appointment.customer.id}`}
@@ -363,7 +354,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
                   </div>
                   {appointment.customer.alternateContacts.length > 0 && (
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      <p className="text-[10px] font-bold tracking-tight text-stone-400">
                         Approved alternates
                       </p>
                       {appointment.customer.alternateContacts.map((alternate) => (
@@ -383,7 +374,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
                   )}
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Schedule</p>
+                  <p className="text-[10px] font-bold tracking-tight text-stone-400">Schedule</p>
                   <p className="text-stone-700">
                     {formatShopDate(appointment.scheduledAt, {
                       weekday: "short",
@@ -464,7 +455,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
       <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Assignment */}
         <section className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">
             Assignment &amp; schedule
           </h2>
           <form action={updateAssignment} className="space-y-3">
@@ -538,7 +529,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
 
           {/* Kennel */}
           <div className="mt-3 pt-4 border-t border-stone-100">
-            <h3 className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-2">
+            <h3 className="text-xs font-bold text-stone-500 tracking-tight mb-2">
               Kennel
             </h3>
             {openKennels.length === 0 && !appointment.kennel ? (
@@ -589,7 +580,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
 
         {/* Services */}
         <section className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">
             Services
           </h2>
           {appointment.services.length === 0 ? (
@@ -603,7 +594,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
                   <span className="text-stone-800">
                     {line.service?.name ?? formatServiceType(line.serviceType)}
                     {line.sortOrder === 0 && (
-                      <span className="ml-2 text-[10px] font-bold text-stone-400 uppercase">
+                      <span className="ml-2 text-[10px] font-bold text-stone-400 ">
                         Primary
                       </span>
                     )}
@@ -683,7 +674,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
       <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Visit events */}
         <section className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">
             What happened ({appointment.visitEvents.length})
           </h2>
           {appointment.visitEvents.length === 0 ? (
@@ -741,7 +732,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
 
         {/* Audit trail */}
         <section className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">
             Status history
           </h2>
           {appointment.statusHistory.length === 0 ? (
@@ -753,7 +744,7 @@ export default async function AppointmentDetailPage({ params, searchParams }: Pa
                   <span>
                     <span
                       className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        statusColor[entry.status] ?? "bg-stone-100 text-stone-500"
+                        statusBadgeClass(entry.status)
                       }`}
                     >
                       {formatStatus(entry.status)}

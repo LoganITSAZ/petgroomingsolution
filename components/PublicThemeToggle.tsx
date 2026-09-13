@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 /**
  * Light/dark for the public site.
@@ -28,46 +28,61 @@ function apply(dark: boolean) {
   document.getElementById("public-root")?.classList.toggle("dark", dark);
 }
 
-export default function PublicThemeToggle({ className = "" }: { className?: string }) {
-  // The server cannot know the visitor's choice, so the button's *label* is
-  // settled on mount. The icons are swapped by CSS off the same class the
-  // pre-paint script sets, so nothing visible waits for hydration.
-  const [dark, setDark] = useState(false);
+/**
+ * The visitor's choice is an external store, not React state: it lives in
+ * localStorage and in the device's own `prefers-color-scheme`, both of which
+ * change without React asking. `useSyncExternalStore` is what reads one —
+ * settling it in an effect instead means a setState on every mount.
+ */
+const listeners = new Set<() => void>();
 
-  useEffect(() => {
+/** Set when this page toggles, so a browser that refuses the write still holds. */
+let localChoice: boolean | null = null;
+
+function subscribe(onStoreChange: () => void): () => void {
+  listeners.add(onStoreChange);
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  media.addEventListener("change", onStoreChange);
+  return () => {
+    listeners.delete(onStoreChange);
+    media.removeEventListener("change", onStoreChange);
+  };
+}
+
+function readDark(): boolean {
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(THEME_STORAGE_KEY);
+  } catch {
+    // Storage can be blocked outright; fall through to the choice held here.
+  }
+  if (stored) return stored === "dark";
+  // No deliberate override, so follow the device — someone whose phone dims at
+  // sunset expects the site to come with it.
+  return localChoice ?? window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+export default function PublicThemeToggle({ className = "" }: { className?: string }) {
+  // The server cannot know the visitor's choice, so it renders the light
+  // label and the store corrects it. The icons are swapped by CSS off the same
+  // class the pre-paint script sets, so nothing visible waits for hydration.
+  const dark = useSyncExternalStore(subscribe, readDark, () => false);
+
     // Re-applied rather than merely read: the pre-paint script only runs on a
     // hard load. Arriving from elsewhere in the app inserts that script into a
     // live document, where it never executes.
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    const next = stored
-      ? stored === "dark"
-      : window.matchMedia("(prefers-color-scheme: dark)").matches;
-    apply(next);
-    setDark(next);
-  }, []);
-
   useEffect(() => {
-    // Follow the device while the visitor has expressed no preference of their
-    // own — someone whose phone dims at sunset expects the site to come with it.
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const follow = () => {
-      if (localStorage.getItem(THEME_STORAGE_KEY)) return;
-      apply(media.matches);
-      setDark(media.matches);
-    };
-    media.addEventListener("change", follow);
-    return () => media.removeEventListener("change", follow);
-  }, []);
+    apply(dark);
+  }, [dark]);
 
   function toggle() {
-    const next = !dark;
-    setDark(next);
-    apply(next);
+    localChoice = !dark;
     try {
-      localStorage.setItem(THEME_STORAGE_KEY, next ? "dark" : "light");
+      localStorage.setItem(THEME_STORAGE_KEY, localChoice ? "dark" : "light");
     } catch {
       // Private browsing refuses writes; the choice still holds for this page.
     }
+    for (const listener of listeners) listener();
   }
 
   return (

@@ -43,6 +43,7 @@ function LoginForm() {
           {(["customer", "staff"] as const).map((t) => (
             <button
               key={t}
+              type="button"
               onClick={() => setUserType(t)}
               className={`flex-1 py-2 rounded-md text-sm font-semibold transition-colors capitalize ${
                 userType === t
@@ -64,6 +65,8 @@ function LoginForm() {
               type="email"
               autoComplete="email"
               required
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "login-error" : undefined}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-400"
@@ -77,13 +80,15 @@ function LoginForm() {
               type="password"
               autoComplete="current-password"
               required
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "login-error" : undefined}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
           </div>
           {error && (
-            <p role="alert" className="text-red-600 text-sm">
+            <p id="login-error" role="alert" className="text-red-600 text-sm">
               {error}
             </p>
           )}

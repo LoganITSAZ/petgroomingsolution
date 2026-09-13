@@ -9,7 +9,7 @@ import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { defaultAssignment } from "@/lib/stations";
 import { capacityConflicts, kennelAvailableFor } from "@/lib/kennels";
-import { shopDayRange } from "@/lib/utils";
+import { formatShopTime24, shopDayKey, shopDayRange } from "@/lib/utils";
 import {
   getServiceOptions,
   resolveSelectedServices,
@@ -23,10 +23,11 @@ import { bookingRateSnapshot } from "@/lib/pricing-tiers";
 export const metadata = { title: "New Appointment" };
 
 interface PageProps {
-  searchParams: { customerId?: string; petId?: string };
+  searchParams: Promise<{ customerId?: string; petId?: string }>;
 }
 
-export default async function NewStaffAppointmentPage({ searchParams }: PageProps) {
+export default async function NewStaffAppointmentPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   if (!session || session.user.userType !== "staff") {
     redirect("/login");
@@ -47,12 +48,12 @@ export default async function NewStaffAppointmentPage({ searchParams }: PageProp
     getServiceOptions(),
   ]);
 
-  // Default datetime: next full hour, at least 1 hour from now
-  const defaultDt = new Date(Date.now() + 60 * 60 * 1000);
+  // Default datetime: next full hour, at least 1 hour from now. The input is
+  // shop wall clock, so it is formatted in SHOP_TIMEZONE — getTimezoneOffset()
+  // is the server's, which is UTC in production.
+  const defaultDt = new Date(new Date().getTime() + 60 * 60 * 1000);
   defaultDt.setMinutes(0, 0, 0);
-  const defaultDtLocal = new Date(defaultDt.getTime() - defaultDt.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
+  const defaultDtLocal = `${shopDayKey(defaultDt)}T${formatShopTime24(defaultDt)}`;
 
   async function createAppointment(formData: FormData) {
     "use server";

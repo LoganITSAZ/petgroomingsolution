@@ -27,30 +27,49 @@
        composites to about #FCFCFC — too faint to read as a container at arm's
        length on a shop terminal. Warm greys, a hair off the stone ramp, so a
        well reads as a recess in the card rather than a second card. */
-    --well: 243 242 238;
-    --band: 249 248 245;
-    --well-line: 226 223 217;
-    --page-bg: 250 250 249;
+    --well: 233 231 224;
+    --band: 245 243 238;
+    --well-line: 213 209 200;
+    /* Chalk, not paper-white. The page behind the card is a surface the shop
+       writes on; near-white left the card floating with nothing behind it. */
+    --page-bg: 245 244 240;
     --surface: 255 255 255;
     --ink: 28 25 23;
-    --muted: 120 113 108;
+    --muted: 114 107 102;
     --line: 231 229 228;
-    --footer-bg: 41 37 36;
+    /* Signals. Red means someone must act (a bite history, a pet held past
+       pickup); green means a thing is finished or the shop is open. They are
+       the only saturated colours that do not come from the shop's brand, so
+       they keep their meaning whatever theme is live. */
+    --signal-alert: 192 54 44;
+    --signal-open: 47 125 79;
+    --signal-shut: 138 132 128;
+    --footer-bg: 26 25 23;
     --footer-ink: 214 211 209;
   }
 
   body {
-    @apply bg-stone-50 text-stone-900 antialiased;
+    @apply bg-page text-stone-900 antialiased;
   }
 
   .dark {
     color-scheme: dark;
-    /* Same roles, flipped: the card is #1f2937, so a well recedes below it and
+    /* Same roles, flipped: the card is #21201d, so a well recedes below it and
        a band sits just above. Painting the variables means `bg-well` needs no
        `.dark` override of its own. */
-    --well: 24 32 45;
-    --band: 38 48 63;
-    --well-line: 55 65 81;
+    --well: 19 18 16;
+    --band: 46 44 40;
+    --well-line: 64 61 56;
+    /* The chassis tokens need the same treatment, and for the same reason: a
+       class override cannot reach `bg-page`, so a back office or portal
+       wrapper painted from `--page-bg` kept its chalk background under `.dark`
+       and put near-white headings on it. These match darkTokens() in
+       lib/themes.ts, which the public site paints inline. */
+    --page-bg: 19 18 17;
+    --surface: 33 32 29;
+    --ink: 245 244 242;
+    --muted: 171 167 162;
+    --line: 70 67 61;
   }
 
   /* ── Dark surfaces ──────────────────────────────────────────────────────
@@ -62,29 +81,29 @@
   .dark,
   .dark body,
   .dark .bg-stone-50,
-  .dark.bg-stone-50 { background-color: #111827; color: #f3f4f6; }
+  .dark.bg-stone-50 { background-color: #131211; color: #f2f1ee; }
   .dark .bg-white,
-  .dark.bg-white { background-color: #1f2937; }
+  .dark.bg-white { background-color: #21201d; }
   .dark .bg-stone-100,
-  .dark.bg-stone-100 { background-color: #1f2937; }
+  .dark.bg-stone-100 { background-color: #21201d; }
   .dark .bg-stone-200,
-  .dark.bg-stone-200 { background-color: #374151; }
-  .dark .bg-stone-300 { background-color: #4b5563; }
+  .dark.bg-stone-200 { background-color: #35332f; }
+  .dark .bg-stone-300 { background-color: #46433d; }
   .dark .bg-stone-900,
-  .dark.bg-stone-900 { background-color: #030712; }
+  .dark.bg-stone-900 { background-color: #0b0a09; }
   .dark .text-stone-900,
-  .dark .text-stone-800 { color: #f9fafb; }
-  .dark .text-stone-700 { color: #e5e7eb; }
-  .dark .text-stone-600 { color: #d1d5db; }
+  .dark .text-stone-800 { color: #faf9f7; }
+  .dark .text-stone-700 { color: #e7e5e2; }
+  .dark .text-stone-600 { color: #d3d0cc; }
   /* #9ca3af is only 4.06:1 on the stone-200 fill above, which is where the
      small capacity pills sit; a step lighter clears AA on every dark surface. */
   .dark .text-stone-500,
-  .dark .text-stone-400 { color: #a8b0bb; }
+  .dark .text-stone-400 { color: #aba7a2; }
   .dark .border-stone-200,
   .dark .border-stone-300,
-  .dark .border-stone-100 { border-color: #374151; }
-  .dark .border-stone-400 { border-color: #4b5563; }
-  .dark .divide-stone-100 > :not([hidden]) ~ :not([hidden]) { border-color: #374151; }
+  .dark .border-stone-100 { border-color: #35332f; }
+  .dark .border-stone-400 { border-color: #46433d; }
+  .dark .divide-stone-100 > :not([hidden]) ~ :not([hidden]) { border-color: #35332f; }
 
   /* Tinted panels. Each family darkens its 50/100 fill, lightens the text
      that goes on it, and pulls the border in to match. */
@@ -126,9 +145,9 @@
 
      Deliberately not listed: `bg-stone-900/*` and `bg-stone-800/*`. Those are
      modal scrims and kiosk overlays, where the transparency is the point. */
-  .dark [class*="bg-white/"] { background-color: #1f2937; }
-  .dark [class*="bg-stone-50/"] { background-color: #111827; }
-  .dark [class*="bg-stone-100/"] { background-color: #1f2937; }
+  .dark [class*="bg-white/"] { background-color: #21201d; }
+  .dark [class*="bg-stone-50/"] { background-color: #131211; }
+  .dark [class*="bg-stone-100/"] { background-color: #21201d; }
   .dark [class*="bg-amber-50/"] { background-color: #451a03; }
   .dark [class*="bg-amber-100/"] { background-color: #78350f; }
   .dark [class*="bg-red-50/"] { background-color: #450a0a; }
@@ -146,7 +165,7 @@
 
   /* Saturated text. The 600–900 shades are dark-on-dark once the surface
      flips, so every one of them lands on its 300 — at least 5:1 against both
-     the card (#1f2937) and the tinted fills above. */
+     the card (#21201d) and the tinted fills above. */
   .dark .text-amber-600,
   .dark .text-amber-700,
   .dark .text-amber-800,
@@ -256,15 +275,15 @@
 
   .dark input,
   .dark textarea,
-  .dark select { background-color: #111827; color: #f9fafb; border-color: #4b5563; }
+  .dark select { background-color: #131211; color: #faf9f7; border-color: #46433d; }
   .dark input::placeholder,
-  .dark textarea::placeholder { color: #a8b0bb; }
+  .dark textarea::placeholder { color: #aba7a2; }
   .dark .hover\:bg-stone-50:hover,
-  .dark .hover\:bg-stone-100:hover { background-color: #374151; }
+  .dark .hover\:bg-stone-100:hover { background-color: #35332f; }
   /* A white hover on a band reads as "lifted" in light mode; on a dark card the
      lift is a step lighter, not a step whiter. `bg-well`/`bg-band` need no rule
      here — they paint from variables the .dark block above redefines. */
-  .dark .hover\:bg-white:hover { background-color: #374151; }
+  .dark .hover\:bg-white:hover { background-color: #35332f; }
   .dark .hover\:bg-amber-50:hover { background-color: #451a03; }
 }
 
@@ -397,8 +416,11 @@
     }
   }
 
+  /* A standfirst, not a label. This was tracked-out small caps, which is the
+     hardest setting on the page to read and said nothing the words did not
+     already say. */
   .public-eyebrow {
-    @apply inline-flex items-center rounded-full border border-brand-300/60 bg-surface/60 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-brand-text shadow-sm;
+    @apply inline-flex items-center text-base font-semibold text-brand-text;
   }
 
   .public-primary-button {
@@ -412,7 +434,52 @@
   }
 
   .public-section-title {
-    @apply text-3xl font-black tracking-tight text-ink md:text-4xl;
+    @apply font-display text-3xl font-extrabold tracking-[-0.03em] text-ink md:text-4xl;
+  }
+
+  /*
+    Disclosure.
+    ───────────
+    A collapsible section is `<details>`/`<summary>` — the platform already
+    knows how to open, close, be keyboard-reachable, be announced as expanded
+    or collapsed, and be found by the browser's own in-page search. A div with
+    a useState and an aria-expanded is the same thing rebuilt worse.
+
+    This class only dresses it: the default disclosure triangle goes, a chevron
+    takes its place on the right, and the row gets a focus ring. Colour is left
+    to the surface it sits on, so the same class works on a glass panel and on
+    a back-office well.
+  */
+  .disclosure > summary {
+    @apply flex cursor-pointer list-none items-center gap-3 rounded-lg outline-none;
+  }
+
+  .disclosure > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .disclosure > summary:focus-visible {
+    @apply ring-2 ring-brand-500/60 ring-offset-2 ring-offset-transparent;
+  }
+
+  /* The chevron is the only thing that says "this opens". It points down when
+     shut and up when open, and the rotation is a transform so a reader who has
+     asked for less motion simply gets the end state. */
+  .disclosure > summary::after {
+    content: "";
+    @apply ml-auto h-2 w-2 shrink-0 rotate-45 border-b-2 border-r-2 border-current opacity-50 transition-transform duration-200;
+    margin-top: -0.25rem;
+  }
+
+  .disclosure[open] > summary::after {
+    @apply rotate-[225deg];
+    margin-top: 0.15rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .disclosure > summary::after {
+      transition: none;
+    }
   }
 
   /* Back-office density: the shop runs these screens all day and wants rows,
@@ -479,7 +546,7 @@
 @layer utilities {
   /* Bite warning — high-visibility red banner */
   .bite-warning {
-    @apply bg-red-600 text-white font-bold px-4 py-2 rounded-lg text-center tracking-wide uppercase;
+    @apply bg-signal-alert text-white font-bold px-4 py-2 rounded-lg text-center tracking-wide uppercase;
   }
 
   /* Station display — large readable text for Pi screen */

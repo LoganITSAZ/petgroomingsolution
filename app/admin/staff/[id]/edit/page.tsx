@@ -21,13 +21,12 @@ const ERRORS: Record<string, string> = {
   self_lockout: "You cannot remove your own admin access — ask another admin to do it.",
 };
 
-export default async function EditStaffPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { error?: string };
+export default async function EditStaffPage(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
   const [staff, config, stations] = await Promise.all([
     prisma.staff.findUnique({
       where: { id: params.id },

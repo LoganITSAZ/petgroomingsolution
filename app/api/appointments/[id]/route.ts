@@ -28,7 +28,7 @@ const APPOINTMENT_INCLUDE = {
 // Auth: staff only
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user) {
@@ -38,7 +38,7 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { id } = params;
+  const { id } = await params;
 
   const appointment = await prisma.appointment.findUnique({
     where: { id },
@@ -57,7 +57,7 @@ export async function GET(
 // Updatable fields: stationId, staffId, scheduledAt, durationMins, visitNotes
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user) {
@@ -67,7 +67,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { id } = params;
+  const { id } = await params;
 
   const existing = await prisma.appointment.findUnique({ where: { id } });
   if (!existing) {
@@ -120,7 +120,7 @@ export async function PATCH(
 // Soft cancel — sets status to CANCELLED and creates a status history record
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user) {
@@ -130,7 +130,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { id } = params;
+  const { id } = await params;
 
   const existing = await prisma.appointment.findUnique({ where: { id } });
   if (!existing) {

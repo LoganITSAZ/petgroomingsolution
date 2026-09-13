@@ -3,6 +3,7 @@ import { canManage, getStaffRoles } from "@/lib/staff-roles";
 import { isFloorStaff } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
+import { headers } from "next/headers";
 import SystemThemeScript from "@/components/SystemThemeScript";
 import PresenceSwitcher from "@/components/PresenceSwitcher";
 import MobileMenu from "@/components/MobileMenu";
@@ -13,9 +14,10 @@ import NavLink from "@/components/NavLink";
 
 /**
  * One back office, one shell. Staff and admin screens are the same product to
- * the person using them, so they share a sidebar: the floor links everyone
- * gets, then the shop group for whoever runs the shop (ADMIN or MANAGER), and
- * the technical group below it for ADMIN alone.
+ * the person using them, so they share a sidebar, grouped by what a person is
+ * there to do rather than by who is allowed in: Floor for everyone, then
+ * Manage, Insights and Settings for whoever runs the shop (ADMIN or MANAGER),
+ * and System for ADMIN alone.
  *
  * Two shapes, one layout: a fixed sidebar on a shop terminal, and a top bar
  * with a drawer on a phone — groomers set their presence from the floor, and
@@ -38,21 +40,35 @@ const NAV = [
   { href: "/staff/resources", label: "Resources" },
 ];
 
-const ADMIN_NAV = [
+/**
+ * What the shop edits about itself: the records and documents a manager
+ * changes during a working week. One flat "Shop" group carried all eleven of
+ * these, which put "Pricing Tiers" and "Appearance" — a rate a customer is on
+ * and the colour of the website — in the same list with nothing between them.
+ */
+const MANAGE_NAV = [
   { href: "/admin/services", label: "Services & Pricing" },
   { href: "/admin/pricing", label: "Pricing Tiers" },
   { href: "/admin/staff", label: "Manage Staff" },
   { href: "/admin/schedule", label: "Edit Schedule" },
   { href: "/admin/stations", label: "Manage Stations" },
   { href: "/admin/marketing", label: "Marketing" },
+  { href: "/admin/waiver", label: "Liability Waiver" },
+];
+
+/** What the shop reads about itself. Nothing here is editable. */
+const INSIGHTS_NAV = [
   // Analytics keeps its /staff URL — a groomer's saved link should not
   // break — but it is a shop screen: it carries the leaderboard and every
   // groomer's estimated pay.
   { href: "/staff/analytics", label: "Analytics" },
   { href: "/admin/reports", label: "Reports" },
-  { href: "/admin/appearance", label: "Appearance" },
+];
+
+/** Set once and left alone. */
+const SETTINGS_NAV = [
   { href: "/admin/settings", label: "Shop Settings" },
-  { href: "/admin/waiver", label: "Liability Waiver" },
+  { href: "/admin/appearance", label: "Appearance" },
 ];
 
 /**
@@ -65,9 +81,26 @@ const TECHNICAL_NAV = [
   { href: "/admin/notifications", label: "Notifications" },
 ];
 
+/** A group header names a scope, never a page. */
+function NavGroup({ label, items, first = false }: { label: string; items: { href: string; label: string }[]; first?: boolean }) {
+  return (
+    <>
+      <p
+        className={`px-3 pb-1 font-display text-[0.8125rem] font-bold tracking-tight text-stone-300 ${first ? "" : "mt-4 border-t border-stone-700/70 pt-3"}`}
+      >
+        {label}
+      </p>
+      {items.map((item) => (
+        <NavLink key={item.href} href={item.href} label={item.label} />
+      ))}
+    </>
+  );
+}
+
 export default async function BackOfficeShell({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user || session.user.userType !== "staff") redirect("/login?type=staff");
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   const [roles, me, config] = await Promise.all([
     getStaffRoles(session.user.id),
@@ -87,43 +120,28 @@ export default async function BackOfficeShell({ children }: { children: React.Re
 
   const links = (
     <>
-      <p className="px-3 pb-1 text-[11px] font-semibold tracking-wider text-stone-400 uppercase">
-        Floor
-      </p>
-      {(onFloor ? [...NAV.slice(0, 1), { href: "/staff/me", label: "My Shift" }, ...NAV.slice(1)] : NAV).map((item) => (
-        <NavLink key={item.href} href={item.href} label={item.label} />
-      ))}
+      <NavGroup
+        first
+        label="Floor"
+        items={onFloor ? [...NAV.slice(0, 1), { href: "/staff/me", label: "My Shift" }, ...NAV.slice(1)] : NAV}
+      />
       {canManageShop && (
         <>
-          <hr className="border-stone-700 mt-3 mb-1" />
-          <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-stone-400 uppercase">
-            Shop
-          </p>
-          {ADMIN_NAV.map((item) => (
-            <NavLink key={item.href} href={item.href} label={item.label} />
-          ))}
+          <NavGroup label="Manage" items={MANAGE_NAV} />
+          <NavGroup label="Insights" items={INSIGHTS_NAV} />
+          <NavGroup label="Settings" items={SETTINGS_NAV} />
         </>
       )}
-      {isAdmin && (
-        <>
-          <hr className="border-stone-700 mt-3 mb-1" />
-          <p className="px-3 py-1 text-[11px] font-semibold tracking-wider text-stone-400 uppercase">
-            Admin
-          </p>
-          {TECHNICAL_NAV.map((item) => (
-            <NavLink key={item.href} href={item.href} label={item.label} />
-          ))}
-        </>
-      )}
+      {isAdmin && <NavGroup label="System" items={TECHNICAL_NAV} />}
     </>
   );
 
   return (
     <div
       id="back-office-root"
-      className={`app-dense min-h-screen bg-stone-100 md:flex ${me?.themePreference === "DARK" ? "dark" : ""}`}
+      className={`app-dense min-h-screen bg-page md:flex ${me?.themePreference === "DARK" ? "dark" : ""}`}
     >
-      {me?.themePreference === "SYSTEM" && <SystemThemeScript rootId="back-office-root" />}
+      {me?.themePreference === "SYSTEM" && <SystemThemeScript rootId="back-office-root" nonce={nonce} />}
 
       <a href="#main-content" className="skip-link">
         Skip to main content
@@ -134,8 +152,8 @@ export default async function BackOfficeShell({ children }: { children: React.Re
         <div className="flex items-center gap-3">
           <MobileMenu>{links}</MobileMenu>
 
-          <Link href="/staff" className="font-bold text-white truncate">
-            🐾 {session.user.name}
+          <Link href="/staff" className="font-display font-extrabold tracking-tight text-white truncate">
+            <span aria-hidden="true">🐾</span> {session.user.name}
           </Link>
 
           {onFloor && (
@@ -147,9 +165,15 @@ export default async function BackOfficeShell({ children }: { children: React.Re
       </header>
 
       {/* Terminal: the familiar sidebar */}
-      <aside className="hidden md:flex w-48 bg-stone-900 text-stone-200 flex-col py-5 px-3 fixed h-full">
-        <Link href="/" className="font-bold text-white text-lg mb-3 px-2">
-            🐾 {config.shopName}
+      <aside className="hidden md:flex w-52 bg-stone-900 text-stone-200 flex-col py-5 px-3 fixed h-full">
+        {/* The display face at text-lg put a two-word shop name on the first
+            group header. Tight leading and its own space, rather than an
+            ellipsis — a shop should not read its own name cut off. */}
+        <Link
+          href="/"
+          className="mb-4 block px-2 font-display text-base font-extrabold leading-tight tracking-[-0.02em] text-white"
+        >
+          <span aria-hidden="true">🐾</span> {config.shopName}
         </Link>
         {/* The admin group makes this list long enough to outrun a short screen. */}
         <nav className="flex-1 space-y-1 text-sm overflow-y-auto">{links}</nav>
@@ -170,12 +194,12 @@ export default async function BackOfficeShell({ children }: { children: React.Re
               await signOut({ redirectTo: "/" });
             }}
           >
-            <button className="text-stone-300 hover:text-white mt-1">Sign out</button>
+            <button type="submit" className="text-stone-300 hover:text-white mt-1">Sign out</button>
           </form>
         </div>
       </aside>
 
-      <main id="main-content" className="flex-1 md:ml-48 p-3 md:p-4 flex flex-col">{children}</main>
+      <main id="main-content" className="flex-1 md:ml-52 p-3 md:p-4 flex flex-col">{children}</main>
     </div>
   );
 }

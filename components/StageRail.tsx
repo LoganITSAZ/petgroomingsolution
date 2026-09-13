@@ -55,7 +55,7 @@ export default function StageRail({
         ))}
       </span>
       {showLabel && (
-        <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-stone-600">
+        <span className="whitespace-nowrap text-[10px] font-semibold tracking-tight text-stone-600">
           {stage.label}
         </span>
       )}

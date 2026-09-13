@@ -63,10 +63,11 @@ function StatusPill({ on }: { on: boolean }) {
 }
 
 interface PageProps {
-  searchParams: { saved?: string };
+  searchParams: Promise<{ saved?: string }>;
 }
 
-export default async function NotificationsPage({ searchParams }: PageProps) {
+export default async function NotificationsPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   // Delivery credentials are a technical screen — admin only, not the manager.
   if (!(await currentStaffIsAdmin())) redirect("/staff");
 

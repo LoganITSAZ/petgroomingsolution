@@ -45,6 +45,10 @@ export default function Modal({
   }, [open]);
 
   return (
+    // The backdrop click below is a pointer shortcut, not the way out: Escape
+    // already closes a `showModal()` dialog, so there is no keyboard handler to
+    // pair with it and nothing here is unreachable without a mouse.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <dialog
       ref={ref}
       aria-labelledby={labelledBy}

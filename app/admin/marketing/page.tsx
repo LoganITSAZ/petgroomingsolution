@@ -6,6 +6,7 @@ import { deletePromotion, savePromotion } from "./actions";
 import { PageShell, PageSection } from "@/components/ui";
 import SaveToast from "@/components/SaveToast";
 import ModalButton from "@/components/ModalButton";
+import DateRangeLiveWarning from "@/components/admin/DateRangeLiveWarning";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -99,6 +100,11 @@ function PromotionFields({
           <span className="block text-stone-500 mb-1">Promo code</span>
           <input name="code" defaultValue={promotion?.code ?? ""} className={inputClass} />
         </label>
+        <DateRangeLiveWarning
+          startName="startsAt"
+          endName="endsAt"
+          message="The end date has to come after the start date."
+        >
         <label className="text-sm">
           <span className="block text-stone-500 mb-1">Starts</span>
           <input
@@ -117,6 +123,7 @@ function PromotionFields({
             className={inputClass}
           />
         </label>
+        </DateRangeLiveWarning>
         <label className="text-sm">
           <span className="block text-stone-500 mb-1">Sort order</span>
           <input
@@ -162,10 +169,11 @@ function PromotionFields({
 }
 
 interface PageProps {
-  searchParams: { saved?: string; deleted?: string; error?: string };
+  searchParams: Promise<{ saved?: string; deleted?: string; error?: string }>;
 }
 
-export default async function AdminMarketingPage({ searchParams }: PageProps) {
+export default async function AdminMarketingPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const [promotions, services] = await Promise.all([
     prisma.promotion.findMany({
       include: { service: true },
@@ -264,7 +272,7 @@ export default async function AdminMarketingPage({ searchParams }: PageProps) {
                     </span>
                   </span>
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase whitespace-nowrap ${STATE_BADGE[state]}`}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${STATE_BADGE[state]}`}
                   >
                     {state}
                   </span>

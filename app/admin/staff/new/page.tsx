@@ -18,11 +18,10 @@ const ERRORS: Record<string, string> = {
   email_taken: "Someone already uses that email address.",
 };
 
-export default async function NewStaffPage({
-  searchParams,
-}: {
-  searchParams: { error?: string };
+export default async function NewStaffPage(props: {
+  searchParams: Promise<{ error?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const [config, stations] = await Promise.all([
     getConfig(),
     prisma.station.findMany({

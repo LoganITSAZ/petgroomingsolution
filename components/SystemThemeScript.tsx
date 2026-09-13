@@ -21,7 +21,7 @@ import { useEffect } from "react";
  * The listener matters as much as the initial read: a device that switches at
  * sunset takes the screen with it, with no reload and no visit to a profile.
  */
-export default function SystemThemeScript({ rootId }: { rootId: string }) {
+export default function SystemThemeScript({ rootId, nonce }: { rootId: string; nonce?: string }) {
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () =>
@@ -36,5 +36,5 @@ export default function SystemThemeScript({ rootId }: { rootId: string }) {
     rootId
   )});if(r)r.classList.toggle("dark",m.matches)}catch(e){}})();`;
 
-  return <script dangerouslySetInnerHTML={{ __html: script }} />;
+  return <script nonce={nonce} dangerouslySetInnerHTML={{ __html: script }} />;
 }

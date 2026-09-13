@@ -14,16 +14,17 @@ export const metadata = { title: "Manage Stations" };
 
 
 interface PageProps {
-  searchParams: {
+  searchParams: Promise<{
     created?: string;
     saved?: string;
     kept?: string;
     capacity?: string;
     error?: string;
-  };
+  }>;
 }
 
-export default async function StationsPage({ searchParams }: PageProps) {
+export default async function StationsPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const config = await getConfig();
   const stations = await prisma.station.findMany({
     orderBy: [{ role: "asc" }, { name: "asc" }],
@@ -150,22 +151,22 @@ export default async function StationsPage({ searchParams }: PageProps) {
       {/* Summary cards */}
       <PageSection bodyClassName="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">Total Stations</p>
+          <p className="text-xs font-semibold text-stone-400 tracking-tight">Total Stations</p>
           <p className="text-2xl font-bold text-stone-800 mt-1">{stations.length}</p>
         </div>
         <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">Active</p>
+          <p className="text-xs font-semibold text-stone-400 tracking-tight">Active</p>
           <p className="text-2xl font-bold text-green-700 mt-1">{activeCount}</p>
         </div>
         <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">Inactive</p>
+          <p className="text-xs font-semibold text-stone-400 tracking-tight">Inactive</p>
           <p className="text-2xl font-bold text-stone-400 mt-1">{stations.length - activeCount}</p>
         </div>
         <Link
           href="/staff/stations"
           className="border border-stone-200 rounded-lg bg-well p-4 hover:border-amber-300 transition-colors"
         >
-          <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">Kennels In Use</p>
+          <p className="text-xs font-semibold text-stone-400 tracking-tight">Kennels In Use</p>
           <p className="text-2xl font-bold text-stone-800 mt-1">
             {kennelOccupied}
             <span className="text-base font-medium text-stone-400">/{kennelTotal}</span>
@@ -187,19 +188,19 @@ export default async function StationsPage({ searchParams }: PageProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-stone-50 border-b border-stone-200 text-left">
-                  <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                  <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 tracking-tight">
                     Name
                   </th>
-                  <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                  <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 tracking-tight">
                     Role
                   </th>
-                  <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                  <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 tracking-tight">
                     Layout
                   </th>
-                  <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                  <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 tracking-tight">
                     Status
                   </th>
-                  <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide text-right">
+                  <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 tracking-tight text-right">
                     Touchscreen
                   </th>
                 </tr>

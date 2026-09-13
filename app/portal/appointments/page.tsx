@@ -1,25 +1,13 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { formatStatus, formatServiceType } from "@/lib/utils";
+import { formatStatus, formatServiceType, statusBadgeClass } from "@/lib/utils";
 import Link from "next/link";
+import { PageShell, PageSection, Well } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
 export const metadata = { title: "My appointments" };
-
-const statusColor: Record<string, string> = {
-  SCHEDULED: "bg-stone-100 text-stone-600",
-  CHECKED_IN: "bg-blue-100 text-blue-700",
-  IN_PROGRESS: "bg-amber-100 text-amber-700",
-  DRYING: "bg-sky-100 text-sky-700",
-  FINISHING: "bg-purple-100 text-purple-700",
-  COMPLETE: "bg-green-100 text-green-700",
-  READY_PICKUP: "bg-emerald-100 text-emerald-800",
-  PICKED_UP: "bg-stone-100 text-stone-400",
-  CANCELLED: "bg-red-100 text-red-700",
-  NO_SHOW: "bg-red-100 text-red-400",
-};
 
 export default async function PortalAppointmentsPage() {
   const session = await auth();
@@ -45,62 +33,57 @@ export default async function PortalAppointmentsPage() {
   );
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-stone-900">My Appointments</h1>
-          <p className="text-stone-500 text-sm mt-0.5">View and manage your grooming appointments.</p>
-        </div>
+    <PageShell
+      title="My Appointments"
+      subtitle="Your grooming visits, booked and past."
+      actions={
         <Link
           href="/portal/appointments/new"
           className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
         >
-          + Book Appointment
+          Book a visit
         </Link>
-      </div>
-
-      {/* Upcoming */}
-      <section>
-        <h2 className="font-bold text-stone-700 mb-3 text-sm uppercase tracking-widest">
-          Upcoming ({upcoming.length})
-        </h2>
+      }
+    >
+      <PageSection title={`Upcoming (${upcoming.length})`}>
         {upcoming.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400">
-            No upcoming appointments.{" "}
-            <Link href="/portal/appointments/new" className="text-amber-700 hover:underline">
-              Book one now →
+          <Well className="py-2 text-sm text-stone-500">
+            Nothing booked.{" "}
+            <Link href="/portal/appointments/new" className="text-brand-text hover:underline">
+              Book a visit
             </Link>
-          </div>
+          </Well>
         ) : (
-          <div className="space-y-3">
+          <Well as="ul" className="px-0 py-0 divide-y divide-well-line">
             {upcoming.map((appt) => (
-              <AppointmentCard key={appt.id} appt={appt} statusColor={statusColor} />
+              <AppointmentRow key={appt.id} appt={appt} />
             ))}
-          </div>
+          </Well>
         )}
-      </section>
+      </PageSection>
 
-      {/* Past */}
+      {/* History is the reason someone scrolls past what is booked. It opens
+          on request rather than pushing the next visit off the screen. */}
       {past.length > 0 && (
-        <section>
-          <h2 className="font-bold text-stone-700 mb-3 text-sm uppercase tracking-widest">
-            Past Appointments ({past.length})
-          </h2>
-          <div className="space-y-3">
-            {past.map((appt) => (
-              <AppointmentCard key={appt.id} appt={appt} statusColor={statusColor} muted />
-            ))}
-          </div>
-        </section>
+        <PageSection>
+          <details className="disclosure">
+            <summary className="font-display text-[0.8125rem] font-bold tracking-tight text-stone-600">
+              Past visits ({past.length})
+            </summary>
+            <Well as="ul" className="mt-2 px-0 py-0 divide-y divide-well-line">
+              {past.map((appt) => (
+                <AppointmentRow key={appt.id} appt={appt} muted />
+              ))}
+            </Well>
+          </details>
+        </PageSection>
       )}
-    </div>
+    </PageShell>
   );
 }
 
-function AppointmentCard({
+function AppointmentRow({
   appt,
-  statusColor,
   muted = false,
 }: {
   appt: {
@@ -112,7 +95,6 @@ function AppointmentCard({
     pet: { name: string; species: string };
     station: { name: string } | null;
   };
-  statusColor: Record<string, string>;
   muted?: boolean;
 }) {
   const petEmoji = appt.pet.species === "CAT" ? "🐱" : appt.pet.species === "DOG" ? "🐶" : "🐾";
@@ -128,13 +110,9 @@ function AppointmentCard({
   });
 
   return (
-    <div
-      className={`bg-white border rounded-xl px-4 py-2.5 flex items-start justify-between gap-3 ${
-        muted ? "border-stone-100 opacity-75" : "border-stone-200"
-      }`}
-    >
+    <li className="px-3 py-2 flex items-start justify-between gap-3">
       <div className="flex items-start gap-3">
-        <span className="text-2xl mt-0.5">{petEmoji}</span>
+        <span className="text-2xl mt-0.5" aria-hidden="true">{petEmoji}</span>
         <div>
           <p className={`font-semibold ${muted ? "text-stone-600" : "text-stone-900"}`}>
             {appt.pet.name}
@@ -148,19 +126,15 @@ function AppointmentCard({
             {formatServiceType(appt.serviceType)} · {dateStr} at {timeStr}
           </p>
           {appt.station && (
-            <p className="text-xs text-stone-400 mt-0.5">
-              Station: {appt.station.name}
-            </p>
+            <p className="text-xs text-stone-400 mt-0.5">Station: {appt.station.name}</p>
           )}
         </div>
       </div>
       <span
-        className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium ${
-          statusColor[appt.status] ?? "bg-stone-100 text-stone-500"
-        }`}
+        className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium ${statusBadgeClass(appt.status)}`}
       >
         {formatStatus(appt.status)}
       </span>
-    </div>
+    </li>
   );
 }

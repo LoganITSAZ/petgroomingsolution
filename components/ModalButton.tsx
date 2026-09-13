@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 /**
  * A button that opens a real dialog.
@@ -29,6 +29,7 @@ export default function ModalButton({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
+  const titleId = useId();
 
   // The page scrolling behind an open modal is the giveaway that it is not
   // really modal.
@@ -64,21 +65,27 @@ export default function ModalButton({
         {label}
       </button>
 
+      {/* Clicking the backdrop is the dialog element itself; a click on the
+          panel stops before it gets here. Escape is the keyboard equivalent and
+          the browser already provides it, so this needs no key handler. */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
       <dialog
         ref={ref}
         onClose={() => setOpen(false)}
-        // Clicking the backdrop is the dialog element itself; a click on the
-        // panel stops before it gets here.
         onClick={(event) => {
           if (event.target === ref.current) close();
         }}
-        aria-label={title}
+        aria-labelledby={titleId}
         className="app-modal w-full max-w-2xl rounded-xl border border-stone-200 bg-white p-0 shadow-xl backdrop:bg-stone-900/40"
       >
+        {/* Stops a click inside the panel reaching the backdrop handler above.
+            It adds no behaviour of its own, so there is nothing to reach by
+            keyboard here. */}
+        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
         <div onClick={(event) => event.stopPropagation()}>
           <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-4 py-3">
             <div className="min-w-0">
-              <h2 className="font-bold text-stone-900">{title}</h2>
+              <h2 id={titleId} className="font-bold text-stone-900">{title}</h2>
               {description && <p className="text-sm text-stone-500 mt-0.5">{description}</p>}
             </div>
             <button

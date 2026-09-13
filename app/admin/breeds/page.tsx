@@ -91,10 +91,11 @@ function GuideFields({ guide }: { guide?: BreedGuide }) {
 }
 
 interface PageProps {
-  searchParams: { saved?: string; deleted?: string; error?: string };
+  searchParams: Promise<{ saved?: string; deleted?: string; error?: string }>;
 }
 
-export default async function BreedGuidesPage({ searchParams }: PageProps) {
+export default async function BreedGuidesPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const guides = await prisma.breedGuide.findMany({
     orderBy: [{ species: "asc" }, { breed: "asc" }],
   });

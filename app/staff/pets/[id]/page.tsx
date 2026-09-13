@@ -4,6 +4,7 @@ import {
   formatServiceType,
   formatSpecies,
   formatCoatType,
+  statusBadgeClass,
 } from "@/lib/utils";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
@@ -18,18 +19,6 @@ import { notFound } from "next/navigation";
 // app reads as the same document (WCAG 2.4.2).
 export const metadata = { title: "Pet" };
 
-const statusColor: Record<string, string> = {
-  SCHEDULED: "bg-stone-100 text-stone-600",
-  CHECKED_IN: "bg-blue-100 text-blue-700",
-  IN_PROGRESS: "bg-amber-100 text-amber-700",
-  DRYING: "bg-sky-100 text-sky-700",
-  FINISHING: "bg-purple-100 text-purple-700",
-  COMPLETE: "bg-green-100 text-green-700",
-  READY_PICKUP: "bg-emerald-100 text-emerald-800",
-  PICKED_UP: "bg-stone-100 text-stone-400",
-  CANCELLED: "bg-red-100 text-red-700",
-  NO_SHOW: "bg-red-100 text-red-400",
-};
 
 const visitEventLabel: Record<string, string> = {
   REWASH: "Re-wash",
@@ -52,11 +41,13 @@ const visitEventColor: Record<string, string> = {
 };
 
 interface PageProps {
-  params: { id: string };
-  searchParams: { photo?: string; error?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ photo?: string; error?: string }>;
 }
 
-export default async function PetDetailPage({ params, searchParams }: PageProps) {
+export default async function PetDetailPage(props: PageProps) {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
   let pet;
   try {
     pet = await prisma.pet.findUniqueOrThrow({
@@ -91,7 +82,8 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
 
   const age = pet.dateOfBirth
     ? Math.floor(
-        (Date.now() - new Date(pet.dateOfBirth).getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+        (new Date().getTime() - new Date(pet.dateOfBirth).getTime()) /
+          (1000 * 60 * 60 * 24 * 365.25)
       )
     : null;
 
@@ -119,7 +111,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
       {/* Bite history banner */}
       {pet.hasBiteHistory && (
         <div className="border-t border-stone-100 bg-red-600 text-white px-3 py-2.5 flex items-center gap-3 font-bold text-sm">
-          <span className="text-xl">⚠</span>
+          <span className="text-xl" aria-hidden="true">⚠</span>
           <span>BITE HISTORY — Handle with extreme caution</span>
         </div>
       )}
@@ -201,7 +193,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
       <PageSection bodyClassName="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Owner card */}
         <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">Owner</h2>
+          <h2 className="text-sm font-bold text-stone-500 tracking-tight mb-3">Owner</h2>
           <p className="font-bold text-stone-900">
             {pet.customer.firstName} {pet.customer.lastName}
           </p>
@@ -227,7 +219,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
 
         {/* Health flags */}
         <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
+          <h2 className="text-sm font-bold text-stone-500 tracking-tight mb-3">
             Health Flags
           </h2>
           {pet.healthFlags.length === 0 ? (
@@ -248,7 +240,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
 
         {/* Grooming notes */}
         <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
+          <h2 className="text-sm font-bold text-stone-500 tracking-tight mb-3">
             Grooming Notes
           </h2>
           {pet.groomingNotes ? (
@@ -260,7 +252,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
 
         {/* Temperament notes */}
         <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest mb-3">
+          <h2 className="text-sm font-bold text-stone-500 tracking-tight mb-3">
             Temperament Notes
           </h2>
           {pet.temperamentNotes ? (
@@ -278,7 +270,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
             No visit events recorded.
           </div>
         ) : (
-          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden divide-y divide-stone-100">
+          <div className="border border-well-line rounded-lg overflow-hidden divide-y divide-stone-100">
             {visitEvents.map((event) => (
               <div key={event.id} className="px-4 py-2.5 flex items-start gap-3">
                 <span
@@ -318,10 +310,10 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
             No appointments yet.
           </div>
         ) : (
-          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <div className="border border-well-line rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-well text-stone-500 text-xs uppercase tracking-widest">
+                <thead className="bg-well text-stone-500 text-xs tracking-tight">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-left">Date</th>
                     <th scope="col" className="px-3 py-2 text-left">Service</th>
@@ -358,7 +350,7 @@ export default async function PetDetailPage({ params, searchParams }: PageProps)
                       <td className="px-3 py-2">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            statusColor[appt.status] ?? "bg-stone-100 text-stone-500"
+                            statusBadgeClass(appt.status)
                           }`}
                         >
                           {formatStatus(appt.status)}

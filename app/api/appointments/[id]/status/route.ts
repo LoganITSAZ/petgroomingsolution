@@ -12,7 +12,7 @@ const schema = z.object({
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user || session.user.userType !== "staff") {
@@ -25,7 +25,7 @@ export async function PATCH(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const appointment = await prisma.appointment.findUnique({ where: { id: params.id } });
+  const appointment = await prisma.appointment.findUnique({ where: { id: (await params).id } });
   if (!appointment) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -33,7 +33,7 @@ export async function PATCH(
   // Audit row, station broadcast, kennel release and pickup email all live in
   // changeAppointmentStatus so every caller behaves identically.
   const updated = await changeAppointmentStatus({
-    appointmentId: params.id,
+    appointmentId: (await params).id,
     status: parsed.data.status,
     note: parsed.data.note,
     staffId: session.user.id,

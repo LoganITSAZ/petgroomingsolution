@@ -4,6 +4,7 @@ import Link from "next/link";
 import { formatStatus, formatServiceType } from "@/lib/utils";
 import { rewardCard } from "@/lib/rewards";
 import RewardCard from "@/components/RewardCard";
+import { PageShell, PageSection, Well } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -35,54 +36,41 @@ export default async function PortalDashboard() {
   ]);
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-xl font-black text-stone-900">
-          Welcome back, {customer?.firstName}!
-        </h1>
-        <p className="text-stone-500 text-sm mt-1">Manage your pets and appointments.</p>
-      </div>
-
+    <PageShell
+      title={`Welcome back, ${customer?.firstName}`}
+      subtitle="Your pets and your visits."
+    >
       {/* The punch card. Every finished visit is a punch. */}
       {card.enabled && (
-        <section
-          className={`rounded-xl border px-4 py-3 ${
-            card.available > 0
-              ? "bg-emerald-50 border-emerald-200"
-              : "bg-white border-stone-200"
-          }`}
-        >
-          <h2 className="font-bold text-stone-800 text-sm">Your rewards</h2>
-          <div className="mt-2">
-            <RewardCard card={card} />
-          </div>
+        <PageSection title="Your rewards" tone={card.available > 0 ? "plain" : "muted"}>
+          <RewardCard card={card} />
           <p className="text-xs text-stone-500 mt-2">
             {card.available > 0
               ? "Mention it at the counter on your next visit and we will take care of it."
               : `Every ${card.perReward} visits earns ${card.label.toLowerCase()}.`}
           </p>
-        </section>
+        </PageSection>
       )}
 
-      {/* Upcoming appointments */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-stone-800">Upcoming Appointments</h2>
-          <Link href="/portal/appointments/new" className="text-sm text-brand-text hover:underline font-medium">
-            + Book new
+      <PageSection
+        title="Upcoming appointments"
+        hint={
+          <Link href="/portal/appointments/new" className="text-brand-text hover:underline font-medium">
+            Book a visit
           </Link>
-        </div>
+        }
+      >
         {upcomingAppointments.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400">
-            No upcoming appointments.{" "}
+          <Well className="py-2 text-sm text-stone-500">
+            Nothing booked.{" "}
             <Link href="/portal/appointments/new" className="text-brand-text hover:underline">
-              Book one now →
+              Book a visit
             </Link>
-          </div>
+          </Well>
         ) : (
-          <div className="space-y-3">
+          <Well as="ul" className="px-0 py-0 divide-y divide-well-line">
             {upcomingAppointments.map((appt) => (
-              <div key={appt.id} className="bg-white border border-stone-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
+              <li key={appt.id} className="px-3 py-2 flex items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold text-stone-900">{appt.pet.name}</p>
                   <p className="text-sm text-stone-500">
@@ -92,39 +80,39 @@ export default async function PortalDashboard() {
                     })}
                   </p>
                 </div>
-                <span className="text-sm font-medium bg-stone-100 text-stone-600 px-3 py-1 rounded-full">
+                <span className="shrink-0 text-sm font-medium bg-stone-100 text-stone-600 px-3 py-1 rounded-full">
                   {formatStatus(appt.status)}
                 </span>
-              </div>
+              </li>
             ))}
-          </div>
+          </Well>
         )}
-      </section>
+      </PageSection>
 
-      {/* Pets */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-stone-800">My Pets</h2>
-          <Link href="/portal/pets/new" className="text-sm text-brand-text hover:underline font-medium">
-            + Add pet
+      <PageSection
+        title="My pets"
+        hint={
+          <Link href="/portal/pets/new" className="text-brand-text hover:underline font-medium">
+            Add a pet
           </Link>
-        </div>
+        }
+      >
         {pets.length === 0 ? (
-          <div className="bg-white border border-stone-200 rounded-xl p-4 text-center text-stone-400">
-            No pets yet.{" "}
+          <Well className="py-2 text-sm text-stone-500">
+            No pets on file.{" "}
             <Link href="/portal/pets/new" className="text-brand-text hover:underline">
-              Add your first pet →
+              Add your first
             </Link>
-          </div>
+          </Well>
         ) : (
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid sm:grid-cols-2 gap-2">
             {pets.map((pet) => (
               <Link
                 key={pet.id}
                 href={`/portal/pets/${pet.id}`}
-                className="bg-white border border-stone-200 rounded-xl px-4 py-2.5 flex items-center gap-3 hover:border-brand-300 transition-colors"
+                className="rounded-lg border border-well-line bg-well ring-1 ring-well-line/60 px-3 py-2 flex items-center gap-3 hover:bg-white transition-colors"
               >
-                <span className="text-3xl">{pet.species === "CAT" ? "🐱" : "🐶"}</span>
+                <span className="text-3xl" aria-hidden="true">{pet.species === "CAT" ? "🐱" : "🐶"}</span>
                 <div>
                   <p className="font-semibold text-stone-900">{pet.name}</p>
                   <p className="text-sm text-stone-500">{pet.breed ?? pet.species}</p>
@@ -133,7 +121,7 @@ export default async function PortalDashboard() {
             ))}
           </div>
         )}
-      </section>
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

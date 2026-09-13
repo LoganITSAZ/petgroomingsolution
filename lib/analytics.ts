@@ -95,7 +95,7 @@ const COMPLETION_BADGES: { threshold: number; label: string }[] = [
   { threshold: 500, label: "Master Groomer" },
 ];
 
-export function badgesFor(stats: {
+function badgesFor(stats: {
   lifetime: number;
   bestDay: number;
   streak: number;
@@ -124,7 +124,7 @@ export function badgesFor(stats: {
  * Consecutive shop days, counting back from the most recent day the groomer
  * finished anything. A day the shop was closed for them simply ends the run.
  */
-export function currentStreak(dayKeys: Set<string>, today: string): number {
+function currentStreak(dayKeys: Set<string>, today: string): number {
   if (dayKeys.size === 0) return 0;
 
   const cursor = new Date(`${today}T12:00:00Z`);

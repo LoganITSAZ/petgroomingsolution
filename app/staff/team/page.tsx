@@ -7,6 +7,7 @@ import {
   formatStatus,
   isFloorStaff,
   shopDayRange,
+  statusBadgeClass,
 } from "@/lib/utils";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
@@ -40,15 +41,6 @@ const ON_FLOOR: AppointmentStatus[] = [
   AppointmentStatus.COMPLETE,
 ];
 
-const statusColor: Record<string, string> = {
-  CHECKED_IN: "bg-blue-100 text-blue-700",
-  IN_PROGRESS: "bg-amber-100 text-amber-700",
-  DRYING: "bg-sky-100 text-sky-700",
-  FINISHING: "bg-purple-100 text-purple-700",
-  COMPLETE: "bg-green-100 text-green-700",
-  READY_PICKUP: "bg-emerald-100 text-emerald-800",
-  PICKED_UP: "bg-stone-100 text-stone-400",
-};
 
 export default async function StaffTeamPage() {
   const session = await auth();
@@ -236,7 +228,7 @@ export default async function StaffTeamPage() {
                     stationId: member.current.station?.id ?? null,
                     stationName: member.current.station?.name ?? null,
                     statusLabel: formatStatus(member.current.status),
-                    statusClass: statusColor[member.current.status] ?? "bg-stone-100 text-stone-500",
+                    statusClass: statusBadgeClass(member.current.status),
                     services:
                       member.current.services.length > 0
                         ? member.current.services
@@ -285,7 +277,7 @@ export default async function StaffTeamPage() {
                     <span className="block font-semibold text-stone-900 truncate">
                       {member.name}
                     </span>
-                    <span className="block text-[10px] text-stone-400 uppercase tracking-wide truncate">
+                    <span className="block text-[10px] text-stone-400 tracking-tight truncate">
                       {member.roles.map(formatRole).join(" · ")}
                     </span>
                   </span>
@@ -307,7 +299,7 @@ export default async function StaffTeamPage() {
                         )}
                         <span
                           className={`ml-2 text-[10px] px-1.5 rounded-full font-medium ${
-                            statusColor[member.current.status] ?? ""
+                            statusBadgeClass(member.current.status)
                           }`}
                         >
                           {formatStatus(member.current.status)}

@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { describeRate, listPricingTiers, quoteFor, tierCustomerCounts } from "@/lib/pricing-tiers";
+import {
+  describeRate,
+  EXAMPLE_LIST_CENTS,
+  listPricingTiers,
+      quoteFor,
+      tierCustomerCounts,
+} from "@/lib/pricing-tiers";
 import { formatCents } from "@/lib/pricing";
 import { deletePricingTier, savePricingTier } from "./actions";
 import TierFields from "./TierFields";
@@ -26,14 +32,12 @@ const ERRORS: Record<string, string> = {
   not_found: "That rate no longer exists.",
 };
 
-// A worked example makes the arithmetic obvious at a glance.
-const EXAMPLE_LIST_CENTS = 8500;
-
 interface PageProps {
-  searchParams: { saved?: string; deleted?: string; error?: string };
+  searchParams: Promise<{ saved?: string; deleted?: string; error?: string }>;
 }
 
-export default async function PricingTiersPage({ searchParams }: PageProps) {
+export default async function PricingTiersPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const [tiers, counts] = await Promise.all([listPricingTiers(), tierCustomerCounts()]);
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
   const assigned = Array.from(counts.values()).reduce((sum, n) => sum + n, 0);
@@ -112,7 +116,7 @@ export default async function PricingTiersPage({ searchParams }: PageProps) {
                   <span className="min-w-0">
                     <span className="font-semibold text-stone-900">{tier.name}</span>
                     {!tier.isActive && (
-                      <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-stone-200 text-stone-500 uppercase">
+                      <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-stone-200 text-stone-500 ">
                         Off
                       </span>
                     )}

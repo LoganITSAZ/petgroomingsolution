@@ -20,13 +20,12 @@ const ERRORS: Record<string, string> = {
 };
 
 const fieldClass =
-  "w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800  bg-white";
+  "w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 bg-white";
 
-export default async function NewCustomerPage({
-  searchParams,
-}: {
-  searchParams: { error?: string };
+export default async function NewCustomerPage(props: {
+  searchParams: Promise<{ error?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const groomers = await prisma.staff.findMany({
     where: { isActive: true, roles: { hasSome: [StaffRole.GROOMER, StaffRole.BATHER] } },
     select: { id: true, name: true },
@@ -118,7 +117,7 @@ export default async function NewCustomerPage({
         </PageSection>
 
         <PageSection bodyClassName="space-y-3">
-          <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">
+          <p className="text-xs font-bold text-stone-500 tracking-tight">
             Approved alternate (optional)
           </p>
           <p className="text-xs text-stone-400 -mt-2">
@@ -141,7 +140,7 @@ export default async function NewCustomerPage({
         </PageSection>
 
         <PageSection bodyClassName="space-y-3">
-          <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">
+          <p className="text-xs font-bold text-stone-500 tracking-tight">
             First pet (optional)
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

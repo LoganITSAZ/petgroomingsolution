@@ -20,7 +20,7 @@ export default async function AboutPage() {
         <div className="absolute -right-20 top-0 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute -bottom-24 -left-12 text-[13rem] leading-none text-white/[0.07]" aria-hidden="true">🐾</div>
         <div className="relative mx-auto max-w-4xl text-center">
-          <p className="mb-5 text-sm font-semibold uppercase tracking-[0.2em] text-brand-on-700">
+          <p className="mb-5 text-sm font-semibold tracking-tight text-brand-on-700">
             Professional Pet Grooming
           </p>
           <h1 className="text-4xl font-black leading-tight md:text-6xl">
@@ -34,8 +34,14 @@ export default async function AboutPage() {
       </section>
 
       {/* Our Story */}
+      {/*
+        One page, one panel. The story, what the shop stands for and the way
+        out to the services were three surfaces stacked down the page; they are
+        bands of one panel now.
+      */}
       <section className="px-6 py-16">
-        <div className="glass-panel mx-auto max-w-3xl rounded-3xl p-7 md:p-10">
+        <div className="glass-panel mx-auto max-w-3xl overflow-hidden rounded-3xl">
+          <div className="p-7 md:p-10">
           <p className="public-eyebrow mb-4">The Gentle Groomer way</p>
           <h2 className="public-section-title mb-5">Our Story</h2>
           <div className="space-y-4 text-muted leading-relaxed">
@@ -69,24 +75,25 @@ export default async function AboutPage() {
               </div>
             ))}
           </div>
-        </div>
-      </section>
+          </div>
 
-      {/* CTA footer band */}
-      <section className="relative mx-4 mb-4 overflow-hidden rounded-3xl bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900 px-6 py-14 text-center text-brand-on-700 shadow-xl shadow-brand-900/20">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.22),transparent_48%)]" />
-        <div className="relative">
-        <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-brand-on-700">A calm visit starts here</p>
-        <h2 className="text-2xl font-black mb-2">See what we offer</h2>
-        <p className="text-brand-on-700 text-sm mb-6">
-          Browse our grooming, bathing and add-on services with current pricing.
-        </p>
-        <Link
-          href="/services"
-          className="inline-flex items-center justify-center rounded-xl bg-surface px-7 py-3 text-sm font-bold text-brand-text shadow-lg transition hover:-translate-y-0.5 hover:bg-brand-100/40"
-        >
-          View Our Services
-        </Link>
+          {/* The way out, as the panel's last band rather than a card of its own. */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900 px-6 py-12 text-center text-brand-on-700">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.22),transparent_48%)]" />
+            <div className="relative">
+              <p className="mb-3 text-xs font-bold tracking-tight text-brand-on-700">A calm visit starts here</p>
+              <h2 className="mb-2 text-2xl font-black">See what we offer</h2>
+              <p className="mb-6 text-sm text-brand-on-700">
+                Browse our grooming, bathing and add-on services with current pricing.
+              </p>
+              <Link
+                href="/services"
+                className="inline-flex items-center justify-center rounded-xl bg-surface px-7 py-3 text-sm font-bold text-brand-text shadow-lg transition hover:-translate-y-0.5 hover:bg-brand-100/40"
+              >
+                View Our Services
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
     </div>

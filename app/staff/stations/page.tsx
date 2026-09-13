@@ -32,11 +32,10 @@ function minutesSince(from: Date | null): number | null {
   return Math.max(0, Math.round((Date.now() - from.getTime()) / 60000));
 }
 
-export default async function StaffStationsPage({
-  searchParams,
-}: {
-  searchParams: { error?: string };
+export default async function StaffStationsPage(props: {
+  searchParams: Promise<{ error?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const isAdmin = await currentStaffIsAdmin();
 
   const { start, end } = shopDayRange();
@@ -185,7 +184,7 @@ export default async function StaffStationsPage({
                     </div>
 
                     {station.allowedRoles.length > 0 && (
-                      <p className="text-[10px] text-stone-400 uppercase tracking-wide mb-1">
+                      <p className="text-[10px] text-stone-400 tracking-tight mb-1">
                         {station.allowedRoles.map(formatRole).join(" or ")} only
                       </p>
                     )}

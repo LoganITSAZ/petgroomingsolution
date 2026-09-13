@@ -19,7 +19,7 @@ async function main() {
   console.log("🌱 Seeding database…");
 
   const adminEmail = process.env.ADMIN_EMAIL?.trim() || DEFAULT_ADMIN_EMAIL;
-  const adminPassword = process.env.ADMIN_PASSWORD || "changeme123";
+  const adminPassword = process.env.ADMIN_PASSWORD?.trim();
 
   // System config
   await prisma.systemConfig.upsert({
@@ -52,9 +52,20 @@ async function main() {
 
   // First-boot admin. Once the shop has any staff, this is skipped: the seed
   // runs on every deploy and must never resurrect a removed account or reset
-  // a password.
+  // a password. Use `npm run staff:password` to reset one.
+  //
+  // ADMIN_PASSWORD is required rather than defaulted: a built-in initial
+  // password is both a credential nobody is told about — which is how a shop
+  // ends up locked out of its own first account — and one the whole internet
+  // knows for any deploy that never changed it.
   const staffCount = await prisma.staff.count();
   if (staffCount === 0) {
+    if (!adminPassword || adminPassword.length < 8) {
+      throw new Error(
+        "No staff accounts exist and ADMIN_PASSWORD is not set (min 8 characters).\n" +
+          `Set ADMIN_EMAIL and ADMIN_PASSWORD in .env, then re-run the seed. ADMIN_EMAIL defaults to ${DEFAULT_ADMIN_EMAIL}.`
+      );
+    }
     const admin = await prisma.staff.create({
       data: {
         name: "Admin",
@@ -63,9 +74,20 @@ async function main() {
         roles: ["ADMIN"],
       },
     });
-    console.log(`✓ Staff — ${admin.email} (change the initial password now)`);
+    console.log(`✓ Staff — created ${admin.email} (change the initial password now)`);
   } else {
-    console.log(`✓ Staff — ${staffCount} account(s) already exist, skipped`);
+    // Name the admins rather than counting them: the seed runs on every deploy
+    // and this line is where an operator finds out what to sign in as.
+    const admins = await prisma.staff.findMany({
+      where: { roles: { has: "ADMIN" }, isActive: true },
+      select: { email: true },
+      orderBy: { createdAt: "asc" },
+    });
+    console.log(
+      `✓ Staff — ${staffCount} account(s) already exist, skipped. Admins: ${
+        admins.map((a) => a.email).join(", ") || "none active — run npm run staff:password"
+      }`
+    );
   }
 
   // Stations. Role decides how a station is used on the floor; kennel units

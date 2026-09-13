@@ -95,22 +95,25 @@ export default function StationForm({
           </div>
         </div>
 
-        <div className="flex items-start gap-3 pt-1">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-stone-800">Active</p>
-            <p className="text-sm text-stone-500 mt-0.5">
-              Inactive stations stay on file but are hidden from the floor.
-            </p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer mt-0.5">
-            <input
-              type="checkbox"
-              name="isActive"
-              defaultChecked={initial.isActive}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-700" />
+        {/* The label wraps the name as well as the switch; empty, the checkbox
+            announced as "checkbox, unchecked" and nothing more. */}
+        <div className="pt-1">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <span className="flex-1 text-sm font-medium text-stone-800">Active</span>
+            <span className="relative inline-flex flex-none items-center mt-0.5">
+              <input
+                type="checkbox"
+                name="isActive"
+                defaultChecked={initial.isActive}
+                aria-describedby="isActive-description"
+                className="sr-only peer"
+              />
+              <span className="block w-11 h-6 bg-stone-200 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-stone-900 dark:peer-focus-visible:outline-stone-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-700" />
+            </span>
           </label>
+          <p id="isActive-description" className="text-sm text-stone-500 mt-0.5">
+            Inactive stations stay on file but are hidden from the floor.
+          </p>
         </div>
       </PageSection>
 
@@ -214,7 +217,7 @@ export default function StationForm({
 
           {/* Live preview of the doors that will exist */}
           <div>
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">
+            <p className="text-xs font-semibold text-stone-500 tracking-tight mb-2">
               Preview — {total} kennel{total !== 1 ? "s" : ""}
             </p>
             {total === 0 ? (

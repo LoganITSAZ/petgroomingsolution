@@ -1,5 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { formatStatus, formatServiceType, formatSpecies, formatCoatType } from "@/lib/utils";
+import {
+  formatStatus,
+  formatServiceType,
+      formatSpecies,
+      formatCoatType,
+          statusBadgeClass,
+} from "@/lib/utils";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
 import { notFound } from "next/navigation";
@@ -31,22 +37,10 @@ import { CoatType, Species } from "@prisma/client";
 // app reads as the same document (WCAG 2.4.2).
 export const metadata = { title: "Customer" };
 
-const statusColor: Record<string, string> = {
-  SCHEDULED: "bg-stone-100 text-stone-600",
-  CHECKED_IN: "bg-blue-100 text-blue-700",
-  IN_PROGRESS: "bg-amber-100 text-amber-700",
-  DRYING: "bg-sky-100 text-sky-700",
-  FINISHING: "bg-purple-100 text-purple-700",
-  COMPLETE: "bg-green-100 text-green-700",
-  READY_PICKUP: "bg-emerald-100 text-emerald-800",
-  PICKED_UP: "bg-stone-100 text-stone-400",
-  CANCELLED: "bg-red-100 text-red-700",
-  NO_SHOW: "bg-red-100 text-red-400",
-};
 
 interface PageProps {
-  params: { id: string };
-  searchParams: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{
     created?: string;
     groomer?: string;
     photo?: string;
@@ -57,7 +51,7 @@ interface PageProps {
     rate?: string;
     redeemed?: string;
     error?: string;
-  };
+  }>;
 }
 
 /** Add or edit one approved alternate. No `alternate` is the add case. */
@@ -243,7 +237,9 @@ function PetForm({
   );
 }
 
-export default async function CustomerDetailPage({ params, searchParams }: PageProps) {
+export default async function CustomerDetailPage(props: PageProps) {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
   let customer;
   try {
     customer = await prisma.customer.findUniqueOrThrow({
@@ -279,7 +275,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
     orderBy: { name: "asc" },
   });
 
-  const memberSince = new Date(customer.createdAt ?? Date.now()).toLocaleDateString("en-US", {
+  const memberSince = formatShopDate(customer.createdAt ?? new Date(), {
     month: "long",
     year: "numeric",
   });
@@ -674,7 +670,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
 
       {insights.length > 0 && (
         <section>
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-1.5">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-1.5">
             What their history shows
           </h2>
           <InsightList insights={insights} compact />
@@ -687,7 +683,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
           {customer.pets.map((pet) => (
             <div
               key={pet.id}
-              className="bg-white border border-stone-200 rounded-xl p-4 flex flex-col gap-2"
+              className="bg-well border border-well-line ring-1 ring-well-line/60 rounded-lg p-4 flex flex-col gap-2"
             >
               <div className="flex items-start justify-between gap-2">
                 <Link href={`/staff/pets/${pet.id}`} className="group min-w-0">
@@ -731,7 +727,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
             </div>
           ))}
 
-          <div className="flex items-center justify-center rounded-xl border border-dashed border-stone-300 bg-well p-4">
+          <div className="flex items-center justify-center rounded-lg border border-dashed border-well-line bg-well p-4">
             <ModalButton
               label="Add a Pet +"
               title="Add a pet"
@@ -751,10 +747,10 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
             No appointments yet.
           </div>
         ) : (
-          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <div className="border border-well-line rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-well text-stone-500 text-xs uppercase tracking-widest">
+                <thead className="bg-well text-stone-500 text-xs tracking-tight">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-left">Date</th>
                     <th scope="col" className="px-3 py-2 text-left">Pet</th>
@@ -796,7 +792,7 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
                       <td className="px-3 py-2">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            statusColor[appt.status] ?? "bg-stone-100 text-stone-500"
+                            statusBadgeClass(appt.status)
                           }`}
                         >
                           {formatStatus(appt.status)}

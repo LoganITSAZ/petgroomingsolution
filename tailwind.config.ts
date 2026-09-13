@@ -13,6 +13,15 @@ const config: Config = {
         // Set in app/layout.tsx. The stack behind it matters: the face is
         // fetched, and a shop terminal on a bad connection still has to be
         // readable while it arrives.
+        // Headlines, page titles and the kiosk. Reading-size text never uses
+        // it — see the note in app/layout.tsx.
+        display: [
+          "var(--font-display)",
+          "var(--font-sans)",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+        ],
         sans: [
           "var(--font-sans)",
           "ui-sans-serif",
@@ -60,6 +69,10 @@ const config: Config = {
         well: "rgb(var(--well) / <alpha-value>)",
         band: "rgb(var(--band) / <alpha-value>)",
         "well-line": "rgb(var(--well-line) / <alpha-value>)",
+        // Signals — act / finished / shut. Never brand-derived; see globals.css.
+        "signal-alert": "rgb(var(--signal-alert) / <alpha-value>)",
+        "signal-open": "rgb(var(--signal-open) / <alpha-value>)",
+        "signal-shut": "rgb(var(--signal-shut) / <alpha-value>)",
         // Public-site surfaces.
         page: "rgb(var(--page-bg) / <alpha-value>)",
         surface: "rgb(var(--surface) / <alpha-value>)",

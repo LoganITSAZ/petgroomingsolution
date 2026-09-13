@@ -110,16 +110,17 @@ const ERRORS: Record<string, string> = {
 };
 
 interface PageProps {
-  searchParams: {
+  searchParams: Promise<{
     saved?: string;
     error?: string;
     version?: string;
     bumped?: string;
     restored?: string;
-  };
+  }>;
 }
 
-export default async function WaiverPage({ searchParams }: PageProps) {
+export default async function WaiverPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const config = await getConfig();
   const currentVersion = config.waiverVersion;
 
@@ -210,24 +211,29 @@ export default async function WaiverPage({ searchParams }: PageProps) {
         {/* The switch and the version sit on one strip: they are the two
             decisions about the document, and neither is worth its own band. */}
         <PageSection tone="muted" bodyClassName="space-y-3">
-          <div className="flex items-start gap-3">
-            <label className="relative inline-flex items-center cursor-pointer mt-0.5 flex-none">
-              <input
-                type="checkbox"
-                name="featureWaiverRequired"
-                defaultChecked={config.featureWaiverRequired}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-stone-200 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600" />
+          {/* The switch's name is inside its label; the paragraph under it is
+              read after the name rather than as part of it. */}
+          <div>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <span className="relative inline-flex items-center mt-0.5 flex-none">
+                <input
+                  type="checkbox"
+                  name="featureWaiverRequired"
+                  defaultChecked={config.featureWaiverRequired}
+                  aria-describedby="waiver-required-description"
+                  className="sr-only peer"
+                />
+                <span className="block w-11 h-6 bg-stone-200 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-stone-900 dark:peer-focus-visible:outline-stone-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600" />
+              </span>
+              <span className="flex-1 min-w-0 text-sm font-bold text-stone-800">
+                Require the waiver
+              </span>
             </label>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-stone-800">Require the waiver</p>
-              <p className="text-sm text-stone-500">
-                Customers accept it when they register, and again whenever the version changes.
-                Publishing a new version asks everyone again — so change the text only when it
-                materially changes.
-              </p>
-            </div>
+            <p id="waiver-required-description" className="pl-14 text-sm text-stone-500">
+              Customers accept it when they register, and again whenever the version changes.
+              Publishing a new version asks everyone again — so change the text only when it
+              materially changes.
+            </p>
           </div>
 
           <div className="border-t border-stone-200 pt-3">
@@ -241,7 +247,7 @@ export default async function WaiverPage({ searchParams }: PageProps) {
         <PageSection grow padded={false} bodyClassName="flex flex-col">
           <label
             htmlFor="waiverText"
-            className="px-3 pt-3 pb-1 font-bold text-stone-700 text-xs uppercase tracking-widest"
+            className="px-3 pt-3 pb-1 font-bold text-stone-700 text-xs tracking-tight"
           >
             Waiver text
           </label>

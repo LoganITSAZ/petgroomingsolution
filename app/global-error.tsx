@@ -45,6 +45,7 @@ export default function GlobalError({
             </p>
           )}
           <button
+            type="button"
             onClick={reset}
             style={{
               marginTop: "1.25rem",

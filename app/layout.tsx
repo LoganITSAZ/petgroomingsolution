@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
 import { getConfig } from "@/lib/config";
 import "./globals.css";
 
@@ -16,6 +16,21 @@ const sans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-sans",
+});
+
+/**
+ * The display face, and the only place the app has a voice of its own.
+ *
+ * Everything set at reading size stays on Plus Jakarta — the back office is
+ * 15px all day and a quirky face there is a tax on the person reading it.
+ * Bricolage carries the headline sizes instead: the public hero, a page's own
+ * title, and the kiosk, where a pet's name is read from across the lobby. Its
+ * optical-size axis is why it can do both ends of that range from one file.
+ */
+const display = Bricolage_Grotesque({
+  subsets: ["latin"],
+  display: "swap",
+      variable: "--font-display",
 });
 
 /**
@@ -50,7 +65,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={sans.variable}>
+    <html lang="en" className={`${sans.variable} ${display.variable}`}>
       <body className="font-sans antialiased">{children}</body>
     </html>
   );

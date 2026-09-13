@@ -36,7 +36,7 @@ export function stationCapacity(station: CapacityInput, perCompartment = 1): num
 }
 
 /** How many pets are at a station right now, ignoring one appointment. */
-export async function stationOccupancy(
+async function stationOccupancy(
   stationId: string,
   exceptAppointmentId?: string
 ): Promise<number> {

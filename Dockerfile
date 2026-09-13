@@ -6,7 +6,12 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci
+# --legacy-peer-deps: eslint-config-next@16 peers eslint>=9 while the repo is
+# still on eslint 8 with .eslintrc.json. Nothing in this image runs eslint —
+# Next 16 dropped `next lint` — so the conflict is install-time only, and the
+# local node_modules is resolved the same way. Drop the flag once the lint
+# setup moves to eslint 9 + flat config.
+RUN npm ci --legacy-peer-deps
 
 # ─── builder stage ─────────────────────────────────────────
 FROM base AS builder

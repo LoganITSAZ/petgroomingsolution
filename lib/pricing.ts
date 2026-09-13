@@ -32,7 +32,7 @@ type PricedService = Pick<
 >;
 
 /** Every price actually set on a service, smallest first. */
-export function servicePrices(service: PricedService): number[] {
+function servicePrices(service: PricedService): number[] {
   return [
     service.priceSmallCents,
     service.priceMediumCents,

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth-guards";
 import Link from "next/link";
 import AddressMap from "@/components/AddressMap";
+import ThresholdLiveWarning from "@/components/admin/ThresholdLiveWarning";
 import { PageShell, PageSection } from "@/components/ui";
 import SaveToast from "@/components/SaveToast";
 
@@ -159,24 +160,38 @@ function FeatureToggle({
   checked: boolean;
 }) {
   return (
-    <div className="flex items-start gap-3 py-4 border-b border-stone-100 last:border-0">
-      <div className="flex-1">
-        <p className="text-sm font-medium text-stone-800">{label}</p>
-        <p className="text-sm text-stone-500 mt-0.5">{description}</p>
-      </div>
-      <label className="relative inline-flex items-center cursor-pointer mt-0.5">
-        <input type="checkbox" name={name} defaultChecked={checked} className="sr-only peer" />
-        <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-amber-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-700" />
+    /* The <label> has to hold the name, not sit empty beside it: wrapping only
+       the checkbox and its switch graphic left the control announced as
+       "checkbox, unchecked" with nothing to say which feature it was. The row
+       is the label now, and the description hangs off it by aria-describedby
+       so it is read second rather than folded into the name. */
+    <div className="py-4 border-b border-stone-100 last:border-0">
+      <label className="flex items-start gap-3 cursor-pointer">
+        <span className="flex-1 text-sm font-medium text-stone-800">{label}</span>
+        <span className="relative inline-flex flex-none items-center mt-0.5">
+          <input
+            type="checkbox"
+            name={name}
+            defaultChecked={checked}
+            aria-describedby={`${name}-description`}
+            className="sr-only peer"
+          />
+          <span className="block w-11 h-6 bg-stone-200 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-stone-900 dark:peer-focus-visible:outline-stone-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-700" />
+        </span>
       </label>
+      <p id={`${name}-description`} className="text-sm text-stone-500 mt-0.5">
+        {description}
+      </p>
     </div>
   );
 }
 
 interface PageProps {
-  searchParams: { saved?: string };
+  searchParams: Promise<{ saved?: string }>;
 }
 
-export default async function SettingsPage({ searchParams }: PageProps) {
+export default async function SettingsPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const config = await getConfig();
 
   return (
@@ -385,6 +400,10 @@ export default async function SettingsPage({ searchParams }: PageProps) {
             These escalate, so each has to be later than the one above it. A value that would invert
             the order is nudged up on save rather than accepted.
           </p>
+          <ThresholdLiveWarning
+            fieldIds={["lateArrivalWatchMins", "lateArrivalLateMins", "lateArrivalMissedMins"]}
+            message="These will be reordered on save to keep watch < late < missed."
+          />
         </Section>
 
         <Section
@@ -402,6 +421,11 @@ export default async function SettingsPage({ searchParams }: PageProps) {
           <Field name="pickupCriticalMins" label="Critical after (mins)">
             <input type="number" id="pickupCriticalMins" name="pickupCriticalMins" defaultValue={config?.pickupCriticalMins ?? 240} min={3} max={1440} className={FIELD} />
           </Field>
+
+          <ThresholdLiveWarning
+            fieldIds={["pickupWatchMins", "pickupLateMins", "pickupCriticalMins"]}
+            message="These will be reordered on save to keep watch < late < critical."
+          />
         </Section>
 
         <PageSection tone="muted" bodyClassName="flex justify-end">

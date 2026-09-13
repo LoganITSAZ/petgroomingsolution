@@ -7,9 +7,9 @@ import { NextRequest } from "next/server";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: stationId } = params;
+  const { id: stationId } = await params;
 
   // Verify station exists
   const station = await prisma.station.findUnique({ where: { id: stationId } });

@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { shopDayKey } from "@/lib/utils";
 import ServicePicker from "@/components/ServicePicker";
+import { PageShell, PageSection, Well } from "@/components/ui";
 import {
   getServiceOptions,
   resolveSelectedServices,
@@ -40,14 +42,17 @@ export default async function PortalNewAppointmentPage() {
   const waiver = await waiverOutstanding(customerId);
   if (waiver.required) {
     return (
-      <div className="max-w-2xl mx-auto py-8 space-y-3">
-        <h1 className="text-xl font-black text-stone-900">One thing first</h1>
-        <p className="text-sm text-stone-600">
-          Our liability waiver has been updated. Please read and accept it to book.
-        </p>
-        <div className="bg-white border border-stone-200 rounded-xl p-4 max-h-80 overflow-y-auto whitespace-pre-wrap text-sm text-stone-700">
-          {waiver.text}
-        </div>
+      <PageShell
+        title="One thing first"
+        subtitle="Our liability waiver has been updated."
+        className="max-w-2xl"
+      >
+        <PageSection>
+          <Well className="max-h-80 overflow-y-auto whitespace-pre-wrap text-sm text-stone-700 py-2">
+            {waiver.text}
+          </Well>
+        </PageSection>
+        <PageSection tone="muted">
         <form action={acceptCurrentWaiver} className="flex items-center justify-between gap-3">
           <label className="flex items-center gap-2 text-sm text-stone-700">
             <input type="checkbox" name="accepted" required className="accent-amber-700" />I have
@@ -60,29 +65,35 @@ export default async function PortalNewAppointmentPage() {
             Accept and continue
           </button>
         </form>
-      </div>
+        </PageSection>
+      </PageShell>
     );
   }
 
   if (!config.featureOnlineBooking) {
     return (
-      <div className="max-w-lg mx-auto py-8 text-center">
-        <p className="text-stone-500">Online booking is currently unavailable. Please call us to book.</p>
-        {config.shopPhone && (
-          <a href={`tel:${config.shopPhone}`} className="mt-3 inline-block text-amber-700 font-semibold hover:text-amber-900">
-            {config.shopPhone}
-          </a>
-        )}
-      </div>
+      <PageShell title="Book an Appointment" className="max-w-lg">
+        <PageSection>
+          <Well className="py-3 text-center">
+            <p className="text-stone-500 text-sm">Online booking is unavailable right now. Call us to book.</p>
+            {config.shopPhone && (
+              <a href={`tel:${config.shopPhone}`} className="mt-2 inline-block text-brand-text font-semibold hover:underline">
+                {config.shopPhone}
+              </a>
+            )}
+          </Well>
+        </PageSection>
+      </PageShell>
     );
   }
 
   // Calculate min/max dates from config
+  const now = new Date();
   const leadMs = (config.bookingLeadHours ?? 2) * 60 * 60 * 1000;
-  const minDate = new Date(Date.now() + leadMs);
-  const maxDate = new Date(Date.now() + (config.bookingWindowDays ?? 30) * 24 * 60 * 60 * 1000);
-
-  const toDateInput = (d: Date) => d.toISOString().slice(0, 10);
+  const minDate = new Date(now.getTime() + leadMs);
+  const maxDate = new Date(
+now.getTime() + (config.bookingWindowDays ?? 30) * 24 * 60 * 60 * 1000
+  );
 
   async function acceptCurrentWaiver(formData: FormData) {
     "use server";
@@ -91,7 +102,7 @@ export default async function PortalNewAppointmentPage() {
     if (!session?.user || session.user.userType !== "customer") redirect("/login?type=customer");
     if (formData.get("accepted") !== "on") redirect("/portal/appointments/new");
 
-    const headerList = headers();
+    const headerList = await headers();
     await acceptWaiver(session.user.id, {
       ipAddress: headerList.get("x-forwarded-for"),
       userAgent: headerList.get("user-agent"),
@@ -162,17 +173,16 @@ export default async function PortalNewAppointmentPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
-      <div>
-        <h1 className="text-xl font-black text-stone-900">Book an Appointment</h1>
-        <p className="text-stone-500 text-sm mt-1">
-          We&apos;ll confirm your booking shortly. You&apos;ll receive a confirmation email once it&apos;s approved.
-        </p>
-      </div>
-
+    <PageShell
+      title="Book an Appointment"
+      subtitle="We'll confirm shortly, by email."
+      back={{ href: "/portal/appointments", label: "Back to My Appointments" }}
+      className="max-w-lg"
+    >
+      <PageSection>
       {/* No pets on file */}
       {pets.length === 0 ? (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
           <p className="text-stone-700 font-medium">No pets on file</p>
           <p className="text-stone-500 text-sm mt-1">
             Add your pet&apos;s profile before booking an appointment.
@@ -185,8 +195,7 @@ export default async function PortalNewAppointmentPage() {
           </Link>
         </div>
       ) : (
-        <div className="bg-white border border-stone-200 rounded-2xl p-4">
-          <form action={createPortalAppointment} className="space-y-3">
+        <form action={createPortalAppointment} className="space-y-3">
             {/* Pet */}
             <div>
               <label htmlFor="petId" className="block text-sm font-semibold text-stone-700 mb-1.5">
@@ -226,8 +235,8 @@ export default async function PortalNewAppointmentPage() {
                 name="preferredDate"
                 type="date"
                 required
-                min={toDateInput(minDate)}
-                max={toDateInput(maxDate)}
+                min={shopDayKey(minDate)}
+                max={shopDayKey(maxDate)}
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
               />
               <p className="mt-1 text-xs text-stone-400">
@@ -283,8 +292,8 @@ export default async function PortalNewAppointmentPage() {
               </Link>
             </div>
           </form>
-        </div>
       )}
-    </div>
+      </PageSection>
+    </PageShell>
   );
 }

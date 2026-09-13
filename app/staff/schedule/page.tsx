@@ -31,10 +31,11 @@ export const metadata = { title: "Schedule" };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface PageProps {
-  searchParams: { week?: string };
+  searchParams: Promise<{ week?: string }>;
 }
 
-export default async function StaffSchedulePage({ searchParams }: PageProps) {
+export default async function StaffSchedulePage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   const meId = session?.user?.id;
 
@@ -118,7 +119,7 @@ export default async function StaffSchedulePage({ searchParams }: PageProps) {
         <PageSection tone="muted">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">Your week</p>
+              <p className="text-xs font-bold text-stone-500 tracking-tight">Your week</p>
               <p className="text-lg font-bold text-stone-900 mt-0.5">
                 {formatHours(mine.minutes)} over {mine.daysWorked} day
                 {mine.daysWorked === 1 ? "" : "s"}
@@ -158,7 +159,7 @@ export default async function StaffSchedulePage({ searchParams }: PageProps) {
             <caption className="sr-only">
               Shifts for the week of {formatShopDate(weekStart, { month: "long", day: "numeric" })}
             </caption>
-            <thead className="bg-well text-stone-500 text-[10px] uppercase tracking-widest">
+            <thead className="bg-well text-stone-500 text-[10px] tracking-tight">
               <tr>
                 <th scope="col" className="px-3 py-2 text-left sticky left-0 bg-stone-50">
                   Staff

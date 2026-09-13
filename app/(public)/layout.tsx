@@ -1,56 +1,20 @@
 import Link from "next/link";
 import MobileMenu from "@/components/MobileMenu";
 import { getConfig } from "@/lib/config";
+import { headers } from "next/headers";
 import PublicThemeToggle, { NO_FLASH_SCRIPT } from "@/components/PublicThemeToggle";
 import { resolveTheme, themeCss } from "@/lib/themes";
 import { SHOP_TIMEZONE } from "@/lib/utils";
+import { shopState, summariseHours, type BusinessHours } from "@/lib/shop-hours";
 
 // SystemConfig is edited at runtime from /admin, so these pages must not be
 // baked at build time — a prerendered snapshot would freeze shop details,
 // feature flags, waiver text and the site's theme until the next deploy.
 export const dynamic = "force-dynamic";
 
-const DAYS = [
-  ["monday", "Mon"],
-  ["tuesday", "Tue"],
-  ["wednesday", "Wed"],
-  ["thursday", "Thu"],
-  ["friday", "Fri"],
-  ["saturday", "Sat"],
-  ["sunday", "Sun"],
-] as const;
-
-type Hours = Record<string, { open: string; close: string } | null>;
-
-/** "8:00" → "8am", "15:30" → "3:30pm". */
-function clock(value: string): string {
-  const [hourRaw, minute] = value.split(":");
-  const hour = Number(hourRaw);
-  const suffix = hour >= 12 ? "pm" : "am";
-  const twelve = hour % 12 === 0 ? 12 : hour % 12;
-  return minute && minute !== "00" ? `${twelve}:${minute}${suffix}` : `${twelve}${suffix}`;
-}
-
-/** Consecutive days with identical hours collapse into one line. */
-function summariseHours(hours: Hours): string[] {
-  const rows: { label: string; text: string }[] = [];
-
-  for (const [key, label] of DAYS) {
-    const day = hours?.[key] ?? null;
-    const text = day ? `${clock(day.open)} – ${clock(day.close)}` : "Closed";
-    const last = rows[rows.length - 1];
-    if (last && last.text === text) {
-      last.label = `${last.label.split("–")[0].trim()} – ${label}`;
-    } else {
-      rows.push({ label, text });
-    }
-  }
-
-  return rows.map((row) => `${row.label}: ${row.text}`);
-}
-
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const config = await getConfig();
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   // The shop's own date decides the seasonal theme, not the visitor's.
   const shopDate = new Intl.DateTimeFormat("en-CA", {
@@ -64,14 +28,22 @@ export default async function PublicLayout({ children }: { children: React.React
     .map(Number);
 
   const theme = resolveTheme(config, { month: shopDate[1], day: shopDate[2] });
-  const hours = summariseHours((config.businessHours as Hours) ?? {});
+  const businessHours = (config.businessHours as BusinessHours) ?? {};
+  const hours = summariseHours(businessHours);
+  const state = shopState(businessHours);
 
   return (
-    <div id="public-root" className="public-shell min-h-screen flex flex-col text-ink">
+    // The pre-paint script below adds `dark` to this element before React
+    // hydrates, so its className is expected to differ from the server's.
+    <div
+      id="public-root"
+      suppressHydrationWarning
+      className="public-shell min-h-screen flex flex-col text-ink"
+    >
       {/* Both halves of the theme. An element has one style attribute, so the
           dark set cannot ride along inline — see themeCss(). */}
       <style dangerouslySetInnerHTML={{ __html: themeCss(theme.tokens) }} />
-      <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
+      <script nonce={nonce} dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
 
       {/*
         The refraction half of the glass. feTurbulence generates a slow fractal
@@ -116,9 +88,20 @@ export default async function PublicLayout({ children }: { children: React.React
 
       <header className="sticky top-0 z-50 px-3 pt-3">
         <div className="glass-panel max-w-6xl mx-auto flex h-14 items-center justify-between rounded-2xl px-4">
-          <Link href="/" className="shrink-0 font-black tracking-tight text-lg text-brand-text transition-transform hover:scale-[1.02]">
-            <span className="mr-1.5">{theme.preset.motif ?? "🐾"}</span>{config.shopName}
+          <div className="flex min-w-0 items-center gap-3">
+            <Link href="/" className="font-display shrink-0 truncate text-lg font-extrabold tracking-[-0.02em] text-brand-text">
+            <span className="mr-1.5" aria-hidden="true">{theme.preset.motif ?? "🐾"}</span>{config.shopName}
           </Link>
+            {state && (
+              <span className="hidden items-center gap-1.5 text-sm text-muted sm:flex">
+                <span
+                  aria-hidden="true"
+                  className={`h-2 w-2 rounded-full ${state.open ? "bg-signal-open" : "bg-signal-shut"}`}
+                />
+                {state.label}
+              </span>
+            )}
+          </div>
           <nav aria-label="Main" className="hidden items-center gap-1 text-sm font-medium text-muted md:flex">
             <Link href="/about" className="rounded-lg px-2 py-2 hover:text-brand-text transition-colors">
               About
@@ -159,8 +142,8 @@ export default async function PublicLayout({ children }: { children: React.React
       <footer className="mt-8 bg-footer-bg text-footer-ink py-10">
         <div className="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
           <div>
-            <p className="font-bold text-white mb-1">
-              {theme.preset.motif ?? "🐾"} {config.shopName}
+            <p className="font-display text-lg font-extrabold text-white mb-1">
+              <span aria-hidden="true">{theme.preset.motif ?? "🐾"}</span> {config.shopName}
             </p>
             <p className="italic opacity-80">Patience, Love &amp; Kindness</p>
           </div>

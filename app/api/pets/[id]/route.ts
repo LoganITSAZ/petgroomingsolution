@@ -57,14 +57,14 @@ async function resolvePet(id: string, session: Session) {
 // Auth: staff sees all; customer sees only their own
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   const { pet, error, status } = await resolvePet(id, session);
   if (error) return NextResponse.json({ error }, { status });
 
@@ -77,14 +77,14 @@ export async function GET(
 //            temperamentNotes, healthFlags, groomingNotes, photoUrl
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   const { pet: existing, error, status } = await resolvePet(id, session);
   if (error) return NextResponse.json({ error }, { status });
 
@@ -128,7 +128,7 @@ export async function PATCH(
 // Soft delete: sets isActive = false
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user) {
@@ -138,7 +138,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { id } = params;
+  const { id } = await params;
 
   const existing = await prisma.pet.findUnique({ where: { id } });
   if (!existing) {

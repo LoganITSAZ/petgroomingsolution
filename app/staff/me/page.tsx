@@ -81,7 +81,7 @@ export default async function MyShiftPage() {
 
   const minutesInState = Math.max(
     0,
-    Math.round((Date.now() - me.presenceSince.getTime()) / 60000)
+    Math.round((new Date().getTime() - me.presenceSince.getTime()) / 60000)
   );
   const state = roster.find((member) => member.id === staffId)?.state ?? me.presence;
   const done = mine.filter(
@@ -114,7 +114,7 @@ export default async function MyShiftPage() {
               <>
                 Scheduled {describeShifts(shifts.get(staffId))}
                 {isOnShiftNow(shifts.get(staffId)) && (
-                  <span className="ml-1.5 text-[10px] font-bold text-green-700 uppercase">
+                  <span className="ml-1.5 text-[10px] font-bold text-green-700 ">
                     on shift
                   </span>
                 )}

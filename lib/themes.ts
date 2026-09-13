@@ -41,12 +41,12 @@ const AMBER: ThemeTokens = {
   brand600: "221 112 16",
   brand700: "183 83 16",
   brand900: "118 55 20",
-  pageBg: "250 250 249",
+  pageBg: "245 244 240",
   surface: "255 255 255",
   ink: "28 25 23",
-  muted: "120 113 108",
+  muted: "114 107 102",
   line: "231 229 228",
-  footerBg: "41 37 36",
+  footerBg: "26 25 23",
   footerInk: "214 211 209",
 };
 
@@ -228,7 +228,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
 ];
 
-export const DEFAULT_THEME_ID = "default";
+const DEFAULT_THEME_ID = "default";
 
 export function getPreset(id: string | null | undefined): ThemePreset {
   return (
@@ -276,7 +276,7 @@ function shift(triplet: string, amount: number): string {
 }
 
 /** A full ramp from one brand colour, for shops that want their own. */
-export function rampFromColor(hex: string, base: ThemeTokens): ThemeTokens {
+function rampFromColor(hex: string, base: ThemeTokens): ThemeTokens {
   const triplet = hexToRgbTriplet(hex);
   if (!triplet) return base;
   return {
@@ -426,12 +426,12 @@ export function brandText(tokens: ThemeTokens): string {
 export function darkTokens(tokens: ThemeTokens): ThemeTokens {
   return {
     ...tokens,
-    pageBg: "12 10 9",
-    surface: "28 25 23",
-    ink: "245 245 244",
-    muted: "180 174 170",
-    line: "68 64 60",
-    footerBg: "12 10 9",
+    pageBg: "19 18 17",
+    surface: "33 32 29",
+    ink: "245 244 242",
+    muted: "171 167 162",
+    line: "70 67 61",
+    footerBg: "19 18 17",
     footerInk: "214 211 209",
   };
 }

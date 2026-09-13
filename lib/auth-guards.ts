@@ -19,6 +19,20 @@ export async function requireStaff(): Promise<string> {
 }
 
 /**
+ * Signed-in staff member holding one of `allowed`. Returns their id.
+ *
+ * Roles come from the database, never the token: a JWT is a snapshot from
+ * sign-in, so a revoked role would otherwise survive until the next logout.
+ */
+async function requireRoles(allowed: (roles: StaffRole[]) => boolean): Promise<string> {
+  const id = await requireStaff();
+  if (!allowed(await getStaffRoles(id))) {
+    throw new Error("Unauthorized");
+  }
+  return id;
+}
+
+/**
  * Signed-in manager or admin. Returns their id.
  *
  * This is the gate for running the shop — prices, rota, staff, waiver. The
@@ -27,26 +41,10 @@ export async function requireStaff(): Promise<string> {
  * the two roles.
  */
 export async function requireManager(): Promise<string> {
-  const session = await auth();
-  if (session?.user?.userType !== "staff") {
-    throw new Error("Unauthorized");
-  }
-  const roles = await getStaffRoles(session.user.id);
-  if (!canManage(roles)) {
-    throw new Error("Unauthorized");
-  }
-  return session.user.id;
+  return requireRoles(canManage);
 }
 
 /** Signed-in admin. Returns their id. Roles are read from the database. */
 export async function requireAdmin(): Promise<string> {
-  const session = await auth();
-  if (session?.user?.userType !== "staff") {
-    throw new Error("Unauthorized");
-  }
-  const roles = await getStaffRoles(session.user.id);
-  if (!roles.includes(StaffRole.ADMIN)) {
-    throw new Error("Unauthorized");
-  }
-  return session.user.id;
+  return requireRoles((roles) => roles.includes(StaffRole.ADMIN));
 }

@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -45,17 +46,14 @@ export default async function NewPetPage() {
   }
 
   return (
-    <div className="max-w-xl">
-      {/* Header */}
-      <div className="mb-3">
-        <Link href="/portal/pets" className="text-sm text-stone-400 hover:text-stone-600 mb-2 inline-block">
-          ← Back to My Pets
-        </Link>
-        <h1 className="text-xl font-black text-stone-900">Add a Pet</h1>
-        <p className="text-stone-500 text-sm mt-0.5">Tell us about your furry family member.</p>
-      </div>
-
-      <form action={createPet} className="bg-white border border-stone-200 rounded-xl p-4 space-y-5">
+    <PageShell
+      title="Add a Pet"
+      subtitle="Tell us about your furry family member."
+      back={{ href: "/portal/pets", label: "Back to My Pets" }}
+      className="max-w-xl"
+    >
+      <PageSection>
+        <form action={createPet} className="space-y-5">
         {/* Name */}
         <div>
           <label htmlFor="name" className="block text-sm font-semibold text-stone-700 mb-1">
@@ -84,9 +82,9 @@ export default async function NewPetPage() {
             className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
           >
             <option value="" disabled>Select species…</option>
-            <option value="DOG">Dog 🐶</option>
-            <option value="CAT">Cat 🐱</option>
-            <option value="OTHER">Other 🐾</option>
+            <option value="DOG">Dog</option>
+            <option value="CAT">Cat</option>
+            <option value="OTHER">Other</option>
           </select>
         </div>
 
@@ -184,7 +182,8 @@ export default async function NewPetPage() {
             Cancel
           </Link>
         </div>
-      </form>
-    </div>
+        </form>
+      </PageSection>
+    </PageShell>
   );
 }

@@ -69,10 +69,11 @@ function Swatch({ preset, live }: { preset: ThemePreset; live: boolean }) {
 }
 
 interface PageProps {
-  searchParams: { saved?: string; error?: string };
+  searchParams: Promise<{ saved?: string; error?: string }>;
 }
 
-export default async function AppearancePage({ searchParams }: PageProps) {
+export default async function AppearancePage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const config = await getConfig();
 
   const [, month, day] = new Intl.DateTimeFormat("en-CA", {
@@ -132,7 +133,7 @@ export default async function AppearancePage({ searchParams }: PageProps) {
         )}
         <div className="bg-surface border-b border-line px-4 py-2 flex items-center justify-between">
           <span className="font-bold text-brand-text">
-            {live.preset.motif ?? "🐾"} {config.shopName}
+            <span aria-hidden="true">{live.preset.motif ?? "🐾"}</span> {config.shopName}
           </span>
           <span className="bg-brand-600 text-brand-on-600 px-3 py-1 rounded-lg text-xs font-semibold">
             Book Now

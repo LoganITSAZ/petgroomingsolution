@@ -98,7 +98,7 @@ export default function StaffProfileDialog({
               {profile.name}
             </h2>
             <p className="text-xs text-stone-400 truncate">{profile.email}</p>
-            <p className="text-[10px] text-stone-400 uppercase tracking-wide mt-0.5">
+            <p className="text-[10px] text-stone-400 tracking-tight mt-0.5">
               {profile.roles.join(" · ")}
               {profile.homeStation && ` · home station ${profile.homeStation}`}
             </p>
@@ -122,7 +122,7 @@ export default function StaffProfileDialog({
 
         {/* Right now */}
         <section className="mt-3 border-t border-stone-100 pt-3">
-          <h3 className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1">
+          <h3 className="text-[10px] font-bold text-stone-500 tracking-tight mb-1">
             Right now
           </h3>
           {profile.current ? (
@@ -175,17 +175,17 @@ export default function StaffProfileDialog({
               {profile.finished}
               <span className="text-sm font-medium text-stone-400">/{profile.assigned}</span>
             </p>
-            <p className="text-[10px] text-stone-500 uppercase tracking-wide">Done today</p>
+            <p className="text-[10px] text-stone-500 tracking-tight">Done today</p>
           </div>
           <div>
             <p className="text-lg font-black text-stone-900">{profile.changesToday}</p>
-            <p className="text-[10px] text-stone-500 uppercase tracking-wide">Status changes</p>
+            <p className="text-[10px] text-stone-500 tracking-tight">Status changes</p>
           </div>
           <div>
             <p className={`text-sm font-bold ${profile.onShiftNow ? "text-green-700" : "text-stone-400"}`}>
               {profile.scheduledToday ?? "Not scheduled"}
             </p>
-            <p className="text-[10px] text-stone-500 uppercase tracking-wide">Today&apos;s shift</p>
+            <p className="text-[10px] text-stone-500 tracking-tight">Today&apos;s shift</p>
           </div>
         </section>
 
@@ -193,7 +193,7 @@ export default function StaffProfileDialog({
         {profile.analytics && (
           <section className="mt-3 border-t border-stone-100 pt-3">
             <div className="flex items-baseline justify-between gap-3">
-              <h3 className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+              <h3 className="text-[10px] font-bold text-stone-500 tracking-tight">
                 Their numbers
               </h3>
               {/* Analytics is a shop screen now, so the way through to it is
@@ -219,7 +219,7 @@ export default function StaffProfileDialog({
                   <dd className="text-lg font-black text-stone-900 leading-none">
                     {figure.value}
                   </dd>
-                  <dt className="text-[10px] text-stone-500 uppercase tracking-wide mt-1">
+                  <dt className="text-[10px] text-stone-500 tracking-tight mt-1">
                     {figure.label}
                   </dt>
                 </div>
@@ -264,7 +264,7 @@ export default function StaffProfileDialog({
         {/* The week */}
         {profile.week.length > 0 && (
           <section className="mt-3 border-t border-stone-100 pt-3">
-            <h3 className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1">
+            <h3 className="text-[10px] font-bold text-stone-500 tracking-tight mb-1">
               Scheduled this week
             </h3>
             <ul className="text-sm divide-y divide-stone-100">
@@ -281,7 +281,7 @@ export default function StaffProfileDialog({
         {/* What they did today */}
         {profile.activity.length > 0 && (
           <section className="mt-3 border-t border-stone-100 pt-3">
-            <h3 className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1">
+            <h3 className="text-[10px] font-bold text-stone-500 tracking-tight mb-1">
               Today&apos;s activity
             </h3>
             <ul className="text-sm divide-y divide-stone-100">

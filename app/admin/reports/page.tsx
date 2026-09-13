@@ -29,11 +29,10 @@ export const dynamic = "force-dynamic";
  * anyone who cannot manage the shop. The download route re-checks for itself,
  * because middleware does not cover `/api/*`.
  */
-export default async function ReportsPage({
-  searchParams,
-}: {
-  searchParams: { id?: string; from?: string; to?: string };
+export default async function ReportsPage(props: {
+  searchParams: Promise<{ id?: string; from?: string; to?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const definition = reportById(searchParams.id ?? "") ?? reportById(DEFAULT_REPORT_ID)!;
   const range =
     searchParams.from && searchParams.to
@@ -61,7 +60,7 @@ export default async function ReportsPage({
       <PageSection tone="muted">
         <form method="get" className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
-            <span className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">
+            <span className="block text-xs font-bold tracking-tight text-stone-500 mb-1">
               Report
             </span>
             <select
@@ -77,7 +76,7 @@ export default async function ReportsPage({
             </select>
           </label>
           <label className="text-sm">
-            <span className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">
+            <span className="block text-xs font-bold tracking-tight text-stone-500 mb-1">
               From
             </span>
             <input
@@ -88,7 +87,7 @@ export default async function ReportsPage({
             />
           </label>
           <label className="text-sm">
-            <span className="block text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">
+            <span className="block text-xs font-bold tracking-tight text-stone-500 mb-1">
               To
             </span>
             <input
@@ -131,7 +130,7 @@ export default async function ReportsPage({
                   <th
                     key={column.key}
                     scope="col"
-                    className={`px-3 py-2 font-bold text-xs uppercase tracking-widest text-stone-500 ${
+                    className={`px-3 py-2 font-bold text-xs tracking-tight text-stone-500 ${
                       column.numeric ? "text-right" : "text-left"
                     }`}
                   >

@@ -1,6 +1,5 @@
-import { DiscountKind, type PricingTier } from "@prisma/client";
+import { type PricingTier } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { formatCents } from "@/lib/pricing";
 
 /**
  * Rates the shop honours below its published prices.
@@ -15,71 +14,21 @@ import { formatCents } from "@/lib/pricing";
  * that is how the shop talks about it — "fifteen percent off" or "ten dollars
  * off", never per-service. `Appointment.pricingDiscountCents` snapshots the
  * result so editing a tier never reprices a visit already quoted.
+ *
+ * The rate arithmetic itself lives in lib/pricing-tiers-math.ts (no Prisma
+ * import, so it's safe for a client component) and is re-exported below so
+ * every existing server-side import of this module keeps working unchanged.
  */
-
-export type TierRate = Pick<
-  PricingTier,
-  "id" | "name" | "discountKind" | "discountPercent" | "discountCents" | "note" | "isActive"
->;
-
-export interface Quote {
-  /** Sum of the catalog prices, before any rate is applied. */
-  listCents: number;
-  /** What the tier takes off. Zero when there is no tier. */
-  discountCents: number;
-  /** What the customer is quoted. Never below zero. */
-  quotedCents: number;
-  tier: TierRate | null;
-}
-
-/**
- * What a tier takes off a total. An inactive tier takes nothing off, so
- * switching a tier off restores list prices everywhere without unassigning
- * anybody.
- */
-export function tierDiscountCents(listCents: number, tier: TierRate | null): number {
-  if (!tier || !tier.isActive || listCents <= 0) return 0;
-
-  if (tier.discountKind === DiscountKind.PERCENT) {
-    const percent = tier.discountPercent ?? 0;
-    if (percent <= 0) return 0;
-    // A tier can be generous but never negative, and never more than the visit.
-    return Math.min(listCents, Math.round((listCents * Math.min(percent, 100)) / 100));
-  }
-
-  const cents = tier.discountCents ?? 0;
-  return cents <= 0 ? 0 : Math.min(listCents, cents);
-}
-
-/** The full quote for a visit: list price, what comes off, what is charged. */
-export function quoteFor(listCents: number, tier: TierRate | null): Quote {
-  const discountCents = tierDiscountCents(listCents, tier);
-  return {
-    listCents,
-    discountCents,
-    quotedCents: Math.max(0, listCents - discountCents),
-    tier: tier ?? null,
-  };
-}
-
-/** Sum of the priced lines on a visit. Unpriced lines contribute nothing. */
-export function listTotalCents(lines: { priceCents: number | null }[]): number {
-  return lines.reduce((sum, line) => sum + (line.priceCents ?? 0), 0);
-}
-
-/** "15% off" / "$10 off" — the rate in the shop's own words. */
-export function describeRate(tier: TierRate): string {
-  if (tier.discountKind === DiscountKind.PERCENT) {
-    const percent = tier.discountPercent ?? 0;
-    return percent > 0 ? `${trimNumber(percent)}% off` : "No discount";
-  }
-  const cents = tier.discountCents ?? 0;
-  return cents > 0 ? `${formatCents(cents)} off` : "No discount";
-}
-
-function trimNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
-}
+export {
+  EXAMPLE_LIST_CENTS,
+  describeRate,
+  listTotalCents,
+  quoteFor,
+  tierDiscountCents,
+  type Quote,
+  type TierRate,
+} from "@/lib/pricing-tiers-math";
+import { listTotalCents, tierDiscountCents, type TierRate } from "@/lib/pricing-tiers-math";
 
 /** Tiers for the admin list and the assignment dropdowns, in display order. */
 export async function listPricingTiers(includeInactive = true): Promise<PricingTier[]> {
@@ -90,7 +39,7 @@ export async function listPricingTiers(includeInactive = true): Promise<PricingT
 }
 
 /** The rate a customer is on right now, or null for list prices. */
-export async function tierForCustomer(customerId: string): Promise<TierRate | null> {
+async function tierForCustomer(customerId: string): Promise<TierRate | null> {
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
     select: { pricingTier: true },

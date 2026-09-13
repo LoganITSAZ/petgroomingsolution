@@ -27,7 +27,7 @@ export async function pickupThresholds(): Promise<PickupThresholds> {
   return { watchMins, lateMins, criticalMins };
 }
 
-export function pickupLevel(waitingMins: number, thresholds: PickupThresholds): PickupLevel {
+function pickupLevel(waitingMins: number, thresholds: PickupThresholds): PickupLevel {
   if (waitingMins >= thresholds.criticalMins) return "critical";
   if (waitingMins >= thresholds.lateMins) return "late";
   if (waitingMins >= thresholds.watchMins) return "watch";

@@ -89,6 +89,33 @@ function Row({
   );
 }
 
+/**
+ * Round-trips the database and times it. Kept out of the component body: it
+ * reads a clock, which a render may not do.
+ */
+async function probeDatabase() {
+  try {
+    const started = performance.now();
+    await prisma.$queryRaw`SELECT 1`;
+    const dbLatencyMs = Math.round(performance.now() - started);
+    const rows = await prisma.$queryRaw<{ version: string }[]>`SELECT version()`;
+    return {
+      dbOnline: true,
+      dbError: "",
+          dbLatencyMs,
+      // "PostgreSQL 16.4 on x86_64…" — the first two words are the useful part
+      dbVersion: rows[0]?.version.split(" ").slice(0, 2).join(" ") ?? "unknown",
+    };
+  } catch (error) {
+    return {
+      dbOnline: false,
+      dbError: error instanceof Error ? error.message : String(error),
+          dbLatencyMs: 0,
+          dbVersion: "",
+    };
+  }
+}
+
 export default async function AdminOverview() {
   // Technical screen: a shop manager runs the shop, an admin runs the system.
   if (!(await currentStaffIsAdmin())) redirect("/staff");
@@ -96,21 +123,7 @@ export default async function AdminOverview() {
   const now = new Date();
 
   // ── Database probe ────────────────────────────────────────────
-  let dbOnline = true;
-  let dbError = "";
-  let dbLatencyMs = 0;
-  let dbVersion = "";
-  try {
-    const started = Date.now();
-    await prisma.$queryRaw`SELECT 1`;
-    dbLatencyMs = Date.now() - started;
-    const rows = await prisma.$queryRaw<{ version: string }[]>`SELECT version()`;
-    // "PostgreSQL 16.4 on x86_64…" — the first two words are the useful part
-    dbVersion = rows[0]?.version.split(" ").slice(0, 2).join(" ") ?? "unknown";
-  } catch (error) {
-    dbOnline = false;
-    dbError = error instanceof Error ? error.message : String(error);
-  }
+  const { dbOnline, dbError, dbLatencyMs, dbVersion } = await probeDatabase();
 
   let migrations: MigrationRow[] = [];
   let migrationError = "";

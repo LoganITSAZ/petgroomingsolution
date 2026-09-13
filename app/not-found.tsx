@@ -9,7 +9,7 @@ export default function NotFound() {
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-6">
       <div className="text-center">
-        <p className="text-5xl">🐾</p>
+        <p className="text-5xl" aria-hidden="true">🐾</p>
         <h1 className="text-xl font-black text-stone-900 mt-3">Page not found</h1>
         <p className="text-sm text-stone-500 mt-1">
           That page does not exist, or the record it pointed at is gone.

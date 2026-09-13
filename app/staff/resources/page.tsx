@@ -57,7 +57,7 @@ export default async function ResourcesPage() {
         <div className="divide-y divide-stone-100">
           {RESOURCE_SECTIONS.map((section) => (
             <section key={section.slug} id={section.slug} className="px-3 py-4 scroll-mt-4">
-              <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">
+              <h2 className="font-bold text-stone-700 text-xs tracking-tight">
                 {section.title}
               </h2>
               <p className="text-sm text-stone-600 mt-1 max-w-3xl">{section.blurb}</p>

@@ -48,15 +48,16 @@ function RoleBadges({ roles }: { roles: string[] }) {
 }
 
 interface PageProps {
-  searchParams: {
+  searchParams: Promise<{
     created?: string;
     saved?: string;
     commission?: string;
     error?: string;
-  };
+  }>;
 }
 
-export default async function StaffPage({ searchParams }: PageProps) {
+export default async function StaffPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const [staffList, config] = await Promise.all([
     prisma.staff.findMany({ orderBy: { name: "asc" } }),
     getConfig(),
@@ -138,22 +139,22 @@ export default async function StaffPage({ searchParams }: PageProps) {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-stone-50 border-b border-stone-200 text-left">
-                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 tracking-tight">
                   Name
                 </th>
-                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 tracking-tight">
                   Email
                 </th>
-                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 tracking-tight">
                   Roles
                 </th>
-                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 tracking-tight">
                   Commission
                 </th>
-                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 tracking-tight">
                   Status
                 </th>
-                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 uppercase tracking-wide text-right">
+                <th scope="col" className="px-4 py-2 text-xs font-semibold text-stone-500 tracking-tight text-right">
                   Actions
                 </th>
               </tr>

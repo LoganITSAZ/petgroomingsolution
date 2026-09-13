@@ -29,6 +29,7 @@ import {
 } from "@/lib/arrivals";
 import { PICKUP_LEVEL_CLASS, PICKUP_LEVEL_LABEL, formatWait, pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
+import FilterAutoSubmit from "@/components/FilterAutoSubmit";
 import { PageShell, PageSection, StatStrip, Well } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
@@ -115,7 +116,7 @@ function shiftDay(dayKey: string, days: number): string {
 }
 
 interface PageProps {
-  searchParams: Partial<Record<keyof Filters, string>> & { error?: string };
+  searchParams: Promise<Partial<Record<keyof Filters, string>> & { error?: string }>;
 }
 
 /**
@@ -134,7 +135,7 @@ function NowWell({
 }) {
   return (
     <div className="min-w-0">
-      <h2 className="mb-1 flex items-baseline gap-1.5 text-xs font-bold uppercase tracking-widest text-stone-500">
+      <h2 className="mb-1 flex items-baseline gap-1.5 text-xs font-bold tracking-tight text-stone-500">
         {label}
         <span className={count > 0 ? "text-stone-800" : "text-stone-400"}>{count}</span>
       </h2>
@@ -145,7 +146,8 @@ function NowWell({
   );
 }
 
-export default async function StaffAppointmentsPage({ searchParams }: PageProps) {
+export default async function StaffAppointmentsPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const todayKey = shopDayKey();
   const tomorrowKey = shiftDay(todayKey, 1);
 
@@ -507,6 +509,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
           method="GET"
           className="hidden peer-checked:flex px-3 py-2 border-t border-stone-100 flex-wrap items-center gap-2"
         >
+          <FilterAutoSubmit>
             <input type="hidden" name="view" value={filters.view} />
             <input
               name="q"
@@ -556,6 +559,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
                 Reset
               </Link>
             )}
+          </FilterAutoSubmit>
         </form>
 
         {/* Counts for the range, regardless of the current filter */}
@@ -614,7 +618,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
             the same glance instead of on each pet's own page.
           */
           <PageSection tone="muted">
-            <h2 className="mb-1.5 flex items-baseline gap-1.5 text-xs font-bold uppercase tracking-widest text-stone-500">
+            <h2 className="mb-1.5 flex items-baseline gap-1.5 text-xs font-bold tracking-tight text-stone-500">
               Where everyone is standing
               <span className={waiting.length > 0 ? "text-amber-700" : "text-stone-400"}>
                 {waiting.length} waiting
@@ -657,7 +661,7 @@ export default async function StaffAppointmentsPage({ searchParams }: PageProps)
         ) : (
           <PageSection grow scroll padded={false}>
             <table className="w-full text-sm text-center">
-              <thead className="bg-well text-stone-500 text-[10px] uppercase tracking-widest sticky top-0 z-10 shadow-[0_1px_0_rgb(var(--well-line))]">
+              <thead className="bg-well text-stone-500 text-[10px] tracking-tight sticky top-0 z-10 shadow-[0_1px_0_rgb(var(--well-line))]">
                 <tr>
                   <th scope="col" className="px-3 py-2 text-left">Stage</th>
                   <th scope="col" className="px-3 py-2">When</th>

@@ -37,10 +37,11 @@ function percent(value: number): string {
 }
 
 interface PageProps {
-  searchParams: { range?: string };
+  searchParams: Promise<{ range?: string }>;
 }
 
-export default async function AnalyticsPage({ searchParams }: PageProps) {
+export default async function AnalyticsPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   if (!(await currentStaffCanManage())) redirect("/staff");
 
   const requested = Number(searchParams.range);
@@ -134,7 +135,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
       <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Volume */}
         <section className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">
             Finished per day
           </h2>
           {shop.perDay.length === 0 ? (
@@ -167,7 +168,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
 
         {/* Money and mix */}
         <section className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-3">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">
             Service mix
           </h2>
           {peakServices.length === 0 ? (
@@ -279,7 +280,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
           <div className="border border-stone-200 rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-well text-stone-500 text-[10px] uppercase tracking-widest">
+                <thead className="bg-well text-stone-500 text-[10px] tracking-tight">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-left">#</th>
                     <th scope="col" className="px-3 py-2 text-left">Groomer</th>
@@ -302,7 +303,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps) {
                       <td className="px-3 py-2 font-black text-stone-400">{index + 1}</td>
                       <td className="px-3 py-2 font-semibold text-stone-900">
                         {row.name}
-                        {index === 0 && <span className="ml-1.5">🏆</span>}
+                        {index === 0 && <span className="ml-1.5" role="img" aria-label="Top groomer">🏆</span>}
                         <span className="block text-[10px] font-medium text-stone-400">
                           {row.roles.map(formatRole).join(" · ")}
                         </span>

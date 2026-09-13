@@ -55,6 +55,7 @@ export default function FloorBoard({
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [note, setNote] = useState("");
+  const [announcement, setAnnouncement] = useState("");
 
   useEffect(() => {
     const root = rootRef.current;
@@ -83,7 +84,7 @@ export default function FloorBoard({
         pet.stationName
           ? $("<span>", {
               class:
-                "block truncate text-[10px] font-semibold uppercase tracking-wide text-brand-text",
+                "block truncate text-[10px] font-semibold tracking-tight text-brand-text",
               text: pet.stationName,
             })
           : []
@@ -95,19 +96,21 @@ export default function FloorBoard({
       const $place = $("<button>", {
         type: "button",
         class:
-          "place hidden w-full border-t border-well-line px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-brand-text hover:bg-well",
+          "place hidden w-full border-t border-well-line px-2 py-1 text-[10px] font-bold tracking-tight text-brand-text hover:bg-well",
         text: "Move here",
         "data-column": key,
       });
       return $("<section>", {
         // Five columns share the width rather than scrolling off the edge.
         class: "col min-w-0 flex-1 basis-40 rounded-lg border border-well-line bg-well",
+        role: "region",
+            "aria-label": name,
       }).append(
         $("<header>", {
           class: "flex items-baseline justify-between gap-1 border-b border-well-line px-2 py-1",
         }).append(
           $("<span>", {
-            class: "truncate text-[10px] font-bold uppercase tracking-wide text-stone-600",
+            class: "truncate text-[10px] font-bold tracking-tight text-stone-600",
             text: name,
             title: hint,
           }),
@@ -158,6 +161,8 @@ export default function FloorBoard({
 
     const drop = async ($chip: JQuery<HTMLElement>, columnKey: string) => {
       const id = String($chip.attr("data-id"));
+      const petName = pets.find((pet) => pet.id === id)?.petName ?? "Pet";
+      const columnLabel = BOARD_COLUMNS.find((entry) => entry.key === columnKey)?.label ?? columnKey;
       $chip.addClass("opacity-50");
       const result = await move(id, columnKey);
       $chip.removeClass("opacity-50");
@@ -166,6 +171,7 @@ export default function FloorBoard({
         return;
       }
       setNote("");
+      setAnnouncement(`${petName} moved to ${columnLabel}`);
       $chip.closest("li").appendTo($strip.find(`.drop[data-column="${columnKey}"]`));
       select(null);
       paint();
@@ -209,6 +215,9 @@ export default function FloorBoard({
   return (
     <div>
       <div ref={rootRef} />
+      <span className="sr-only" aria-live="polite">
+        {announcement}
+      </span>
       {note && (
         <p role="alert" className="mt-1 text-xs font-semibold text-red-700">
           {note}

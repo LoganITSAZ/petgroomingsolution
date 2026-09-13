@@ -36,7 +36,9 @@ export default async function StaffServicesPage() {
       by: ["serviceId"],
       _count: { _all: true },
       where: {
-        appointment: { scheduledAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) } },
+        appointment: {
+          scheduledAt: { gte: new Date(new Date().getTime() - 90 * 24 * 60 * 60 * 1000) },
+        },
       },
     }),
   ]);
@@ -101,12 +103,12 @@ export default async function StaffServicesPage() {
                       <span className="min-w-0">
                         <span className="font-semibold text-stone-900">{service.name}</span>
                         {service.walkInEligible && (
-                          <span className="ml-2 text-[10px] font-bold text-emerald-700 uppercase">
+                          <span className="ml-2 text-[10px] font-bold text-emerald-700 ">
                             Walk-in
                           </span>
                         )}
                         {offers.length > 0 && (
-                          <span className="ml-2 text-[10px] font-bold text-amber-700 uppercase">
+                          <span className="ml-2 text-[10px] font-bold text-amber-700 ">
                             Promo
                           </span>
                         )}
@@ -130,7 +132,7 @@ export default async function StaffServicesPage() {
 
                       {service.staffNotes && (
                         <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                          <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest">
+                          <p className="text-[10px] font-bold text-amber-800 tracking-tight">
                             Staff notes
                           </p>
                           <p className="text-sm text-stone-700 whitespace-pre-wrap">
@@ -152,7 +154,7 @@ export default async function StaffServicesPage() {
                               key={tier.label}
                               className="bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5"
                             >
-                              <p className="text-[10px] text-stone-500 uppercase">{tier.label}</p>
+                              <p className="text-[10px] text-stone-500 ">{tier.label}</p>
                               <p className="font-bold text-stone-900">{formatCents(tier.cents)}</p>
                             </div>
                           ))}

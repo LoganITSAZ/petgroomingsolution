@@ -14,11 +14,10 @@ export const metadata = { title: "My Profile" };
 
 export const dynamic = "force-dynamic";
 
-export default async function StaffProfilePage({
-  searchParams,
-}: {
-  searchParams: { saved?: string; error?: string; password?: string; photoError?: string };
+export default async function StaffProfilePage(props: {
+  searchParams: Promise<{ saved?: string; error?: string; password?: string; photoError?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   if (!session?.user || session.user.userType !== "staff") redirect("/login?type=staff");
 
@@ -107,7 +106,7 @@ export default async function StaffProfilePage({
             <span className="block text-sm font-semibold text-stone-700 mb-1">Email</span>
             <p className="bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm text-stone-500">{staff.email}</p>
           </div>
-          <button className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold">Save profile</button>
+          <button type="submit" className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold">Save profile</button>
         </form>
 
         {/* Its own form, so flipping the switch does not submit — or fail
@@ -136,7 +135,7 @@ export default async function StaffProfilePage({
               <input id={id} name={id} type="password" required minLength={id === "currentPassword" ? undefined : 8} className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm" />
             </div>
           ))}
-          <button className="bg-stone-800 hover:bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-semibold">Change password</button>
+          <button type="submit" className="bg-stone-800 hover:bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-semibold">Change password</button>
         </form>
       </PageSection>
     </PageShell>

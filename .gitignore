@@ -46,3 +46,6 @@ CLAUDE.md
 CLAUDE.local.md
 **/CLAUDE.local.md
 .claude/
+
+# editor
+.vscode/

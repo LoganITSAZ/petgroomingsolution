@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 type PetType = "DOG" | "CAT";
 type DogSize = "priceSmallCents" | "priceMediumCents" | "priceLargeCents" | "priceXlCents";
@@ -65,7 +65,7 @@ function priceLabel(service: PricingService): string {
   return low === high ? money(low) : `${money(low)}–${money(high)}`;
 }
 
-export default function ServicePricingExplorer({ services }: { services: PricingService[] }) {
+export default function ServicePricingExplorer({ services, extras }: { services: PricingService[]; extras?: ReactNode }) {
   const [petType, setPetType] = useState<PetType | null>(null);
   const [dogSize, setDogSize] = useState<DogSize | null>(null);
   const readyToShowPrices = petType === "CAT" || (petType === "DOG" && dogSize !== null);
@@ -89,7 +89,7 @@ export default function ServicePricingExplorer({ services }: { services: Pricing
   return (
     <section
       aria-labelledby="pricing-tool-heading"
-      className="glass-panel relative flex min-h-[34rem] flex-col overflow-hidden rounded-3xl p-5 md:min-h-[38rem] md:p-8"
+      className="relative flex min-h-[34rem] flex-col overflow-hidden p-5 md:min-h-[38rem] md:p-8"
     >
       <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-brand-100/70 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -left-20 h-64 w-64 rounded-full bg-brand-300/25 blur-3xl" />
@@ -104,7 +104,7 @@ export default function ServicePricingExplorer({ services }: { services: Pricing
             <p className="mt-2 text-muted">Answer a couple of quick questions and we&apos;ll simplify the menu for you.</p>
           </div>
           <div className="mx-auto mt-8 w-full max-w-3xl">
-            <div className="mb-4 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-brand-text">
+            <div className="mb-4 flex items-center justify-center gap-2 text-xs font-bold tracking-tight text-brand-text">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-brand-on-600">1</span>
               Choose your pet
               {petType === "DOG" && <><span className="mx-1 h-px w-8 bg-brand-300" /><span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-brand-on-600">2</span> Choose weight</>}
@@ -125,7 +125,7 @@ export default function ServicePricingExplorer({ services }: { services: Pricing
                   className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-200 md:p-6 ${
                     petType === type
                       ? "border-brand-500 bg-brand-100/60 text-brand-text shadow-lg shadow-brand-900/10"
-                      : "border-white/70 bg-surface/65 text-ink hover:-translate-y-0.5 hover:border-brand-300 hover:bg-surface hover:shadow-lg hover:shadow-brand-900/5"
+                      : "border-well-line bg-well/70 text-ink hover:-translate-y-0.5 hover:border-brand-300 hover:bg-surface hover:shadow-lg hover:shadow-brand-900/5"
                   }`}
                 >
                   <span className="block text-5xl transition duration-200 group-hover:scale-110" aria-hidden="true">{icon}</span>
@@ -136,7 +136,7 @@ export default function ServicePricingExplorer({ services }: { services: Pricing
               ))}
             </div>
             {petType === "DOG" ? (
-              <div className="mt-6 rounded-2xl border border-brand-300/70 bg-surface/55 p-4 md:p-5">
+              <div className="mt-6 rounded-2xl border border-brand-300/70 bg-well/60 p-4 md:p-5">
                 <div className="mb-3 text-center">
                   <p className="text-lg font-black text-ink">How much does your dog weigh?</p>
                   <p className="text-sm text-muted">Choose the closest range to reveal their prices.</p>
@@ -151,7 +151,7 @@ export default function ServicePricingExplorer({ services }: { services: Pricing
                       className={`rounded-xl border px-3 py-3 text-center transition ${
                         dogSize === size.value
                           ? "border-brand-500 bg-brand-600 text-brand-on-600 shadow-md"
-                          : "border-line bg-surface/70 text-ink hover:border-brand-300 hover:bg-brand-100/30"
+                          : "border-well-line bg-well/80 text-ink hover:border-brand-300 hover:bg-brand-100/30"
                       }`}
                     >
                       <span className="block font-black">{size.label}</span>
@@ -203,13 +203,13 @@ export default function ServicePricingExplorer({ services }: { services: Pricing
           <div key={`${petType}-${dogSize ?? ""}`} className="-mr-2 flex-1 space-y-5 overflow-y-auto pr-2">
             {Array.from(grouped).map(([category, categoryServices]) => (
               <div key={category}>
-                <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-brand-text">{category}</h3>
+                <h3 className="mb-2 text-xs font-bold tracking-tight text-brand-text">{category}</h3>
                 <div className="grid gap-3 md:grid-cols-2">
                   {categoryServices.map((service) => {
                     const hasSizePrices = petType === "DOG" && dogSize !== null && SIZE_LABELS.some(([, , field]) => service[field] != null);
                     const selectedPrice = hasSizePrices && dogSize ? service[dogSize] : null;
                     return (
-                      <article key={service.id} className="rounded-xl border border-line bg-surface/60 p-4 shadow-sm transition hover:border-brand-300/70 hover:shadow-md hover:shadow-brand-900/5">
+                      <article key={service.id} className="rounded-xl border border-well-line bg-well/70 p-4 shadow-sm transition hover:border-brand-300/70 hover:shadow-md hover:shadow-brand-900/5">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <h4 className="font-bold text-ink">{service.name}</h4>
@@ -235,6 +235,10 @@ export default function ServicePricingExplorer({ services }: { services: Pricing
               </div>
             ))}
           </div>
+
+          {/* Surcharges only mean something beside a price, so they arrive with
+          the prices rather than sitting under an unanswered tool. */}
+          {extras}
         </div>
       )}
     </section>

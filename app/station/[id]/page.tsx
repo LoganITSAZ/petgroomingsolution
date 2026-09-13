@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
 import { currentShopTime, formatStatus, formatServiceType } from "@/lib/utils";
 import { nextStatus } from "@/lib/appointment-flow";
 
@@ -38,22 +39,27 @@ type ShopLocation = {
 type Station = {
   id: string;
   name: string;
-  role: "GROOMER" | "BATHING" | "KENNEL";
+  role: "GROOMER" | "BATHING" | "DRYING" | "KENNEL";
   kennelRows: number | null;
   kennelColumns: number | null;
 };
 
+/**
+ * A door holds several pets when they come from one household, so the board
+ * streams a list per compartment (`getKennelBoard`). This read `appointment`,
+ * which the route has never sent, so every door on the kiosk said Empty while
+ * the shop screens showed it occupied.
+ */
 type KennelData = {
   id: string;
   label: string;
   isActive: boolean;
-  occupiedAt: string | null;
-  appointment: {
+  appointments: {
     id: string;
     status: string;
     pet: { name: string; hasBiteHistory: boolean };
     customer: { firstName: string; lastName: string };
-  } | null;
+  }[];
 };
 
 type Occupant = NonNullable<AppointmentData>;
@@ -72,11 +78,11 @@ async function advanceStatus(appointmentId: string, status: string) {
   });
 }
 
-export default function StationDisplay({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default function StationDisplay() {
+  // Next 16 hands a page's `params` over as a promise; the kiosk is a client
+// component on React 18, which has no `use()`, so it reads the segment from
+  // the router instead.
+const params = useParams<{ id: string }>();
   const [appointments, setAppointments] = useState<Occupant[]>([]);
   const [kennels, setKennels] = useState<KennelData[]>([]);
   const [station, setStation] = useState<Station | null>(null);
@@ -145,14 +151,14 @@ export default function StationDisplay({
   const pet = appointment?.pet;
   const next = appointment ? nextStatus(appointment.status) : null;
   const isKennel = station?.role === "KENNEL";
-  const occupied = kennels.filter((kennel) => kennel.appointment).length;
+  const occupied = kennels.filter((kennel) => kennel.appointments.length > 0).length;
   const inService = kennels.filter((kennel) => kennel.isActive).length;
 
   return (
     <div className="min-h-screen bg-stone-900 text-white flex flex-col p-6 gap-6 select-none">
       {/* Station header */}
       <div className="flex items-center justify-between">
-        <span className="text-stone-300 text-xl font-semibold uppercase tracking-widest">
+        <span className="font-display text-3xl font-extrabold tracking-tight text-white">
           {station?.name ?? "Station"}
         </span>
         <span className="text-stone-300 text-lg tabular-nums">
@@ -168,7 +174,7 @@ export default function StationDisplay({
       {isKennel ? (
         kennels.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-stone-300 gap-4">
-            <span className="text-8xl">🏠</span>
+            <span className="text-8xl" aria-hidden="true">🏠</span>
             <p className="text-3xl">No kennels configured</p>
             <p className="text-xl">Set this unit&apos;s layout in the admin panel.</p>
           </div>
@@ -180,7 +186,9 @@ export default function StationDisplay({
             }}
           >
             {kennels.map((kennel) => {
-              const occupant = kennel.appointment;
+              const occupants = kennel.appointments;
+              const occupant = occupants[0] ?? null;
+              const biting = occupants.some((one) => one.pet.hasBiteHistory);
               return (
                 <div
                   key={kennel.id}
@@ -188,25 +196,29 @@ export default function StationDisplay({
                     !kennel.isActive
                       ? "bg-stone-800/40 text-stone-300"
                       : occupant
-                        ? occupant.pet.hasBiteHistory
-                          ? "bg-red-900 text-white"
+                        ? biting
+                          ? "bg-signal-alert/90 text-white"
                           : "bg-stone-800 text-white"
                         : "bg-stone-800/60 text-stone-300"
                   }`}
                 >
-                  <span className="text-2xl font-black tracking-widest">{kennel.label}</span>
+                  <span className="font-display text-3xl font-extrabold tracking-tight text-white/90">{kennel.label}</span>
                   {!kennel.isActive ? (
-                    <span className="text-lg uppercase tracking-widest">Out of service</span>
+                    <span className="text-lg">Out of service</span>
                   ) : occupant ? (
                     <>
-                      <span className="text-3xl font-bold leading-tight">{occupant.pet.name}</span>
+                      {/* A household shares a door; the counter needs every
+                          name behind it, not just the first one in. */}
+                      <span className="font-display text-3xl font-extrabold leading-tight tracking-tight">
+                        {occupants.map((one) => one.pet.name).join(", ")}
+                      </span>
                       <span className="text-lg text-stone-300">
                         {occupant.customer.firstName} {occupant.customer.lastName}
                       </span>
                       <span className="text-base text-stone-300 mt-auto">
                         {formatStatus(occupant.status)}
                       </span>
-                      {occupant.pet.hasBiteHistory && (
+                      {biting && (
                         <span className="text-base font-black tracking-widest">⚠ BITE HISTORY</span>
                       )}
                     </>
@@ -226,10 +238,10 @@ export default function StationDisplay({
               <div
                 key={occupant.id}
                 className={`rounded-2xl p-5 flex flex-col gap-2 ${
-                  occupant.pet.hasBiteHistory ? "bg-red-900" : "bg-stone-800"
+                  occupant.pet.hasBiteHistory ? "bg-signal-alert/90" : "bg-stone-800"
                 }`}
               >
-                <span className="text-4xl font-black leading-tight">{occupant.pet.name}</span>
+                <span className="font-display text-4xl font-extrabold leading-tight tracking-tight">{occupant.pet.name}</span>
                 <span className="text-xl text-stone-300">
                   {occupant.customer.firstName} {occupant.customer.lastName}
                 </span>
@@ -245,6 +257,7 @@ export default function StationDisplay({
                 </span>
                 {step && (
                   <button
+                    type="button"
                     onClick={() => handleAdvance(occupant)}
                     disabled={advancing}
                     className="bg-brand-600 hover:bg-brand-500 active:bg-brand-700 disabled:opacity-50
@@ -279,7 +292,7 @@ export default function StationDisplay({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={pet.photoUrl} alt={pet.name} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-5xl">
+                  <div className="w-full h-full flex items-center justify-center text-5xl" aria-hidden="true">
                     {pet.species === "CAT" ? "🐱" : "🐶"}
                   </div>
                 )}
@@ -287,7 +300,7 @@ export default function StationDisplay({
 
               {/* Identity */}
               <div className="flex-1">
-                <h1 className="text-6xl font-black tracking-tight">{pet.name}</h1>
+                <h1 className="font-display text-6xl font-extrabold tracking-[-0.03em]">{pet.name}</h1>
                 <p className="text-stone-300 text-2xl mt-1">
                   {pet.breed ?? pet.species}
                   {pet.weightLbs ? ` · ${pet.weightLbs} lbs` : ""}
@@ -316,7 +329,7 @@ export default function StationDisplay({
             {/* Grooming notes */}
             {pet.groomingNotes && (
               <div className="bg-stone-700 rounded-xl p-5">
-                <p className="text-stone-300 text-sm uppercase tracking-widest mb-2">Grooming Notes</p>
+                <p className="font-display text-lg font-bold text-stone-300 mb-2">Grooming notes</p>
                 <p className="text-white text-xl leading-relaxed">{pet.groomingNotes}</p>
               </div>
             )}
@@ -325,12 +338,15 @@ export default function StationDisplay({
           {/* Status + advance button */}
           <div className="flex flex-col gap-4">
             <div className="bg-stone-800 rounded-2xl px-8 py-5 text-center">
-              <p className="text-stone-300 text-lg uppercase tracking-widest mb-1">Current Status</p>
-              <p className="text-4xl font-bold">{formatStatus(appointment.status)}</p>
+              <p className="text-stone-300 text-lg mb-1">Right now</p>
+              <p className="font-display text-4xl font-extrabold tracking-tight">
+                {formatStatus(appointment.status)}
+              </p>
             </div>
 
             {next && (
               <button
+                type="button"
                 onClick={() => handleAdvance(appointment)}
                 disabled={advancing}
                 className="w-full bg-brand-600 hover:bg-brand-500 active:bg-brand-700 disabled:opacity-50
@@ -349,14 +365,14 @@ export default function StationDisplay({
         </>
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-stone-300 gap-4">
-          <span className="text-8xl">🐾</span>
+          <span className="text-8xl" aria-hidden="true">🐾</span>
           <p className="text-3xl">No pet assigned</p>
           <p className="text-xl">Waiting for next appointment…</p>
 
           {shopLocation?.address && (
             <div className="mt-4 w-full max-w-2xl text-center">
               <p className="text-2xl text-stone-200">{shopLocation.shopName}</p>
-              <p className="text-xl text-stone-400 mt-1">{shopLocation.address}</p>
+              <p className="text-xl text-stone-300 mt-1">{shopLocation.address}</p>
               {shopLocation.embedUrl && (
                 <div className="mt-3 rounded-2xl overflow-hidden border border-stone-700">
                   <iframe

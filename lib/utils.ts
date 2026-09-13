@@ -236,6 +236,28 @@ export function stationRoleBadgeClass(role: string): string {
   return map[role] ?? "bg-stone-100 text-stone-600";
 }
 
+/**
+ * Tailwind classes for an appointment status badge.
+ *
+ * One map for the whole app: six screens each kept their own copy and two of
+ * them had already drifted, listing only the in-shop statuses.
+ */
+export function statusBadgeClass(status: string): string {
+  const map: Record<string, string> = {
+    SCHEDULED: "bg-stone-100 text-stone-600",
+    CHECKED_IN: "bg-blue-100 text-blue-700",
+    IN_PROGRESS: "bg-amber-100 text-amber-700",
+    DRYING: "bg-sky-100 text-sky-700",
+    FINISHING: "bg-purple-100 text-purple-700",
+    COMPLETE: "bg-green-100 text-green-700",
+    READY_PICKUP: "bg-emerald-100 text-emerald-800",
+    PICKED_UP: "bg-stone-100 text-stone-400",
+    CANCELLED: "bg-red-100 text-red-700",
+    NO_SHOW: "bg-red-100 text-red-400",
+  };
+  return map[status] ?? "bg-stone-100 text-stone-500";
+}
+
 /** Tailwind classes for a role badge. */
 export function roleBadgeClass(role: string): string {
   const map: Record<string, string> = {

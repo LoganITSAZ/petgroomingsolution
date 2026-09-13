@@ -174,7 +174,7 @@ export type KennelBoard = Awaited<ReturnType<typeof getKennelBoard>>;
  * household allowance applies, so the answer is about that pet, not the door
  * in the abstract.
  */
-export async function kennelRoomFor(
+async function kennelRoomFor(
   kennelId: string,
   appointmentId?: string
 ): Promise<CompartmentRoom> {

@@ -17,11 +17,10 @@ export const dynamic = "force-dynamic";
  * Editing stays at /admin/breeds and is linked from here for whoever runs the
  * shop, so there is still exactly one screen that owns changing a guide.
  */
-export default async function StaffBreedGuidePage({
-  searchParams,
-}: {
-  searchParams: { q?: string };
+export default async function StaffBreedGuidePage(props: {
+  searchParams: Promise<{ q?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const query = (searchParams.q ?? "").trim();
 
   const [guides, canManageShop] = await Promise.all([

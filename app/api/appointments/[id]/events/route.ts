@@ -9,7 +9,7 @@ import { VisitEventType } from "@prisma/client";
 // If eventType === "BITE", also flags pet.hasBiteHistory = true
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user) {
@@ -19,7 +19,7 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { id } = params;
+  const { id } = await params;
 
   const appointment = await prisma.appointment.findUnique({
     where: { id },

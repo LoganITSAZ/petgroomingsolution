@@ -23,7 +23,7 @@ export interface PetOption {
 }
 
 const fieldClass =
-  "w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800  bg-white";
+  "w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 bg-white";
 
 const SEX_LABEL: Record<PetSex, string> = {
   MALE: "Male",
@@ -58,7 +58,7 @@ function PetFields({
 }) {
   return (
     <div className="border border-stone-200 rounded-lg p-3 space-y-3 bg-stone-50">
-      <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">{heading}</p>
+      <p className="text-xs font-bold text-stone-500 tracking-tight">{heading}</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="text-sm">
           <span className="block text-stone-600 mb-1">
@@ -245,7 +245,7 @@ export default function CustomerPetFields({
       ) : (
         <>
           <div className="border border-stone-200 rounded-lg p-3 space-y-3 bg-stone-50">
-            <p className="text-xs font-bold text-stone-500 uppercase tracking-widest">
+            <p className="text-xs font-bold text-stone-500 tracking-tight">
               New customer
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

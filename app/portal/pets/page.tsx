@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { PageShell, PageSection, Well } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -35,104 +36,100 @@ export default async function PortalPetsPage() {
   });
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-stone-900">My Pets</h1>
-          <p className="text-stone-500 text-sm mt-0.5">
-            {pets.length === 0 ? "No pets on file yet." : `${pets.length} pet${pets.length !== 1 ? "s" : ""} on file.`}
-          </p>
-        </div>
+    <PageShell
+      title="My Pets"
+      subtitle={pets.length === 0 ? "None on file yet." : `${pets.length} on file.`}
+      actions={
         <Link
           href="/portal/pets/new"
           className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
         >
-          + Add a Pet
+          Add a pet
         </Link>
-      </div>
-
-      {/* Pet cards */}
-      {pets.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
-          <p className="text-4xl mb-3">🐾</p>
-          <p className="text-stone-500 mb-3">You haven&apos;t added any pets yet.</p>
-          <Link
-            href="/portal/pets/new"
-            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-          >
-            Add your first pet →
-          </Link>
-        </div>
-      ) : (
-        <div className="grid sm:grid-cols-2 gap-3">
-          {pets.map((pet) => (
-            <div
-              key={pet.id}
-              className="bg-white border border-stone-200 rounded-xl p-4 space-y-3 hover:border-amber-300 transition-colors"
+      }
+    >
+      <PageSection>
+        {pets.length === 0 ? (
+          <Well className="py-4 text-center">
+            <p className="text-3xl mb-2" aria-hidden="true">🐾</p>
+            <p className="text-stone-500 text-sm mb-3">Nothing here until you add a pet.</p>
+            <Link
+              href="/portal/pets/new"
+              className="inline-block bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
             >
-              {/* Pet name + bite badge */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">{speciesEmoji[pet.species] ?? "🐾"}</span>
-                  <div>
-                    <p className="font-bold text-stone-900 text-lg leading-tight">{pet.name}</p>
-                    {pet.breed && (
-                      <p className="text-sm text-stone-500">{pet.breed}</p>
-                    )}
+              Add your first pet
+            </Link>
+          </Well>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {pets.map((pet) => (
+              <div
+                key={pet.id}
+                className="rounded-lg border border-well-line bg-well ring-1 ring-well-line/60 p-3 space-y-3"
+              >
+                {/* Pet name + bite badge */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl" aria-hidden="true">{speciesEmoji[pet.species] ?? "🐾"}</span>
+                    <div>
+                      <p className="font-bold text-stone-900 text-lg leading-tight">{pet.name}</p>
+                      {pet.breed && (
+                        <p className="text-sm text-stone-500">{pet.breed}</p>
+                      )}
+                    </div>
                   </div>
+                  {pet.hasBiteHistory && (
+                    <span className="shrink-0 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">
+                      Bite History on file
+                    </span>
+                  )}
                 </div>
-                {pet.hasBiteHistory && (
-                  <span className="shrink-0 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">
-                    Bite History on file
-                  </span>
-                )}
-              </div>
 
-              {/* Details */}
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-                <div>
-                  <dt className="text-stone-400 text-xs uppercase tracking-wide">Species</dt>
-                  <dd className="text-stone-700 font-medium capitalize">
-                    {pet.species.charAt(0) + pet.species.slice(1).toLowerCase()}
-                  </dd>
-                </div>
-                {pet.weightLbs != null && (
+                {/* Details */}
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
                   <div>
-                    <dt className="text-stone-400 text-xs uppercase tracking-wide">Weight</dt>
-                    <dd className="text-stone-700 font-medium">{pet.weightLbs} lbs</dd>
-                  </div>
-                )}
-                {pet.coatType && (
-                  <div>
-                    <dt className="text-stone-400 text-xs uppercase tracking-wide">Coat</dt>
-                    <dd className="text-stone-700 font-medium">{coatLabel[pet.coatType] ?? pet.coatType}</dd>
-                  </div>
-                )}
-                {pet.dateOfBirth && (
-                  <div>
-                    <dt className="text-stone-400 text-xs uppercase tracking-wide">Date of Birth</dt>
-                    <dd className="text-stone-700 font-medium">
-                      {new Date(pet.dateOfBirth).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
+                    <dt className="text-stone-400 text-xs tracking-tight">Species</dt>
+                    <dd className="text-stone-700 font-medium capitalize">
+                      {pet.species.charAt(0) + pet.species.slice(1).toLowerCase()}
                     </dd>
                   </div>
-                )}
-              </dl>
+                  {pet.weightLbs != null && (
+                    <div>
+                      <dt className="text-stone-400 text-xs tracking-tight">Weight</dt>
+                      <dd className="text-stone-700 font-medium">{pet.weightLbs} lbs</dd>
+                    </div>
+                  )}
+                  {pet.coatType && (
+                    <div>
+                      <dt className="text-stone-400 text-xs tracking-tight">Coat</dt>
+                      <dd className="text-stone-700 font-medium">{coatLabel[pet.coatType] ?? pet.coatType}</dd>
+                    </div>
+                  )}
+                  {pet.dateOfBirth && (
+                    <div>
+                      <dt className="text-stone-400 text-xs tracking-tight">Date of Birth</dt>
+                      <dd className="text-stone-700 font-medium">
+                        {new Date(pet.dateOfBirth).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
 
-              {pet.groomingNotes && (
-                <div className="bg-stone-50 rounded-lg px-3 py-2 text-xs text-stone-600">
-                  <span className="font-semibold text-stone-500 uppercase tracking-wide">Notes: </span>
-                  {pet.groomingNotes}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+                {pet.groomingNotes && (
+                  <div className="rounded-lg bg-white border border-well-line px-3 py-2 text-xs text-stone-600">
+                    <span className="font-semibold text-stone-500 tracking-tight">Notes: </span>
+                    {pet.groomingNotes}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </PageSection>
+    </PageShell>
   );
 }

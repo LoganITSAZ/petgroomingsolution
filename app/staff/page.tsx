@@ -4,6 +4,7 @@ import {
   formatStationRole,
   formatStatus,
   shopDayRange,
+  statusBadgeClass,
 } from "@/lib/utils";
 import { AppointmentStatus, StaffRole, StationRole } from "@prisma/client";
 import { stationCapacity } from "@/lib/stations";
@@ -42,27 +43,16 @@ const ON_FLOOR: AppointmentStatus[] = [
   AppointmentStatus.COMPLETE,
 ];
 
-const statusColor: Record<string, string> = {
-  SCHEDULED: "bg-stone-100 text-stone-600",
-  CHECKED_IN: "bg-blue-100 text-blue-700",
-  IN_PROGRESS: "bg-amber-100 text-amber-700",
-  DRYING: "bg-sky-100 text-sky-700",
-  FINISHING: "bg-purple-100 text-purple-700",
-  COMPLETE: "bg-green-100 text-green-700",
-  READY_PICKUP: "bg-emerald-100 text-emerald-800",
-  PICKED_UP: "bg-stone-100 text-stone-400",
-};
 
 
 function minutesSince(from: Date | null): number | null {
   return from ? Math.max(0, Math.round((Date.now() - from.getTime()) / 60000)) : null;
 }
 
-export default async function StaffDashboard({
-  searchParams,
-}: {
-  searchParams: { assigned?: string; error?: string };
+export default async function StaffDashboard(props: {
+  searchParams: Promise<{ assigned?: string; error?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const now = new Date();
   const { start, end } = shopDayRange(now);
 
@@ -363,7 +353,7 @@ export default async function StaffDashboard({
             width rather than a fixed column that squeezed them to two abreast. */}
         <div className="border-t border-stone-100 px-3 py-3">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">Floor</h2>
+            <h2 className="font-bold text-stone-700 text-xs tracking-tight">Floor</h2>
             <span className="text-xs text-stone-500">
               {roster.filter((member) => member.state !== "OFF_SHIFT").length} signed in ·{" "}
               {roster.filter((member) => isOnShiftNow(shifts.get(member.id))).length} scheduled now ·{" "}
@@ -421,7 +411,7 @@ export default async function StaffDashboard({
         {/* The trend behind today's numbers, last. */}
         <div className="border-t border-stone-100 px-3 py-3">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest">
+            <h2 className="font-bold text-stone-700 text-xs tracking-tight">
               Last {SNAPSHOT_DAYS} days
             </h2>
             {canManageShop && (
@@ -490,7 +480,7 @@ export default async function StaffDashboard({
                   <input type="hidden" name="stationId" value={suggestion.stationId} />
                   <input type="hidden" name="staffId" value={suggestion.staffId} />
 
-                  <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wide">
+                  <p className="text-[11px] font-bold text-stone-500 tracking-tight">
                     {suggestion.stationName} is open
                   </p>
                   <p className="text-sm font-bold text-stone-900 mt-0.5">
@@ -523,7 +513,7 @@ export default async function StaffDashboard({
           className={conflicts.shortfall > 0 ? "bg-red-50" : "bg-amber-50"}
         >
           <h2
-            className={`font-bold text-xs uppercase tracking-widest ${
+            className={`font-bold text-xs tracking-tight ${
               conflicts.shortfall > 0 ? "text-red-800" : "text-amber-800"
             }`}
           >
@@ -574,7 +564,7 @@ export default async function StaffDashboard({
 
         return (
           <section key={role}>
-            <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-2">
+            <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-2">
               {formatStationRole(role)}{" "}
             <span className="text-stone-400">
               ({list.reduce((n, station) => n + (occupantsByStation.get(station.id)?.length ?? 0), 0)}
@@ -598,7 +588,7 @@ export default async function StaffDashboard({
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide truncate">
+                      <span className="text-[11px] font-bold text-stone-500 tracking-tight truncate">
                         {station.name}
                       </span>
                       <span
@@ -643,7 +633,7 @@ export default async function StaffDashboard({
                                 <span className="flex items-center gap-1.5">
                                   <span
                                     className={`text-[10px] px-1.5 rounded-full font-medium ${
-                                      statusColor[appt.status] ?? ""
+                                      statusBadgeClass(appt.status)
                                     }`}
                                   >
                                     {formatStatus(appt.status)}
@@ -671,7 +661,7 @@ export default async function StaffDashboard({
         {/* Kennels — same card as the stations above, one per unit */}
         {kennelStations.length > 0 && (
           <section>
-          <h2 className="font-bold text-stone-700 text-xs uppercase tracking-widest mb-2">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-2">
             {formatStationRole("KENNEL")}{" "}
             <span className="text-stone-400">
               ({kennelStations.length} unit{kennelStations.length !== 1 ? "s" : ""} ·{" "}
@@ -700,7 +690,7 @@ export default async function StaffDashboard({
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wide truncate">
+                    <span className="text-[11px] font-bold text-stone-500 tracking-tight truncate">
                       {station.name}
                     </span>
                     <span
@@ -744,7 +734,7 @@ export default async function StaffDashboard({
                               <span className="flex items-center gap-1.5">
                                 <span
                                   className={`text-[10px] px-1.5 rounded-full font-medium ${
-                                    statusColor[occupant.status] ?? ""
+                                    statusBadgeClass(occupant.status)
                                   }`}
                                 >
                                   {formatStatus(occupant.status)}

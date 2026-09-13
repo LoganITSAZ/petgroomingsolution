@@ -25,7 +25,7 @@ export const getStaffRoles = cache(async function getStaffRoles(staffId: string)
 });
 
 /** Current roles of the signed-in staff member; empty for customers and guests. */
-export async function currentStaffRoles(): Promise<StaffRole[]> {
+async function currentStaffRoles(): Promise<StaffRole[]> {
   const session = await auth();
   if (!session?.user || session.user.userType !== "staff") return [];
   return getStaffRoles(session.user.id);
@@ -43,7 +43,7 @@ export async function currentStaffIsAdmin(): Promise<boolean> {
  * status and the notification credentials stay with ADMIN. ADMIN is a superset
  * of MANAGER, so an owner never needs both.
  */
-export const MANAGING_ROLES: StaffRole[] = [StaffRole.ADMIN, StaffRole.MANAGER];
+const MANAGING_ROLES: StaffRole[] = [StaffRole.ADMIN, StaffRole.MANAGER];
 
 export function canManage(roles: readonly StaffRole[]): boolean {
   return roles.some((role) => MANAGING_ROLES.includes(role));

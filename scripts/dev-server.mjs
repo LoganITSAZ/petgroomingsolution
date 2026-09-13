@@ -1,15 +1,9 @@
 #!/usr/bin/env node
 /**
- * Supervisor for `next dev`: restarts it when it stops, so an edit never
- * leaves the shop at a shell prompt. Raw server: `npm run dev:raw`.
- *
- * The one crash with a mechanical fix is a torn `.next` — usually `next build`
- * writing over the directory this server was serving — so that case clears the
- * cache before restarting. Everything else just restarts; the output above the
- * message is the evidence.
+ * `next dev` with one thing added: it refuses to start on a port that is
+ * already taken rather than sliding to the next one.
  */
 import { spawn, execFileSync } from "node:child_process";
-import { rm } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,54 +56,16 @@ if (!(await portIsFree(PORT))) {
   );
   process.exit(1);
 }
-const TORN_NEXT = /Cannot find module '\.[\\/].*\.js'|ENOENT.*\.next[\\/]|missing required error components|Failed to read source code from .*\.next/i;
-const CRASH_LOOP_LIMIT = 5;
-const CRASH_WINDOW_MS = 60_000;
 
-let tail = "";
-let stopping = false;
-let child = null;
-const crashes = [];
+// -p last so the probed port wins even if nothing was passed.
+const child = spawn(
+  process.execPath,
+  [path.join(ROOT, "node_modules/next/dist/bin/next"), "dev", ...args, "-p", String(PORT)],
+  { cwd: ROOT, stdio: "inherit" },
+);
 
-// Registered once: a handler per restart would leak listeners.
 for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-  process.on(sig, () => { stopping = true; child ? child.kill(sig) : process.exit(0); });
+  process.on(sig, () => child.kill(sig));
 }
 
-function run() {
-  tail = "";
-  child = spawn(
-    process.execPath,
-    // -p last so the probed port wins even if nothing was passed.
-    [path.join(ROOT, "node_modules/next/dist/bin/next"), "dev", ...args, "-p", String(PORT)],
-    { cwd: ROOT, stdio: ["inherit", "pipe", "pipe"] },
-  );
-  for (const [src, dest] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) {
-    src.on("data", (chunk) => {
-      dest.write(chunk);
-      tail = (tail + chunk).slice(-8192); // enough for a stack trace, not a log file
-    });
-  }
-  return new Promise((resolve) => child.on("exit", resolve).on("error", () => resolve(1)));
-}
-
-for (;;) {
-  const code = await run();
-  if (stopping) process.exit(0);
-  process.stderr.write(`\n[dev] the dev server stopped (exit ${code}). Restarting.\n`);
-
-  if (TORN_NEXT.test(tail)) {
-    const dir = path.join(ROOT, process.env.NEXT_DIST_DIR ?? ".next");
-    process.stderr.write(`[dev] the build cache looks torn — clearing ${path.relative(ROOT, dir)}.\n`);
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
-  }
-
-  const now = Date.now();
-  crashes.push(now);
-  while (crashes.length && now - crashes[0] > CRASH_WINDOW_MS) crashes.shift();
-  if (crashes.length >= CRASH_LOOP_LIMIT) {
-    process.stderr.write("[dev] stopped restarting: 5 crashes in a minute. Fix what the output reports.\n");
-    process.exit(1);
-  }
-  await new Promise((r) => setTimeout(r, 500));
-}
+child.on("exit", (code) => process.exit(code ?? 0));

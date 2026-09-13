@@ -30,11 +30,10 @@ export default function PhotoStack({
       .toUpperCase();
 
   return (
-    <span
-      className="relative inline-block group"
-      tabIndex={0}
-      role="img"
-      aria-label={`${petName}, owned by ${ownerName}`}
+    <button
+      type="button"
+      className="group relative inline-block border-0 bg-transparent p-0 text-left"
+      aria-label={`${petName}, owned by ${ownerName}. Activate to preview both photos.`}
       style={{ width: size * 1.35, height: size }}
     >
       {/* Owner, behind and offset so a slice always shows */}
@@ -97,6 +96,6 @@ export default function PhotoStack({
           </span>
         )}
       </span>
-    </span>
+    </button>
   );
 }

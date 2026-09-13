@@ -24,6 +24,7 @@ import {
   formatStationRole,
   formatStatus,
   shopDayRange,
+  statusBadgeClass,
 } from "@/lib/utils";
 import { assignKennel, releaseKennel, setKennelService } from "../actions";
 import { currentStaffIsAdmin } from "@/lib/staff-roles";
@@ -33,16 +34,6 @@ import { currentStaffIsAdmin } from "@/lib/staff-roles";
 export const metadata = { title: "Station" };
 
 
-const statusColor: Record<string, string> = {
-  SCHEDULED: "bg-stone-100 text-stone-600",
-  CHECKED_IN: "bg-blue-100 text-blue-700",
-  IN_PROGRESS: "bg-amber-100 text-amber-700",
-  DRYING: "bg-sky-100 text-sky-700",
-  FINISHING: "bg-purple-100 text-purple-700",
-  COMPLETE: "bg-green-100 text-green-700",
-  READY_PICKUP: "bg-emerald-100 text-emerald-800",
-  PICKED_UP: "bg-stone-100 text-stone-400",
-};
 
 const NOTICES: Record<string, string> = {
   assigned: "Pet moved into the kennel.",
@@ -61,11 +52,13 @@ const ERRORS: Record<string, string> = {
 };
 
 interface PageProps {
-  params: { id: string };
-  searchParams: Record<string, string | undefined>;
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }
 
-export default async function StaffStationDetailPage({ params, searchParams }: PageProps) {
+export default async function StaffStationDetailPage(props: PageProps) {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
   const station = await prisma.station.findUnique({ where: { id: params.id } });
   if (!station) notFound();
 
@@ -120,6 +113,8 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
 
   // Breed reference for whoever is standing at this station.
   const guides = await guidesForBreeds(occupants.map((appt) => appt.pet.breed));
+  // One instant for every row, rather than a fresh clock read per pet.
+  const nowMs = new Date().getTime();
 
   const notice = Object.keys(NOTICES).find((key) => searchParams[key] === "1");
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
@@ -226,11 +221,11 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                   <div className="flex items-center justify-between">
                     <span className="font-black text-stone-800">{kennel.label}</span>
                     {!kennel.isActive ? (
-                      <span className="text-[10px] font-bold text-stone-400 uppercase">
+                      <span className="text-[10px] font-bold text-stone-400 ">
                         Out of service
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold text-stone-400 uppercase">
+                      <span className="text-[10px] font-bold text-stone-400 ">
                         {inside.length}/{shown}
                         {household && inside.length > demand.perCompartment && (
                           <span className="ml-1 text-emerald-700">same home</span>
@@ -318,7 +313,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
         /* Work station — one card per pet it is holding */
         <PageSection>
           <div className="flex items-baseline justify-between gap-3 mb-2">
-            <h2 className="text-sm font-bold text-stone-500 uppercase tracking-widest">
+            <h2 className="text-sm font-bold text-stone-500 tracking-tight">
               At this station now
             </h2>
             <span
@@ -340,7 +335,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
               {occupants.map((appt) => {
                 const guide = guides.get((appt.pet.breed ?? "").trim().toLowerCase()) ?? null;
                 const mins = appt.checkedInAt
-                  ? Math.round((Date.now() - appt.checkedInAt.getTime()) / 60000)
+                  ? Math.round((nowMs - appt.checkedInAt.getTime()) / 60000)
                   : null;
                 const serviceMins = appt.services.reduce(
                   (sum, line) => sum + (line.service?.durationMins ?? 0),
@@ -404,7 +399,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                       <div className="text-right">
                         <span
                           className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            statusColor[appt.status] ?? "bg-stone-100 text-stone-500"
+                            statusBadgeClass(appt.status)
                           }`}
                         >
                           {formatStatus(appt.status)}
@@ -428,7 +423,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                     {/* The work itself */}
                     <div className="grid gap-2 md:grid-cols-2">
                       <div className="border border-stone-200 rounded-lg p-2">
-                        <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest mb-1">
+                        <p className="text-[10px] font-bold text-stone-500 tracking-tight mb-1">
                           Booked services
                         </p>
                         <ul className="text-sm space-y-1">
@@ -460,7 +455,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                       </div>
 
                       <div className="border border-stone-200 rounded-lg p-2 space-y-1.5">
-                        <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                        <p className="text-[10px] font-bold text-stone-500 tracking-tight">
                           This pet
                         </p>
                         {appt.pet.healthFlags.length > 0 && (
@@ -538,7 +533,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
         ) : (
           <div className="border border-stone-200 rounded-lg overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-well text-stone-500 text-xs uppercase tracking-widest">
+              <thead className="bg-well text-stone-500 text-xs tracking-tight">
                 <tr>
                   <th scope="col" className="px-3 py-2 text-left">Time</th>
                   <th scope="col" className="px-3 py-2 text-left">Pet</th>
@@ -568,7 +563,7 @@ export default async function StaffStationDetailPage({ params, searchParams }: P
                     <td className="px-3 py-2">
                       <span
                         className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          statusColor[appt.status] ?? "bg-stone-100 text-stone-500"
+                          statusBadgeClass(appt.status)
                         }`}
                       >
                         {formatStatus(appt.status)}
