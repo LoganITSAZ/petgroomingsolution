@@ -288,7 +288,7 @@ export default async function StaffDashboard(props: {
           */
           <PageSection tone="muted">
             <h2 className="mb-1.5 flex items-baseline gap-1.5 text-xs font-bold uppercase tracking-widest text-stone-500">
-              Where everyone is standing
+              Service lifecycle
               <span className={waitingOnFloor.length > 0 ? "text-amber-700" : "text-stone-400"}>
                 {waitingOnFloor.length} waiting
               </span>
