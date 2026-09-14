@@ -26,11 +26,10 @@ import {
   arrivalThresholds,
   minutesLate,
 } from "@/lib/arrivals";
-import { PICKUP_LEVEL_CLASS, PICKUP_LEVEL_LABEL, formatWait, pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
 import FilterAutoSubmit from "@/components/FilterAutoSubmit";
 import DateJump from "@/components/DateJump";
-import { PageShell, PageSection, StatStrip, Well } from "@/components/ui";
+import { PageShell, PageSection, StatStrip } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -119,33 +118,6 @@ interface PageProps {
   searchParams: Promise<Partial<Record<keyof Filters, string>> & { error?: string }>;
 }
 
-/**
- * One of the three at-a-glance groups above the list. The label carries the
- * count, so the well below it holds pets and nothing else — and an empty well
- * reads as "nobody" without a line of wording saying so.
- */
-function NowWell({
-  label,
-  count,
-  children,
-}: {
-  label: string;
-  count: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="min-w-0">
-      <h2 className="mb-1 flex items-baseline gap-1.5 text-xs font-bold tracking-tight text-stone-500">
-        {label}
-        <span className={count > 0 ? "text-stone-800" : "text-stone-400"}>{count}</span>
-      </h2>
-      <Well as="ul" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        {children}
-      </Well>
-    </div>
-  );
-}
-
 export default async function StaffAppointmentsPage(props: PageProps) {
   const searchParams = await props.searchParams;
   const todayKey = shopDayKey();
@@ -200,8 +172,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     householdMax,
     arrivals,
     counts,
-    operationalAppointments,
-    pickupList,
   ] = await Promise.all([
     prisma.appointment.findMany({
       where,
@@ -248,23 +218,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
       where: { scheduledAt: range },
       _count: { _all: true },
     }),
-    prisma.appointment.findMany({
-      // Include finished pets in the board’s pickup column.
-      where: {
-        scheduledAt: range,
-        status: { in: [AppointmentStatus.SCHEDULED, ...IN_SHOP, AppointmentStatus.READY_PICKUP] },
-      },
-      select: {
-        id: true,
-        scheduledAt: true,
-        status: true,
-        stationId: true,
-        pet: { select: { name: true, hasBiteHistory: true } },
-        customer: { select: { firstName: true, lastName: true } },
-      },
-      orderBy: { scheduledAt: "asc" },
-    }),
-    pickupWatchlist(),
   ]);
 
   const countFor = (list: AppointmentStatus[]) =>
@@ -283,15 +236,9 @@ export default async function StaffAppointmentsPage(props: PageProps) {
 
   const listQuery = queryString(filters);
 
-  // The floor follows the selected date range. Hide it when the list is
-  // narrowed so its pets do not contradict the filtered results below.
   const isFiltered =
     Boolean(filters.q || filters.staffId || filters.stationId || filters.type) ||
     filters.group !== DEFAULT_GROUP;
-  const now = new Date();
-  const arrivingNext = operationalAppointments
-    .filter((appointment) => appointment.status === AppointmentStatus.SCHEDULED && appointment.scheduledAt >= now)
-    .slice(0, 4);
 
   /*
    * Compartments with room, offered when a pet arrives. Room is per customer,
@@ -578,52 +525,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
 
         {/* Counts for the range, regardless of the current filter */}
         <StatStrip stats={summary} />
-
-        {!isFiltered && (
-          /*
-            Three questions the counter is asked all day, side by side on one
-            band. Stacked as three bands they pushed the list itself below the
-            fold on a shop terminal, and the answer to each is usually a couple
-            of names — a column each is the whole of it.
-          */
-          <PageSection>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <NowWell label="Waiting for pickup" count={pickupList.pets.length}>
-                {pickupList.pets.slice(0, 4).map((pet) => (
-                  <li key={pet.appointmentId}>
-                    <Link
-                      href={`/staff/appointments/${pet.appointmentId}`}
-                      className="flex items-center gap-1.5 hover:text-brand-text"
-                    >
-                      <span className="font-semibold truncate">{pet.petName}</span>
-                      <span
-                        className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${PICKUP_LEVEL_CLASS[pet.level]}`}
-                        title={PICKUP_LEVEL_LABEL[pet.level]}
-                      >
-                        {formatWait(pet.waitingMins)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </NowWell>
-              <NowWell label="Arriving next" count={arrivingNext.length}>
-                {arrivingNext.map((appointment) => (
-                  <li key={appointment.id}>
-                    <Link
-                      href={`/staff/appointments/${appointment.id}`}
-                      className="flex items-center gap-1.5 hover:text-brand-text"
-                    >
-                      <span className="font-semibold truncate">{appointment.pet.name}</span>
-                      <span className="shrink-0 text-stone-500">
-                        {formatShopTime(appointment.scheduledAt)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </NowWell>
-            </div>
-          </PageSection>
-        )}
 
         {searchParams.error === "not_found" && (
           <div className="mx-3 mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-red-800 text-sm font-medium">
