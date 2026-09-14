@@ -281,23 +281,21 @@ export default async function StaffDashboard(props: {
         </div>
 
         {workStations.length > 0 && (
-          /*
-            The floor, arranged by hand. It answers what the "no station" list
-            used to — the Waiting column is that list — and lets it be fixed in
-            the same glance instead of on each pet's own page.
-          */
-          <PageSection tone="muted">
-            <h2 className="mb-1.5 flex items-baseline gap-1.5 text-xs font-bold uppercase tracking-widest text-stone-500">
-              Service lifecycle
-              <span className={waitingOnFloor.length > 0 ? "text-amber-700" : "text-stone-400"}>
-                {waitingOnFloor.length} waiting
-              </span>
-              <span className="ml-auto font-medium normal-case tracking-normal text-stone-400">
-                Drag a pet to a stage, or tap it and choose
-              </span>
-            </h2>
-            <FloorBoard pets={boardPets} capacity={boardCapacity} move={moveToColumn} />
-          </PageSection>
+          <div className={`${styles.panel} ${styles.amber}`}>
+            <PageSection
+              title="Service lifecycle"
+              hint={
+                <span>
+                  {waitingOnFloor.length > 0 && (
+                    <span className="font-bold text-amber-700">{waitingOnFloor.length} waiting · </span>
+                  )}
+                  Drag a pet to a stage, or tap it and choose
+                </span>
+              }
+            >
+              <FloorBoard pets={boardPets} capacity={boardCapacity} move={moveToColumn} />
+            </PageSection>
+          </div>
         )}
 
         <div id="pickups" className={`${styles.panel} ${styles.green}`}>
