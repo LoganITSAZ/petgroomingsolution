@@ -15,7 +15,7 @@ import { moveToColumn } from "@/app/staff/appointments/actions";
 import { ALERT_DOT, serviceAlerts } from "@/lib/alerts";
 import styles from "./dashboard.module.css";
 import { DashboardRefresh } from "@/components/DashboardRefresh";
-import { PICKUP_LEVEL_LABEL, PICKUP_LEVEL_CLASS, pickupWatchlist } from "@/lib/pickups";
+import { PICKUP_LEVEL_LABEL, PICKUP_LEVEL_CLASS, formatWait, pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
 import { Meter, PageShell, PageSection, fillTone } from "@/components/ui";
 import { currentStaffCanManage } from "@/lib/staff-roles";
@@ -284,7 +284,7 @@ export default async function StaffDashboard(props: {
         <div className={styles.grid}>
           <div className={styles.column}>
             <div id="arrivals" className={`${styles.panel} ${styles.blue}`}>
-      <PageSection title="Next arrivals" hint={`${scheduled.length} remaining today`}>
+      <PageSection title="Arriving next" hint={`${scheduled.length} remaining today`}>
         {scheduled.length === 0 ? <p className="text-sm text-muted">No more arrivals scheduled today.</p> : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -308,11 +308,11 @@ export default async function StaffDashboard(props: {
           </div>
           <div className={styles.column}>
             <div id="pickups" className={`${styles.panel} ${styles.green}`}>
-              <PageSection title="Ready to go home" hint="Longest wait first">
+              <PageSection title="Waiting for pickup" hint="Longest wait first">
                 <div className={styles.queue}>
                   {pickups.pets.slice(0, 4).map((pet) => <div key={pet.appointmentId} className={styles.pet}>
                     <div><Link href={`/staff/appointments/${pet.appointmentId}`} className="text-sm font-bold text-ink">{pet.petName}</Link><p className="text-xs text-muted">{pet.ownerName}{pet.kennelLabel && ` · Kennel ${pet.kennelLabel}`}</p>{pet.phone && <a className="text-xs font-semibold text-brand-text" href={`tel:${pet.phone}`}>Call {pet.phone}</a>}</div>
-                    <div className="text-right"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${PICKUP_LEVEL_CLASS[pet.level]}`}>{PICKUP_LEVEL_LABEL[pet.level]}</span><p className="mt-1 text-xs text-muted">Waiting {pet.waitingMins} min</p></div>
+                    <div className="text-right"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${PICKUP_LEVEL_CLASS[pet.level]}`} title={PICKUP_LEVEL_LABEL[pet.level]}>{formatWait(pet.waitingMins)}</span></div>
                   </div>)}
                   {pickups.pets.length > 4 && <Link href="/staff/appointments?status=READY_PICKUP" className="text-sm underline">View all {pickups.pets.length} pickups</Link>}
                   {pickups.pets.length === 0 && <p className="py-3 text-sm text-muted">No pets waiting for pickup.</p>}
