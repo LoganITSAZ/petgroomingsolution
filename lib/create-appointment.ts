@@ -60,7 +60,13 @@ export type CreateAppointmentInput = {
 
 export type CreateAppointmentFailure = {
   ok: false;
-  code: BookingRefusalCode | "NOT_FOUND" | "PET_MISMATCH" | "NO_SERVICES" | "NO_KENNEL";
+  code:
+    | BookingRefusalCode
+    | "NOT_FOUND"
+    | "BAD_ASSIGNMENT"
+    | "PET_MISMATCH"
+    | "NO_SERVICES"
+    | "NO_KENNEL";
   message: string;
 };
 
@@ -86,15 +92,33 @@ export async function createAppointment(
     if (refusal) return { ok: false, code: refusal.code, message: refusal.message };
   }
 
-  const [customer, pet] = await Promise.all([
+  // A named station or groomer that does not exist is a bad request, not a
+  // foreign-key crash. Checked here rather than in the API route because every
+  // caller can name one and only the route ever guarded it.
+  const [customer, pet, station, staff] = await Promise.all([
     prisma.customer.findUnique({ where: { id: input.customerId }, select: { id: true } }),
     prisma.pet.findUnique({
       where: { id: input.petId },
       select: { id: true, customerId: true },
     }),
+    input.stationId
+      ? prisma.station.findUnique({ where: { id: input.stationId }, select: { id: true } })
+      : null,
+    input.staffId
+      ? prisma.staff.findUnique({ where: { id: input.staffId }, select: { id: true } })
+      : null,
   ]);
   if (!customer) return { ok: false, code: "NOT_FOUND", message: "Customer not found." };
   if (!pet) return { ok: false, code: "NOT_FOUND", message: "Pet not found." };
+  // NOT_FOUND (the customer or the pet) is the thing being booked; a station
+  // or groomer the caller named is part of the request body, so it stays a 400
+  // like it was before this path was shared.
+  if (input.stationId && !station) {
+    return { ok: false, code: "BAD_ASSIGNMENT", message: "Station not found." };
+  }
+  if (input.staffId && !staff) {
+    return { ok: false, code: "BAD_ASSIGNMENT", message: "Staff member not found." };
+  }
   if (pet.customerId !== input.customerId) {
     return { ok: false, code: "PET_MISMATCH", message: "That pet belongs to someone else." };
   }
