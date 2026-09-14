@@ -8,6 +8,9 @@ import {
 } from "@/lib/utils";
 import { AppointmentStatus, StaffRole, StationRole } from "@prisma/client";
 import { stationCapacity } from "@/lib/stations";
+import { BOARD_COLUMNS, boardColumnFor } from "@/lib/appointment-flow";
+import FloorBoard, { type ColumnCapacity } from "@/components/FloorBoard";
+import { moveToColumn } from "@/app/staff/appointments/actions";
 import { getShopAnalytics } from "@/lib/analytics";
 import { KENNELABLE_STATUSES, capacityConflicts, kennelDemand } from "@/lib/kennels";
 import { ALERT_DOT, serviceAlerts } from "@/lib/alerts";
@@ -75,7 +78,15 @@ export default async function StaffDashboard(props: {
   ] = await Promise.all([
     prisma.appointment.findMany({
       where: { scheduledAt: { gte: start, lt: end } },
-      select: { id: true, status: true, staffId: true, scheduledAt: true, pet: { select: { name: true } } },
+      select: {
+        id: true,
+        status: true,
+        staffId: true,
+        scheduledAt: true,
+        stationId: true,
+        pet: { select: { name: true, hasBiteHistory: true } },
+        customer: { select: { firstName: true, lastName: true } },
+      },
       orderBy: { scheduledAt: "asc" },
     }),
     prisma.appointment.findMany({
@@ -155,6 +166,42 @@ export default async function StaffDashboard(props: {
   }
   const workStations = stations.filter((s) => s.role !== StationRole.KENNEL);
   const kennelStations = stations.filter((s) => s.role === StationRole.KENNEL);
+
+  /*
+   * The board's chips: every pet actually in the shop, wherever it is standing.
+   * Pets that have not arrived are not on it — there is nothing to place yet —
+   * and a station that is full simply shows the pet that is holding it.
+   */
+  const stationsById = new Map(stations.map((station) => [station.id, station]));
+  const boardPets = todayAppointments
+    .filter((appointment) => boardColumnFor(appointment.status) !== null)
+    .map((appointment) => ({
+      id: appointment.id,
+      petName: appointment.pet.name,
+      ownerName: `${appointment.customer.firstName} ${appointment.customer.lastName}`,
+      columnKey: boardColumnFor(appointment.status)?.key ?? BOARD_COLUMNS[0].key,
+      stationName: appointment.stationId
+        ? (stationsById.get(appointment.stationId)?.name ?? null)
+        : null,
+      hasBiteHistory: appointment.pet.hasBiteHistory,
+    }));
+  const waitingOnFloor = boardPets.filter((pet) => pet.columnKey === BOARD_COLUMNS[0].key);
+
+  /*
+   * How full each stage is. A column backed by stations reads "2/4"; a column
+   * with none — the shop that dries on the groom table, or has not added a
+   * drying station yet — is left out and its header just counts heads.
+   */
+  const boardCapacity: Record<string, ColumnCapacity> = {};
+  for (const column of BOARD_COLUMNS) {
+    if (!column.stationRole) continue;
+    const ofRole = workStations.filter((station) => station.role === column.stationRole);
+    if (ofRole.length === 0) continue;
+    boardCapacity[column.key] = {
+      used: boardPets.filter((pet) => pet.columnKey === column.key).length,
+      capacity: ofRole.length,
+    };
+  }
 
   const kennelTotal = kennels.capacity;
   const kennelOccupied = kennelStations.reduce(
@@ -456,6 +503,26 @@ export default async function StaffDashboard(props: {
         <p className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           That station is limited to roles this person does not hold.
         </p>
+      )}
+
+      {workStations.length > 0 && (
+        /*
+          The floor, arranged by hand. It answers what the "no station" list
+          used to — the Waiting column is that list — and lets it be fixed in
+          the same glance instead of on each pet's own page.
+        */
+        <PageSection tone="muted">
+          <h2 className="mb-1.5 flex items-baseline gap-1.5 text-xs font-bold uppercase tracking-widest text-stone-500">
+            Where everyone is standing
+            <span className={waitingOnFloor.length > 0 ? "text-amber-700" : "text-stone-400"}>
+              {waitingOnFloor.length} waiting
+            </span>
+            <span className="ml-auto font-medium normal-case tracking-normal text-stone-400">
+              Drag a pet to a stage, or tap it and choose
+            </span>
+          </h2>
+          <FloorBoard pets={boardPets} capacity={boardCapacity} move={moveToColumn} />
+        </PageSection>
       )}
 
       {/* What to do with the open stations, right now */}

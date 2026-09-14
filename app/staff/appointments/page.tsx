@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma, AppointmentStatus, AppointmentType, StaffRole, StationRole } from "@prisma/client";
-import { BOARD_COLUMNS, boardColumnFor, nextStatus } from "@/lib/appointment-flow";
+import { nextStatus } from "@/lib/appointment-flow";
 import {
   formatServiceType,
   formatShopDate,
@@ -9,10 +9,9 @@ import {
   shopDayKey,
   shopDayRange,
 } from "@/lib/utils";
-import { checkInWithKennel, moveStatus, moveToColumn } from "./actions";
+import { checkInWithKennel, moveStatus } from "./actions";
 import CheckInDialog from "@/components/CheckInDialog";
 import StageRail from "@/components/StageRail";
-import FloorBoard, { type ColumnCapacity } from "@/components/FloorBoard";
 import {
   KENNELABLE_STATUSES,
   compartmentCapacity,
@@ -299,41 +298,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
   const arrivingNext = operationalAppointments
     .filter((appointment) => appointment.status === AppointmentStatus.SCHEDULED && appointment.scheduledAt >= now)
     .slice(0, 4);
-  /*
-   * The board's chips: every pet actually in the shop, wherever it is standing.
-   * Pets that have not arrived are not on it — there is nothing to place yet —
-   * and a station that is full simply shows the pet that is holding it.
-   */
-  const stationsById = new Map(stations.map((station) => [station.id, station]));
-  const boardPets = operationalAppointments
-    .filter((appointment) => boardColumnFor(appointment.status) !== null)
-    .map((appointment) => ({
-      id: appointment.id,
-      petName: appointment.pet.name,
-      ownerName: `${appointment.customer.firstName} ${appointment.customer.lastName}`,
-      columnKey: boardColumnFor(appointment.status)?.key ?? BOARD_COLUMNS[0].key,
-      stationName: appointment.stationId
-        ? (stationsById.get(appointment.stationId)?.name ?? null)
-        : null,
-      hasBiteHistory: appointment.pet.hasBiteHistory,
-    }));
-  const waiting = boardPets.filter((pet) => pet.columnKey === BOARD_COLUMNS[0].key);
-
-  /*
-   * How full each stage is. A column backed by stations reads "2/4"; a column
-   * with none — the shop that dries on the groom table, or has not added a
-   * drying station yet — is left out and its header just counts heads.
-   */
-  const boardCapacity: Record<string, ColumnCapacity> = {};
-  for (const column of BOARD_COLUMNS) {
-    if (!column.stationRole) continue;
-    const ofRole = stations.filter((station) => station.role === column.stationRole);
-    if (ofRole.length === 0) continue;
-    boardCapacity[column.key] = {
-      used: boardPets.filter((pet) => pet.columnKey === column.key).length,
-      capacity: ofRole.length,
-    };
-  }
 
   /*
    * Compartments with room, offered when a pet arrives. Room is per customer,
@@ -608,26 +572,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
                 ))}
               </NowWell>
             </div>
-          </PageSection>
-        )}
-
-        {!isFiltered && stations.length > 0 && (
-          /*
-            The floor, arranged by hand. It answers what the "no station" list
-            used to — the Waiting column is that list — and lets it be fixed in
-            the same glance instead of on each pet's own page.
-          */
-          <PageSection tone="muted">
-            <h2 className="mb-1.5 flex items-baseline gap-1.5 text-xs font-bold tracking-tight text-stone-500">
-              Where everyone is standing
-              <span className={waiting.length > 0 ? "text-amber-700" : "text-stone-400"}>
-                {waiting.length} waiting
-              </span>
-              <span className="ml-auto font-medium normal-case tracking-normal text-stone-400">
-                Drag a pet to a stage, or tap it and choose
-              </span>
-            </h2>
-            <FloorBoard pets={boardPets} capacity={boardCapacity} move={moveToColumn} />
           </PageSection>
         )}
 
