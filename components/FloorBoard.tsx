@@ -100,7 +100,7 @@ export default function FloorBoard({
       );
 
     const column = (key: string, name: string, hint: string) => {
-      const $list = $("<ul>", { class: "drop min-h-[4rem] space-y-2 p-2", "data-column": key });
+      const $list = $("<ul>", { class: "drop min-h-[4rem] flex-1 space-y-2 overflow-y-auto p-2", "data-column": key });
       const $count = $("<span>", { class: "count shrink-0 text-[10px] font-bold text-stone-400" });
       const $place = $("<button>", {
         type: "button",
@@ -111,7 +111,7 @@ export default function FloorBoard({
       });
       return $("<section>", {
         // Five columns share the width rather than scrolling off the edge.
-        class: "glass-tile col min-w-0 flex-1 basis-40 rounded-lg border border-well-line bg-well",
+        class: "glass-tile col flex h-full min-w-0 flex-1 basis-40 flex-col rounded-lg border border-well-line bg-well",
         role: "region",
             "aria-label": name,
       }).append(
@@ -130,7 +130,7 @@ export default function FloorBoard({
       );
     };
 
-    const $strip = $("<div>", { class: "grid grid-cols-1 gap-2 pb-1 sm:grid-cols-2 lg:grid-cols-5" });
+    const $strip = $("<div>", { class: "grid h-full grid-cols-1 gap-2 pb-1 sm:grid-cols-2 lg:grid-cols-5" });
     BOARD_COLUMNS.forEach((entry) => {
       const room = capacity[entry.key];
       const hint = room
@@ -222,8 +222,8 @@ export default function FloorBoard({
   }, [pets, capacity, move, router]);
 
   return (
-    <div>
-      <div ref={rootRef} />
+    <div className="flex h-full min-h-0 flex-col">
+      <div ref={rootRef} className="flex-1 min-h-0" />
       <span className="sr-only" aria-live="polite">
         {announcement}
       </span>

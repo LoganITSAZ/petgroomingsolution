@@ -1,23 +1,16 @@
 import { prisma } from "@/lib/prisma";
-import {
-  formatShopDate,
-  formatShopTime,
-  formatStationRole,
-  shopDayRange,
-} from "@/lib/utils";
+import { formatShopDate, formatShopTime, shopDayRange } from "@/lib/utils";
 import { AppointmentStatus, StationRole } from "@prisma/client";
-import { stationCapacity } from "@/lib/stations";
 import { floorRoster } from "@/lib/presence";
-import { KENNELABLE_STATUSES, kennelDemand } from "@/lib/kennels";
 import { BOARD_COLUMNS, boardColumnFor } from "@/lib/appointment-flow";
 import FloorBoard, { type ColumnCapacity } from "@/components/FloorBoard";
 import { moveToColumn } from "@/app/staff/appointments/actions";
 import { ALERT_DOT, serviceAlerts } from "@/lib/alerts";
 import styles from "./dashboard.module.css";
 import { DashboardRefresh } from "@/components/DashboardRefresh";
-import { PICKUP_LEVEL_LABEL, PICKUP_LEVEL_CLASS, formatWait, pickupWatchlist } from "@/lib/pickups";
+import { PICKUP_LEVEL_LABEL, PICKUP_LEVEL_CLASS, pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
-import { Meter, PageShell, PageSection, fillTone } from "@/components/ui";
+import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -46,7 +39,6 @@ export default async function StaffDashboard(props: {
     onFloor,
     pickups,
     stations,
-    kennels,
     roster,
     alerts,
   ] = await Promise.all([
@@ -71,22 +63,7 @@ export default async function StaffDashboard(props: {
     prisma.station.findMany({
       where: { isActive: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
-      include: {
-        kennels: {
-          select: {
-            id: true,
-            label: true,
-            isActive: true,
-            appointments: {
-              where: { status: { in: KENNELABLE_STATUSES } },
-              select: { id: true },
-            },
-          },
-          orderBy: [{ row: "asc" }, { column: "asc" }],
-        },
-      },
     }),
-    kennelDemand(start, end),
     floorRoster(),
     serviceAlerts(),
   ]);
@@ -94,16 +71,7 @@ export default async function StaffDashboard(props: {
   // ── Today at a glance ─────────────────────────────────────────
   const scheduled = todayAppointments.filter((a) => a.status === AppointmentStatus.SCHEDULED);
   // ── The board ─────────────────────────────────────────────────
-  // Stations can hold more than one pet, so occupancy is a list per station.
-  const occupantsByStation = new Map<string, typeof onFloor>();
-  for (const appointment of onFloor) {
-    if (!appointment.stationId) continue;
-    const list = occupantsByStation.get(appointment.stationId) ?? [];
-    list.push(appointment);
-    occupantsByStation.set(appointment.stationId, list);
-  }
   const workStations = stations.filter((s) => s.role !== StationRole.KENNEL);
-  const kennelStations = stations.filter((s) => s.role === StationRole.KENNEL);
 
   /*
    * The board's chips: every pet actually in the shop, wherever it is standing.
@@ -151,35 +119,6 @@ export default async function StaffDashboard(props: {
     };
   }
 
-  const kennelTotal = kennels.capacity;
-  const kennelOccupied = kennelStations.reduce(
-    (n, s) => n + s.kennels.reduce((inside, kennel) => inside + kennel.appointments.length, 0),
-    0
-  );
-
-  // ── Capacity ──────────────────────────────────────────────────
-  const segment = (role: StationRole) => {
-    const list = workStations.filter((s) => s.role === role);
-    return {
-      label: formatStationRole(role),
-      total: list.reduce((n, station) => n + stationCapacity(station), 0),
-      used: list.reduce((n, station) => n + (occupantsByStation.get(station.id)?.length ?? 0), 0),
-    };
-  };
-
-  const capacitySegments = [
-    segment(StationRole.GROOMER),
-    segment(StationRole.BATHING),
-    segment(StationRole.DRYING),
-    { label: "Kennels", total: kennelTotal, used: kennelOccupied },
-  ].filter((s) => s.total > 0);
-
-  const capacityTotal = capacitySegments.reduce((n, s) => n + s.total, 0);
-  const capacityUsed = capacitySegments.reduce((n, s) => n + s.used, 0);
-  const capacityPercent = capacityTotal === 0 ? 0 : Math.round((capacityUsed / capacityTotal) * 100);
-
-  const capacityState = fillTone(capacityUsed, capacityTotal);
-
   const onShift = roster.filter((member) => member.state !== "OFF_SHIFT");
   const criticalCount = alerts.filter((alert) => alert.severity === "critical").length;
 
@@ -204,7 +143,7 @@ export default async function StaffDashboard(props: {
           {[
             { label: "Arrivals left today", value: scheduled.length, hint: `${scheduled.filter((a) => a.scheduledAt < now).length} past arrival time`, tone: styles.blue, href: "#arrivals" },
             { label: "In service now", value: onFloor.filter((a) => a.status !== "COMPLETE").length, hint: `${onFloor.filter((a) => a.status === "CHECKED_IN").length} checked in, waiting to start`, tone: styles.amber, href: "/staff/stations" },
-            { label: "Ready for pickup", value: pickups.pets.length, hint: `${pickups.pets.filter((pet) => ["late", "critical"].includes(pet.level)).length} late pickups`, tone: styles.green, href: "#pickups" },
+            { label: "Ready for pickup", value: pickups.pets.length, hint: `${pickups.pets.filter((pet) => ["late", "critical"].includes(pet.level)).length} late pickups`, tone: styles.green, href: "/staff/appointments?status=READY_PICKUP" },
             { label: "Team ready now", value: roster.filter((member) => member.state === "READY").length, hint: `${onShift.length} signed in · ${roster.filter((member) => member.state === "WORKING").length} working`, tone: styles.purple, href: "/staff/team" },
           ].map((metric) => <a key={metric.label} href={metric.href} className={`${styles.metric} ${metric.tone}`}><span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.hint}</small></a>)}
         </div>
@@ -281,7 +220,7 @@ export default async function StaffDashboard(props: {
         </div>
 
         {workStations.length > 0 && (
-          <div className={`${styles.panel} ${styles.amber}`}>
+          <div className={`${styles.panel} ${styles.amber} ${styles.grow}`}>
             <PageSection
               title="Service lifecycle"
               hint={
@@ -292,43 +231,12 @@ export default async function StaffDashboard(props: {
                   Drag a pet to a stage, or tap it and choose
                 </span>
               }
+              grow
             >
               <FloorBoard pets={boardPets} capacity={boardCapacity} move={moveToColumn} />
             </PageSection>
           </div>
         )}
-
-        <div id="pickups" className={`${styles.panel} ${styles.green}`}>
-          <PageSection title="Waiting for pickup" hint="Longest wait first">
-            <div className={styles.queue}>
-              {pickups.pets.slice(0, 4).map((pet) => <div key={pet.appointmentId} className={styles.pet}>
-                <div><Link href={`/staff/appointments/${pet.appointmentId}`} className="text-sm font-bold text-ink">{pet.petName}</Link><p className="text-xs text-muted">{pet.ownerName}{pet.kennelLabel && ` · Kennel ${pet.kennelLabel}`}</p>{pet.phone && <a className="text-xs font-semibold text-brand-text" href={`tel:${pet.phone}`}>Call {pet.phone}</a>}</div>
-                <div className="text-right"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${PICKUP_LEVEL_CLASS[pet.level]}`} title={PICKUP_LEVEL_LABEL[pet.level]}>{formatWait(pet.waitingMins)}</span></div>
-              </div>)}
-              {pickups.pets.length > 4 && <Link href="/staff/appointments?status=READY_PICKUP" className="text-sm underline">View all {pickups.pets.length} pickups</Link>}
-              {pickups.pets.length === 0 && <p className="py-3 text-sm text-muted">No pets waiting for pickup.</p>}
-            </div>
-          </PageSection>
-        </div>
-
-            <div className={`${styles.panel} ${styles.green}`}>
-      <PageSection
-        title="Space available now"
-        hint={
-          <span>
-            <span className={`font-bold ${capacityState.text}`}>{capacityState.label}</span>
-            {capacityTotal > 0 && ` · ${capacityPercent}% of ${capacityTotal} spaces in use`}
-          </span>
-        }
-      >
-        <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 xl:grid-cols-4">
-          {capacitySegments.map(({ label, used, total }) => (
-            <Meter key={label} label={label} used={used} total={total} />
-          ))}
-        </div>
-        {capacitySegments.length === 0 && <p className="text-sm text-muted">No station capacity configured.</p>}
-      </PageSection>
-            </div>
       </div>
     </PageShell>
   );
