@@ -1,7 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { serviceFloorCents } from "@/lib/pricing";
-import { bookingRateSnapshot } from "@/lib/pricing-tiers";
+import { createAppointment } from "@/lib/create-appointment";
 import { getConfig } from "@/lib/config";
 import { currentShopTime, isWithinWalkInWindow } from "@/lib/utils";
 import { NextResponse } from "next/server";
@@ -78,56 +77,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Pet does not belong to this customer" }, { status: 400 });
   }
 
-  // Walk-ins need a line item like any other visit, or they are invisible to
-  // the service mix and revenue figures in analytics.
-  const catalogService = await prisma.service.findFirst({
-    where: { type: serviceType, isActive: true },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+  const result = await createAppointment({
+    customerId,
+    petId,
+    scheduledAt: now,
+    serviceType,
+    appointmentType: AppointmentType.WALK_IN,
+    // A walk-in is already here: it gets a groomer and a station like any
+    // other visit, which it never did before.
+    status: AppointmentStatus.CHECKED_IN,
+    enforceCustomerRules: false,
+    changedById: session.user.userType === "staff" ? session.user.id : null,
+    note: "Walk-in check-in via portal",
   });
 
-  const linePriceCents = catalogService ? serviceFloorCents(catalogService) : null;
-  // A walk-in is quoted the same negotiated rate as a booked visit.
-  const rate = await bookingRateSnapshot(customerId, [{ priceCents: linePriceCents }]);
+  if (!result.ok) {
+    const status = result.code === "NOT_FOUND" ? 404 : 400;
+    return NextResponse.json({ error: result.message, code: result.code }, { status });
+  }
 
-  const appointment = await prisma.$transaction(async (tx) => {
-    const created = await tx.appointment.create({
-      data: {
-        customerId,
-        petId,
-        scheduledAt: now,
-        serviceType,
-        appointmentType: AppointmentType.WALK_IN,
-        status: AppointmentStatus.CHECKED_IN,
-        checkedInAt: now,
-        pricingTierId: rate.pricingTierId,
-        pricingDiscountCents: rate.pricingDiscountCents,
-        services: {
-          create: {
-            serviceId: catalogService?.id ?? null,
-            serviceType,
-            priceCents: linePriceCents,
-            sortOrder: 0,
-          },
-        },
-      },
-      include: {
-        pet: true,
-        customer: true,
-        station: true,
-        staff: true,
-      },
-    });
-
-    await tx.appointmentStatusHistory.create({
-      data: {
-        appointmentId: created.id,
-        status: AppointmentStatus.CHECKED_IN,
-        note: "Walk-in check-in via portal",
-      },
-    });
-
-    return created;
-  });
-
-  return NextResponse.json(appointment, { status: 201 });
+  return NextResponse.json(result.appointment, { status: 201 });
 }
