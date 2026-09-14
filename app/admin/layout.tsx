@@ -22,7 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <BackOfficeShell>
-      <div className="max-w-6xl">{children}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col max-w-6xl">{children}</div>
     </BackOfficeShell>
   );
 }

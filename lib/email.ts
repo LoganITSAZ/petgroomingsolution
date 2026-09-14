@@ -77,6 +77,51 @@ export async function sendBookingConfirmation({
   });
 }
 
+/**
+ * The "forgot my password" link.
+ *
+ * Deliberately *not* behind `featureEmailNotify`. That flag governs whether the
+ * shop mails customers about their visits; switching it off must not lock every
+ * account holder out of the account they already have.
+ */
+export async function sendPasswordReset({
+  to,
+  name,
+  url,
+  expiresInMins,
+}: {
+  to: string;
+  name: string;
+  url: string;
+  expiresInMins: number;
+}) {
+  const config = await getConfig();
+
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY is not set — skipping password reset email");
+    return;
+  }
+
+  const from = await getFrom();
+
+  await resend.emails.send({
+    from,
+    to,
+    subject: `Reset your ${config.shopName} password`,
+    html: `
+      <p>Hi ${name},</p>
+      <p>Someone asked to reset the password on your ${config.shopName} account.
+         If that was you, use the link below.</p>
+      <p><a href="${url}">Choose a new password</a></p>
+      <p>This link works once and expires in ${expiresInMins} minutes.</p>
+      <p>If you did not ask for this, you can ignore this email — nothing has
+         changed on your account.</p>
+      <p>— ${config.shopName}</p>
+    `,
+  });
+}
+
 export async function sendReadyForPickup({
   to,
   ownerName,

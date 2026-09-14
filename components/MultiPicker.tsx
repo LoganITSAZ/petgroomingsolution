@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import $ from "jquery";
+import { jQueryFactory } from "jquery/factory";
 
 /**
  * Repeatable selector, driven by jQuery.
@@ -56,6 +56,8 @@ export default function MultiPicker({
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+    // Initialize only after mounting; server rendering has no document.
+    const $ = jQueryFactory(window);
 
     const $root = $(root);
     $root.empty();

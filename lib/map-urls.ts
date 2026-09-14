@@ -5,9 +5,10 @@
  * network, the database or React — which is what makes it testable.
  */
 
-export interface GeoPoint {
-  lat: number;
-  lon: number;
+/** A place on the map. Two ends of a route need no label. */
+export type Coords = { lat: number; lon: number };
+
+export interface GeoPoint extends Coords {
   label: string;
 }
 
@@ -45,4 +46,32 @@ export function directionsUrl(point: GeoPoint): string {
 /** Search link for an address we could not place — still useful to a reader. */
 export function searchUrl(address: string): string {
   return `https://www.openstreetmap.org/search?query=${encodeURIComponent(address)}`;
+}
+
+/** A driving estimate between two points. Distance is metres, time is seconds. */
+export interface Drive {
+  metres: number;
+  seconds: number;
+}
+
+/**
+ * How the shop says a drive out loud: "12 min · 5.4 mi".
+ *
+ * Rounded hard on purpose — this is a routing engine's guess at an average
+ * day, not a departure time. Under a minute still reads as "1 min", because
+ * "0 min" looks like a bug.
+ */
+export function formatDrive({ metres, seconds }: Drive): string {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  const time = minutes >= 60
+    ? `${Math.floor(minutes / 60)} hr${minutes % 60 ? ` ${minutes % 60} min` : ""}`
+    : `${minutes} min`;
+  const miles = metres / 1609.344;
+  return `${time} · ${miles < 10 ? miles.toFixed(1) : Math.round(miles)} mi`;
+}
+
+/** Directions between two points, opened on openstreetmap.org. */
+export function routeUrl(from: Coords, to: Coords): string {
+  const at = (point: Coords) => `${point.lat.toFixed(6)},${point.lon.toFixed(6)}`;
+  return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${at(from)};${at(to)}`;
 }

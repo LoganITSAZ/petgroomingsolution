@@ -8,9 +8,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 function done(params: string): never {
-  revalidatePath("/admin/pricing");
+  revalidatePath("/admin/loyalty");
   revalidatePath("/staff/customers");
-  redirect(`/admin/pricing${params}`);
+  redirect(`/admin/loyalty${params}`);
 }
 
 /**

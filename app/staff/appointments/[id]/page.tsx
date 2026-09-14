@@ -29,6 +29,7 @@ import {
   arrivalThresholds,
   minutesLate,
 } from "@/lib/arrivals";
+import { shopDateTimeLocalValue } from "@/lib/shop-time";
 import ServicePicker from "@/components/ServicePicker";
 import PhotoStack from "@/components/PhotoStack";
 import InsightList from "@/components/InsightList";
@@ -92,7 +93,7 @@ const ERRORS: Record<string, string> = {
   kennel_out_of_service: "That kennel is out of service.",
   bad_event: "Pick a valid event type.",
   not_floor_staff:
-    "That account does not work the floor — admin-only accounts cannot be assigned to a pet.",
+    "That account does not work the storefront — admin-only accounts cannot be assigned to a pet.",
   station_full: "That station is already at its maximum number of pets.",
   role_not_allowed:
     "That station is limited to specific roles, and the selected staff member does not hold one.",
@@ -102,12 +103,9 @@ const inputClass =
   "w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800 bg-white";
 
 /** datetime-local wants "YYYY-MM-DDTHH:mm". */
-function toLocalInput(value: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(
-    value.getHours()
-  )}:${pad(value.getMinutes())}`;
-}
+// This renders on the server, so getFullYear()/getHours() would print UTC in
+// production — the heading beside it already reads shop time.
+const toLocalInput = shopDateTimeLocalValue;
 
 interface PageProps {
   params: Promise<{ id: string }>;

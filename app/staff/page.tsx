@@ -1,43 +1,30 @@
 import { prisma } from "@/lib/prisma";
 import {
   formatShopDate,
+  formatShopTime,
   formatStationRole,
-  formatStatus,
   shopDayRange,
-  statusBadgeClass,
 } from "@/lib/utils";
-import { AppointmentStatus, StaffRole, StationRole } from "@prisma/client";
+import { AppointmentStatus, StationRole } from "@prisma/client";
 import { stationCapacity } from "@/lib/stations";
+import { floorRoster } from "@/lib/presence";
+import { KENNELABLE_STATUSES, kennelDemand } from "@/lib/kennels";
 import { BOARD_COLUMNS, boardColumnFor } from "@/lib/appointment-flow";
 import FloorBoard, { type ColumnCapacity } from "@/components/FloorBoard";
 import { moveToColumn } from "@/app/staff/appointments/actions";
-import { getShopAnalytics } from "@/lib/analytics";
-import { KENNELABLE_STATUSES, capacityConflicts, kennelDemand } from "@/lib/kennels";
 import { ALERT_DOT, serviceAlerts } from "@/lib/alerts";
-import { assignmentSuggestions, floorBlockers } from "@/lib/recommendations";
-import { PRESENCE_CLASS, PRESENCE_LABEL, floorRoster } from "@/lib/presence";
-import { describeShifts, isOnShiftNow, scheduleGaps, todaysShifts } from "@/lib/schedule";
-import { applySuggestion } from "./presence-actions";
-import { pickupWatchlist } from "@/lib/pickups";
+import styles from "./dashboard.module.css";
+import { DashboardRefresh } from "@/components/DashboardRefresh";
+import { PICKUP_LEVEL_LABEL, PICKUP_LEVEL_CLASS, pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
-import { PageShell, PageSection, Panel, StatStrip } from "@/components/ui";
+import { Meter, PageShell, PageSection, fillTone } from "@/components/ui";
 import { currentStaffCanManage } from "@/lib/staff-roles";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
 export const metadata = { title: "Dashboard" };
 
-/**
- * Shop floor dashboard, grouped by station: every place a pet can be, with the
- * groomer, the owner and where the service stands, read in one pass.
- * Configuration lives in the admin panel; the shop's numbers are at
- * /staff/analytics, which every staff member can read.
- */
-
-// Statuses that mean the pet is in the shop and being worked on.
-/** The dashboard snapshot window — short enough that the floor recognises it. */
-const SNAPSHOT_DAYS = 3;
-
+// Keep detailed operations on their dedicated pages.
 const ON_FLOOR: AppointmentStatus[] = [
   AppointmentStatus.CHECKED_IN,
   AppointmentStatus.IN_PROGRESS,
@@ -47,10 +34,6 @@ const ON_FLOOR: AppointmentStatus[] = [
 ];
 
 
-
-function minutesSince(from: Date | null): number | null {
-  return from ? Math.max(0, Math.round((Date.now() - from.getTime()) / 60000)) : null;
-}
 
 export default async function StaffDashboard(props: {
   searchParams: Promise<{ assigned?: string; error?: string }>;
@@ -64,16 +47,9 @@ export default async function StaffDashboard(props: {
     onFloor,
     pickups,
     stations,
-    groomers,
     kennels,
-    conflicts,
-    snapshot,
-    suggestions,
-    blockers,
     roster,
     alerts,
-    shifts,
-    gaps,
     canManageShop,
   ] = await Promise.all([
     prisma.appointment.findMany({
@@ -91,13 +67,7 @@ export default async function StaffDashboard(props: {
     }),
     prisma.appointment.findMany({
       where: { status: { in: ON_FLOOR } },
-      include: {
-        pet: { select: { id: true, name: true, hasBiteHistory: true } },
-        customer: { select: { firstName: true, lastName: true } },
-        staff: { select: { id: true, name: true } },
-        services: { include: { service: true }, orderBy: { sortOrder: "asc" } },
-      },
-      orderBy: { checkedInAt: "asc" },
+      select: { id: true, status: true, stationId: true },
     }),
     pickupWatchlist(),
     prisma.station.findMany({
@@ -111,50 +81,21 @@ export default async function StaffDashboard(props: {
             isActive: true,
             appointments: {
               where: { status: { in: KENNELABLE_STATUSES } },
-              select: {
-                id: true,
-                status: true,
-                kenneledAt: true,
-                pet: { select: { id: true, name: true, hasBiteHistory: true } },
-                customer: { select: { firstName: true, lastName: true } },
-                staff: { select: { name: true } },
-              },
-              orderBy: { kenneledAt: "asc" },
+              select: { id: true },
             },
           },
           orderBy: [{ row: "asc" }, { column: "asc" }],
         },
       },
     }),
-    // Floor headcount: the people who actually work pets.
-    prisma.staff.findMany({
-      where: { isActive: true, roles: { hasSome: [StaffRole.GROOMER, StaffRole.BATHER] } },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
     kennelDemand(start, end),
-    capacityConflicts(start, end),
-    // The dashboard reads the last three days, not the last month: this is a
-    // floor screen, and the shape of the week just gone is what it can act on.
-    getShopAnalytics(SNAPSHOT_DAYS),
-    assignmentSuggestions(),
-    floorBlockers(),
     floorRoster(),
     serviceAlerts(),
-    todaysShifts(),
-    scheduleGaps(),
     currentStaffCanManage(),
   ]);
 
   // ── Today at a glance ─────────────────────────────────────────
   const scheduled = todayAppointments.filter((a) => a.status === AppointmentStatus.SCHEDULED);
-  const cancelled = todayAppointments.filter(
-    (a) => a.status === AppointmentStatus.CANCELLED || a.status === AppointmentStatus.NO_SHOW
-  );
-  const active = todayAppointments.filter(
-    (a) => a.status !== AppointmentStatus.CANCELLED && a.status !== AppointmentStatus.NO_SHOW
-  );
-
   // ── The board ─────────────────────────────────────────────────
   // Stations can hold more than one pet, so occupancy is a list per station.
   const occupantsByStation = new Map<string, typeof onFloor>();
@@ -173,6 +114,7 @@ export default async function StaffDashboard(props: {
    * and a station that is full simply shows the pet that is holding it.
    */
   const stationsById = new Map(stations.map((station) => [station.id, station]));
+  const pickupsById = new Map(pickups.pets.map((pet) => [pet.appointmentId, pet]));
   const boardPets = todayAppointments
     .filter((appointment) => boardColumnFor(appointment.status) !== null)
     .map((appointment) => ({
@@ -184,6 +126,15 @@ export default async function StaffDashboard(props: {
         ? (stationsById.get(appointment.stationId)?.name ?? null)
         : null,
       hasBiteHistory: appointment.pet.hasBiteHistory,
+      pickupNote: appointment.status === AppointmentStatus.COMPLETE
+        ? { label: "Notify owner", className: "bg-amber-100 text-amber-800" }
+        : (() => {
+            const pickup = pickupsById.get(appointment.id);
+            return pickup ? {
+              label: `${PICKUP_LEVEL_LABEL[pickup.level]} · ${pickup.waitingMins} min`,
+              className: PICKUP_LEVEL_CLASS[pickup.level],
+            } : undefined;
+          })(),
     }));
   const waitingOnFloor = boardPets.filter((pet) => pet.columnKey === BOARD_COLUMNS[0].key);
 
@@ -229,261 +180,37 @@ export default async function StaffDashboard(props: {
   const capacityTotal = capacitySegments.reduce((n, s) => n + s.total, 0);
   const capacityUsed = capacitySegments.reduce((n, s) => n + s.used, 0);
   const capacityPercent = capacityTotal === 0 ? 0 : Math.round((capacityUsed / capacityTotal) * 100);
-  const groomersOnAPet = groomers.filter((groomer) =>
-    onFloor.some((a) => a.staffId === groomer.id)
-  ).length;
 
-  const capacityState =
-    capacityTotal === 0
-      ? { label: "Not configured", tone: "text-stone-400", bar: "bg-stone-300" }
-      : capacityUsed >= capacityTotal
-        ? { label: "Full", tone: "text-red-700", bar: "bg-red-600" }
-        : capacityPercent >= 85
-          ? { label: "Nearly full", tone: "text-amber-700", bar: "bg-amber-500" }
-          : capacityPercent >= 50
-            ? { label: "Busy", tone: "text-amber-700", bar: "bg-amber-400" }
-            : { label: "Open", tone: "text-green-700", bar: "bg-green-500" };
+  const capacityState = fillTone(capacityUsed, capacityTotal);
 
-  /*
-   * The same figures /staff/analytics leads with, over three days rather than
-   * thirty. Derived there, not recomputed here, so the two screens can never
-   * disagree about what "finished" means.
-   */
-  const snapshotFigures = [
-    {
-      label: "Finished",
-      value: snapshot.finished,
-      hint: `${snapshot.booked} booked`,
-    },
-    {
-      label: "Walk-ins",
-      value: snapshot.walkIns,
-      hint: `${snapshot.scheduledAppointments} pre-booked`,
-    },
-    {
-      label: "No-show rate",
-      value: `${Math.round(snapshot.noShowRate * 100)}%`,
-      hint: `${snapshot.noShows} no-show, ${snapshot.cancelled} cancelled`,
-    },
-    {
-      label: "Avg turnaround",
-      value: snapshot.avgTurnaroundMins != null ? `${snapshot.avgTurnaroundMins} min` : "—",
-      hint: "check-in to finished",
-    },
-  ];
-
-  const counts = [
-    { label: "scheduled", value: scheduled.length },
-    { label: "in the shop", value: onFloor.length },
-    { label: "ready", value: pickups.pets.length },
-    {
-      label: "picked up",
-      value: todayAppointments.filter((a) => a.status === AppointmentStatus.PICKED_UP).length,
-    },
-  ];
+  const onShift = roster.filter((member) => member.state !== "OFF_SHIFT");
+  const criticalCount = alerts.filter((alert) => alert.severity === "critical").length;
 
   return (
     <PageShell
-      title={formatShopDate(now, { weekday: "long", month: "long", day: "numeric" })}
-      actions={
+      className={styles.dashboard}
+      subtitle={formatShopDate(now, { weekday: "long", month: "short", day: "numeric" })}
+      title="Shop overview"
+      actions={<>
+        <DashboardRefresh updatedAt={now.toISOString()} />
         <Link
           href="/staff/appointments"
           className="text-sm font-bold px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors"
         >
           Full schedule
         </Link>
-      }
+        <Link href="/staff/appointments/new" className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-bold text-brand-on-600">+ Book appointment</Link>
+      </>}
     >
-      {/*
-        The day, in four bands that each answer one question: what is on,
-        what is wrong, how full, who is here. It used to be one flex row of
-        four panels with min-widths totalling wider than the screen, so the
-        order they wrapped in changed with the window and nothing lined up.
-      */}
-      <StatStrip
-        stats={[
-          { label: "On the books", value: active.length },
-          ...counts.map(({ label, value }) => ({ label, value })),
-          ...(cancelled.length > 0
-            ? [{ label: "Cancelled / no-show", value: cancelled.length }]
-            : []),
-        ]}
-      />
-
-      <PageSection padded={false}>
-        <div className="grid gap-3 px-3 py-3 lg:grid-cols-3">
-          {/* What needs chasing, given the most room: it is the only band
-              here that asks someone to do something. */}
-          <Panel
-            title={
-              <span className="flex items-baseline justify-between gap-3">
-                <span>Needs attention</span>
-                {alerts.length > 0 && (
-                  <span className="font-medium normal-case tracking-normal text-stone-500">
-                    {alerts.filter((alert) => alert.severity === "critical").length} critical
-                  </span>
-                )}
-              </span>
-            }
-            className="lg:col-span-2"
-          >
-            {alerts.length === 0 ? (
-              <p className="text-sm text-stone-500">
-                Nothing to chase — no late pickups, no unclaimed arrivals, nothing overrunning.
-              </p>
-            ) : (
-              <ul className="space-y-1">
-                {alerts.slice(0, 5).map((alert) => (
-                  <li key={alert.id}>
-                    <Link
-                      href={alert.href}
-                      className="flex items-baseline gap-2 text-sm rounded-md -mx-1 px-1 py-0.5 hover:bg-white transition-colors"
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${ALERT_DOT[alert.severity]}`}
-                      />
-                      <span className="min-w-0">
-                        <span className="font-bold text-stone-800">{alert.title}</span>{" "}
-                        <span className="text-stone-500">{alert.detail}</span>
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-                {alerts.length > 5 && (
-                  <li className="text-xs text-stone-500 pl-3.5">+{alerts.length - 5} more</li>
-                )}
-              </ul>
-            )}
-          </Panel>
-
-          <Panel
-            title={
-              <span className="flex items-baseline justify-between gap-3">
-                <span>Capacity</span>
-                <span className={`text-sm font-black normal-case tracking-normal ${capacityState.tone}`}>
-                  {capacityState.label}
-                </span>
-              </span>
-            }
-          >
-            <div className="h-1.5 rounded-full bg-stone-200 overflow-hidden">
-              <div
-                className={`h-full ${capacityState.bar}`}
-                style={{ width: `${Math.min(capacityPercent, 100)}%` }}
-              />
-            </div>
-            <div className="mt-1.5 space-y-0.5 text-xs text-stone-600">
-              {capacitySegments.map(({ label, used, total }) => (
-                <span
-                  key={label}
-                  className={`flex items-center justify-between gap-3 ${
-                    used >= total ? "text-red-600 font-bold" : ""
-                  }`}
-                >
-                  <span>{label}</span>
-                  <span className="tabular-nums">
-                    {used}/{total}
-                  </span>
-                </span>
-              ))}
-              <span className="flex items-center justify-between gap-3">
-                <span>Groomers on a pet</span>
-                <span className="tabular-nums">
-                  {groomersOnAPet}/{groomers.length}
-                </span>
-              </span>
-            </div>
-          </Panel>
+      <div className={styles.body}>
+        <div className={styles.metrics}>
+          {[
+            { label: "Arrivals left today", value: scheduled.length, hint: `${scheduled.filter((a) => a.scheduledAt < now).length} past arrival time`, tone: styles.blue, href: "#arrivals" },
+            { label: "In service now", value: onFloor.filter((a) => a.status !== "COMPLETE").length, hint: `${onFloor.filter((a) => a.status === "CHECKED_IN").length} checked in, waiting to start`, tone: styles.amber, href: "/staff/stations" },
+            { label: "Ready for pickup", value: pickups.pets.length, hint: `${pickups.pets.filter((pet) => ["late", "critical"].includes(pet.level)).length} late pickups`, tone: styles.green, href: "#pickups" },
+            { label: "Team ready now", value: roster.filter((member) => member.state === "READY").length, hint: `${onShift.length} signed in · ${roster.filter((member) => member.state === "WORKING").length} working`, tone: styles.purple, href: "/staff/team" },
+          ].map((metric) => <a key={metric.label} href={metric.href} className={`${styles.metric} ${metric.tone}`}><span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.hint}</small></a>)}
         </div>
-
-        {/* Who is here. Chips wrap on their own, so this band gets the full
-            width rather than a fixed column that squeezed them to two abreast. */}
-        <div className="border-t border-stone-100 px-3 py-3">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="font-bold text-stone-700 text-xs tracking-tight">Floor</h2>
-            <span className="text-xs text-stone-500">
-              {roster.filter((member) => member.state !== "OFF_SHIFT").length} signed in ·{" "}
-              {roster.filter((member) => isOnShiftNow(shifts.get(member.id))).length} scheduled now ·{" "}
-              <Link href="/staff/team" className="hover:text-stone-800 underline">
-                staff
-              </Link>
-            </span>
-          </div>
-          {roster.length === 0 ? (
-            <p className="text-sm text-stone-500 mt-1.5">No floor staff on file.</p>
-          ) : (
-            <div className="flex flex-wrap gap-1 mt-2">
-              {roster.map((member) => {
-                const href = member.working
-                  ? `/staff/appointments/${member.working.appointmentId}`
-                  : "/staff/team";
-                return (
-                  <Link
-                    key={member.id}
-                    href={href}
-                    title={[
-                      PRESENCE_LABEL[member.state],
-                      `${member.minutesInState} min`,
-                      member.working
-                        ? `${member.working.petName}${member.working.stationName ? ` at ${member.working.stationName}` : ""}`
-                        : null,
-                      describeShifts(shifts.get(member.id))
-                        ? `scheduled ${describeShifts(shifts.get(member.id))}`
-                        : "not scheduled today",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                    className={`inline-flex items-baseline gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold transition-opacity hover:opacity-80 ${PRESENCE_CLASS[member.state]}`}
-                  >
-                    <span>{member.name}</span>
-                    <span className="font-normal opacity-70">
-                      {member.working ? member.working.petName : `${member.minutesInState}m`}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-          {gaps.filter((gap) => gap.kind === "expected").length > 0 && (
-            <p className="mt-2 text-sm text-amber-700">
-              <span className="font-bold">Scheduled but not signed in:</span>{" "}
-              {gaps
-                .filter((gap) => gap.kind === "expected")
-                .map((gap) => gap.staffName)
-                .join(", ")}
-            </p>
-          )}
-        </div>
-
-        {/* The trend behind today's numbers, last. */}
-        <div className="border-t border-stone-100 px-3 py-3">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="font-bold text-stone-700 text-xs tracking-tight">
-              Last {SNAPSHOT_DAYS} days
-            </h2>
-            {canManageShop && (
-              <Link
-                href="/staff/analytics"
-                className="text-xs text-stone-500 hover:text-stone-800 underline"
-              >
-                full analytics
-              </Link>
-            )}
-          </div>
-          <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {snapshotFigures.map(({ label, value, hint }) => (
-              <div key={label} className="rounded-lg border border-stone-200 bg-well px-3 py-2">
-                <dd className="text-lg font-black text-stone-900 leading-tight tabular-nums">
-                  {value}
-                </dd>
-                <dt className="text-xs font-medium text-stone-700">{label}</dt>
-                <p className="text-[11px] text-stone-500">{hint}</p>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </PageSection>
-
       {searchParams.assigned === "1" && (
         <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Assigned.
@@ -491,12 +218,12 @@ export default async function StaffDashboard(props: {
       )}
       {searchParams.error === "suggestion_stale" && (
         <p className="border-t border-stone-100 bg-amber-50 px-3 py-2 text-amber-800 text-sm font-medium">
-          The floor moved before that could be applied — here is the current picture.
+          The storefront moved before that could be applied — here is the current picture.
         </p>
       )}
       {searchParams.error === "not_floor_staff" && (
         <p className="border-t border-stone-100 bg-amber-50 px-3 py-2 text-amber-800 text-sm font-medium">
-          Floor status is for groomers and bathers — an admin-only account does not take pets.
+          Storefront status is for groomers and bathers — an admin-only account does not take pets.
         </p>
       )}
       {searchParams.error === "role_not_allowed" && (
@@ -505,322 +232,119 @@ export default async function StaffDashboard(props: {
         </p>
       )}
 
-      {workStations.length > 0 && (
-        /*
-          The floor, arranged by hand. It answers what the "no station" list
-          used to — the Waiting column is that list — and lets it be fixed in
-          the same glance instead of on each pet's own page.
-        */
-        <PageSection tone="muted">
-          <h2 className="mb-1.5 flex items-baseline gap-1.5 text-xs font-bold uppercase tracking-widest text-stone-500">
-            Where everyone is standing
-            <span className={waitingOnFloor.length > 0 ? "text-amber-700" : "text-stone-400"}>
-              {waitingOnFloor.length} waiting
-            </span>
-            <span className="ml-auto font-medium normal-case tracking-normal text-stone-400">
-              Drag a pet to a stage, or tap it and choose
-            </span>
-          </h2>
-          <FloorBoard pets={boardPets} capacity={boardCapacity} move={moveToColumn} />
-        </PageSection>
-      )}
-
-      {/* What to do with the open stations, right now */}
-      {(suggestions.length > 0 || blockers.blocked) && (
-        <PageSection
-          title="Next moves"
-          hint={`${blockers.readyStaff} ready · ${blockers.waitingPets} waiting · ${blockers.openStations} station${blockers.openStations === 1 ? "" : "s"} open`}
+      {alerts.length > 0 && (
+        <div
+          role="alert"
+          className={`border-t px-3 py-2 ${
+            criticalCount > 0
+              ? "border-red-100 bg-red-50 text-red-900"
+              : "border-amber-100 bg-amber-50 text-amber-900"
+          }`}
         >
-          {suggestions.length === 0 ? (
-            <p className="text-sm text-stone-500 border border-stone-200 rounded-lg bg-well px-3 py-2">
-              {blockers.blocked}
-            </p>
-          ) : (
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {suggestions.map((suggestion) => (
-                <form
-                  key={suggestion.stationId}
-                  action={applySuggestion}
-                  className="bg-white border border-emerald-200 rounded-lg px-3 py-2"
-                >
-                  <input type="hidden" name="appointmentId" value={suggestion.appointmentId} />
-                  <input type="hidden" name="stationId" value={suggestion.stationId} />
-                  <input type="hidden" name="staffId" value={suggestion.staffId} />
-
-                  <p className="text-[11px] font-bold text-stone-500 tracking-tight">
-                    {suggestion.stationName} is open
-                  </p>
-                  <p className="text-sm font-bold text-stone-900 mt-0.5">
-                    {suggestion.petName}
-                    {suggestion.hasBiteHistory && (
-                      <span className="ml-1.5 text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold align-middle">
-                        BITE
-                      </span>
-                    )}
-                    <span className="font-normal text-stone-500"> → {suggestion.staffName}</span>
-                  </p>
-                  <p className="text-xs text-stone-400">{suggestion.reasons.join(" · ")}</p>
-                  <button
-                    type="submit"
-                    className="mt-1.5 w-full bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg py-1.5 text-xs font-semibold transition-colors"
-                  >
-                    Assign
-                  </button>
-                </form>
-              ))}
-            </div>
-          )}
-        </PageSection>
-      )}
-
-
-      {/* Kennel space about to run out */}
-      {(conflicts.shortfall > 0 || conflicts.overstaying.length > 0) && (
-        <PageSection
-          className={conflicts.shortfall > 0 ? "bg-red-50" : "bg-amber-50"}
-        >
-          <h2
-            className={`font-bold text-xs tracking-tight ${
-              conflicts.shortfall > 0 ? "text-red-800" : "text-amber-800"
-            }`}
-          >
-            {conflicts.shortfall > 0
-              ? `Kennel space short by ${conflicts.shortfall}`
-              : "Kennels held by late pickups"}
-          </h2>
-          <p className="text-sm text-stone-700 mt-0.5">
-            {conflicts.committed}/{conflicts.capacity} committed
-            {conflicts.incoming > 0 && ` · ${conflicts.incoming} still to arrive`}
-            {conflicts.overstaying.length > 0 &&
-              ` · ${conflicts.overstaying.length} waiting to be collected`}
+          <p className="text-sm font-black">
+            {alerts.length === 1 ? "1 thing needs" : `${alerts.length} things need`} attention
+            {criticalCount > 0 && ` — ${criticalCount} critical`}
           </p>
-          {conflicts.overstaying.length > 0 && (
-            <ul className="mt-1 divide-y divide-amber-100 text-sm">
-              {conflicts.overstaying.map((pet) => (
-                <li key={pet.appointmentId} className="py-1 flex items-center justify-between gap-3">
-                  <Link
-                    href={`/staff/appointments/${pet.appointmentId}`}
-                    className="truncate hover:text-amber-900"
-                  >
-                    <span className="font-semibold text-stone-900">{pet.petName}</span>
-                    <span className="text-stone-600"> · {pet.ownerName}</span>
-                    {pet.kennelLabel && (
-                      <span className="text-stone-400"> · kennel {pet.kennelLabel}</span>
-                    )}
-                  </Link>
-                  <span className="whitespace-nowrap text-xs">
-                    {pet.phone && (
-                      <a href={`tel:${pet.phone}`} className="text-amber-800 hover:underline mr-2">
-                        {pet.phone}
-                      </a>
-                    )}
-                    <span className="text-stone-500">waiting {pet.waitingMins} min</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </PageSection>
+          <ul className="mt-1 space-y-0.5">
+            {alerts.map((alert) => (
+              <li key={alert.id} className="flex items-baseline gap-2 text-sm">
+                <span
+                  className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${ALERT_DOT[alert.severity]}`}
+                />
+                <Link href={alert.href} className="min-w-0 hover:underline">
+                  <span className="font-bold">{alert.title}</span>{" "}
+                  <span className="opacity-80">{alert.detail}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
-      {/* The board — one vertical column for each kind of station */}
-      <PageSection grow scroll bodyClassName="grid gap-4 lg:grid-cols-3 items-start">
-        {[StationRole.GROOMER, StationRole.BATHING, StationRole.DRYING].map((role) => {
-        const list = workStations.filter((s) => s.role === role);
-        if (list.length === 0) return null;
-
-        return (
-          <section key={role}>
-            <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-2">
-              {formatStationRole(role)}{" "}
-            <span className="text-stone-400">
-              ({list.reduce((n, station) => n + (occupantsByStation.get(station.id)?.length ?? 0), 0)}
-              /{list.reduce((n, station) => n + stationCapacity(station), 0)})
-            </span>
+        {workStations.length > 0 && (
+          /*
+            The floor, arranged by hand. It answers what the "no station" list
+            used to — the Waiting column is that list — and lets it be fixed in
+            the same glance instead of on each pet's own page.
+          */
+          <PageSection tone="muted">
+            <h2 className="mb-1.5 flex items-baseline gap-1.5 text-xs font-bold uppercase tracking-widest text-stone-500">
+              Where everyone is standing
+              <span className={waitingOnFloor.length > 0 ? "text-amber-700" : "text-stone-400"}>
+                {waitingOnFloor.length} waiting
+              </span>
+              <span className="ml-auto font-medium normal-case tracking-normal text-stone-400">
+                Drag a pet to a stage, or tap it and choose
+              </span>
             </h2>
-            <div className="grid gap-2">
-              {list.map((station) => {
-                const occupants = occupantsByStation.get(station.id) ?? [];
-                const capacity = stationCapacity(station);
-                const full = occupants.length >= capacity;
+            <FloorBoard pets={boardPets} capacity={boardCapacity} move={moveToColumn} />
+          </PageSection>
+        )}
 
-                return (
-                  <Link
-                    key={station.id}
-                    href={`/staff/stations/${station.id}`}
-                    className={`rounded-lg border px-3 py-2 transition-colors ${
-                      occupants.length > 0
-                        ? "bg-white border-stone-200 hover:border-amber-300"
-                        : "bg-stone-50 border-dashed border-stone-300 hover:border-stone-400"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-bold text-stone-500 tracking-tight truncate">
-                        {station.name}
-                      </span>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold whitespace-nowrap ${
-                          full
-                            ? "bg-red-100 text-red-700"
-                            : occupants.length > 0
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-stone-200 text-stone-500"
-                        }`}
-                      >
-                        {occupants.length}/{capacity}
-                      </span>
-                    </div>
-
-                    {occupants.length === 0 ? (
-                      <p className="text-stone-400 text-xs mt-1">Open</p>
-                    ) : (
-                      <ul className="mt-1 divide-y divide-stone-100 text-sm">
-                        {occupants.map((appt) => {
-                          const mins = minutesSince(appt.checkedInAt);
-                          const over =
-                            appt.durationMins != null && mins != null && mins > appt.durationMins;
-                          return (
-                            <li key={appt.id} className="py-0.5">
-                              <p className="font-bold text-stone-900 truncate">
-                                {appt.pet.name}
-                                {appt.pet.hasBiteHistory && (
-                                  <span className="ml-1 text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold align-middle">
-                                    BITE
-                                  </span>
-                                )}
-                                <span className="font-normal text-stone-500">
-                                  {" "}
-                                  · {appt.customer.firstName} {appt.customer.lastName}
-                                </span>
-                              </p>
-                              <p className="text-xs flex justify-between gap-2">
-                                <span className={appt.staff ? "text-stone-500" : "text-amber-700"}>
-                                  {appt.staff?.name ?? "No groomer"}
-                                </span>
-                                <span className="flex items-center gap-1.5">
-                                  <span
-                                    className={`text-[10px] px-1.5 rounded-full font-medium ${
-                                      statusBadgeClass(appt.status)
-                                    }`}
-                                  >
-                                    {formatStatus(appt.status)}
-                                  </span>
-                                  {mins != null && (
-                                    <span className={over ? "text-red-600 font-semibold" : "text-stone-400"}>
-                                      {mins}m
-                                    </span>
-                                  )}
-                                </span>
-                              </p>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        );
-        })}
-
-        {/* Kennels — same card as the stations above, one per unit */}
-        {kennelStations.length > 0 && (
-          <section>
-          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-2">
-            {formatStationRole("KENNEL")}{" "}
-            <span className="text-stone-400">
-              ({kennelStations.length} unit{kennelStations.length !== 1 ? "s" : ""} ·{" "}
-              {kennelOccupied}/{kennelTotal} in use
-              {kennels.reserved > 0 && `, ${kennels.reserved} still expected`}
-              {kennels.capacity > 0 && kennels.free === 0 && " — none free"})
-            </span>
-          </h2>
-            <div className="grid gap-2">
-            {kennelStations.map((station) => {
-              const occupants = station.kennels.flatMap((kennel) =>
-                kennel.appointments.map((appt) => ({ ...appt, label: kennel.label }))
-              );
-              const capacity =
-                station.kennels.filter((kennel) => kennel.isActive).length * kennels.perCompartment;
-              const full = occupants.length >= capacity;
-
-              return (
-                <Link
-                  key={station.id}
-                  href={`/staff/stations/${station.id}`}
-                  className={`rounded-lg border px-3 py-2 transition-colors ${
-                    occupants.length > 0
-                      ? "bg-white border-stone-200 hover:border-emerald-300"
-                      : "bg-stone-50 border-dashed border-stone-300 hover:border-stone-400"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-bold text-stone-500 tracking-tight truncate">
-                      {station.name}
-                    </span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold whitespace-nowrap ${
-                        full
-                          ? "bg-red-100 text-red-700"
-                          : occupants.length > 0
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-stone-200 text-stone-500"
-                      }`}
-                    >
-                      {occupants.length}/{capacity}
-                    </span>
-                  </div>
-
-                  {occupants.length === 0 ? (
-                    <p className="text-stone-400 text-xs mt-1">Empty</p>
-                  ) : (
-                    <ul className="mt-1 divide-y divide-stone-100 text-sm">
-                      {occupants.map((occupant) => {
-                        const mins = minutesSince(occupant.kenneledAt);
-                        return (
-                          <li key={occupant.id} className="py-0.5">
-                            <p className="font-bold text-stone-900 truncate">
-                              <span className="text-stone-500 font-black">{occupant.label}</span>{" "}
-                              {occupant.pet.name}
-                              {occupant.pet.hasBiteHistory && (
-                                <span className="ml-1 text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold align-middle">
-                                  BITE
-                                </span>
-                              )}
-                              <span className="font-normal text-stone-500">
-                                {" "}
-                                · {occupant.customer.firstName} {occupant.customer.lastName}
-                              </span>
-                            </p>
-                            <p className="text-xs flex justify-between gap-2">
-                              <span className={occupant.staff ? "text-stone-500" : "text-amber-700"}>
-                                {occupant.staff?.name ?? "No groomer"}
-                              </span>
-                              <span className="flex items-center gap-1.5">
-                                <span
-                                  className={`text-[10px] px-1.5 rounded-full font-medium ${
-                                    statusBadgeClass(occupant.status)
-                                  }`}
-                                >
-                                  {formatStatus(occupant.status)}
-                                </span>
-                                {mins != null && <span className="text-stone-400">{mins}m</span>}
-                              </span>
-                            </p>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </Link>
-              );
-            })}
+        <div className={styles.grid}>
+          <div className={styles.column}>
+            <div id="arrivals" className={`${styles.panel} ${styles.blue}`}>
+      <PageSection title="Next arrivals" hint={`${scheduled.length} remaining today`}>
+        {scheduled.length === 0 ? <p className="text-sm text-muted">No more arrivals scheduled today.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">Next four scheduled arrivals, including overdue check-ins</caption>
+              <thead className="text-xs text-muted"><tr><th scope="col" className="py-2">Arrival</th><th scope="col">Pet</th><th scope="col">Assigned to</th><th scope="col">Check-in</th></tr></thead>
+              <tbody className="divide-y divide-stone-100">{scheduled.slice(0, 4).map((appointment) => (
+                <tr key={appointment.id}>
+                  <td className="py-3 whitespace-nowrap pr-3 tabular-nums">{formatShopTime(appointment.scheduledAt)}</td>
+                  <th scope="row" className="pr-3"><Link className="underline" href={`/staff/appointments/${appointment.id}`}>{appointment.pet.name}</Link></th>
+                  <td className="pr-3">{roster.find((member) => member.id === appointment.staffId)?.name ?? "Unassigned"}</td>
+                  <td className={appointment.scheduledAt < now ? "text-amber-700 font-semibold" : "text-muted"}>{appointment.scheduledAt < now ? "Past arrival time" : "Expected"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+            {scheduled.length > 4 && <Link href="/staff/appointments" className="text-sm underline">View all {scheduled.length} expected arrivals</Link>}
           </div>
-          </section>
         )}
       </PageSection>
+
+            </div>
+          </div>
+          <div className={styles.column}>
+            <div id="pickups" className={`${styles.panel} ${styles.green}`}>
+              <PageSection title="Ready to go home" hint="Longest wait first">
+                <div className={styles.queue}>
+                  {pickups.pets.slice(0, 4).map((pet) => <div key={pet.appointmentId} className={styles.pet}>
+                    <div><Link href={`/staff/appointments/${pet.appointmentId}`} className="text-sm font-bold text-ink">{pet.petName}</Link><p className="text-xs text-muted">{pet.ownerName}{pet.kennelLabel && ` · Kennel ${pet.kennelLabel}`}</p>{pet.phone && <a className="text-xs font-semibold text-brand-text" href={`tel:${pet.phone}`}>Call {pet.phone}</a>}</div>
+                    <div className="text-right"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${PICKUP_LEVEL_CLASS[pet.level]}`}>{PICKUP_LEVEL_LABEL[pet.level]}</span><p className="mt-1 text-xs text-muted">Waiting {pet.waitingMins} min</p></div>
+                  </div>)}
+                  {pickups.pets.length > 4 && <Link href="/staff/appointments?status=READY_PICKUP" className="text-sm underline">View all {pickups.pets.length} pickups</Link>}
+                  {pickups.pets.length === 0 && <p className="py-3 text-sm text-muted">No pets waiting for pickup.</p>}
+                </div>
+              </PageSection>
+            </div>
+          </div>
+        </div>
+            <div className={`${styles.panel} ${styles.green}`}>
+      <PageSection
+        title="Space available now"
+        hint={
+          <span>
+            <span className={`font-bold ${capacityState.text}`}>{capacityState.label}</span>
+            {capacityTotal > 0 && ` · ${capacityPercent}% of ${capacityTotal} spaces in use`}
+          </span>
+        }
+      >
+        <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 xl:grid-cols-4">
+          {capacitySegments.map(({ label, used, total }) => (
+            <Meter key={label} label={label} used={used} total={total} />
+          ))}
+        </div>
+        {capacitySegments.length === 0 && <p className="text-sm text-muted">No station capacity configured.</p>}
+      </PageSection>
+            </div>
+        <nav aria-label="More shop detail" className="flex flex-wrap gap-x-5 gap-y-2 px-1 text-sm text-muted">
+          <Link href="/staff/stations" className="underline">Floor & stations</Link>
+          <Link href="/staff/team" className="underline">Team & workload</Link>
+          {canManageShop && <Link href="/staff/analytics" className="underline">Business analytics</Link>}
+        </nav>
+      </div>
     </PageShell>
   );
 }

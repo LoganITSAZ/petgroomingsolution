@@ -1,8 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { cache } from "react";
-import { type GeoPoint, stripUnit } from "@/lib/map-urls";
+import { type Drive, type GeoPoint, stripUnit } from "@/lib/map-urls";
+import { getConfig } from "@/lib/config";
 
-export { directionsUrl, embedUrl, searchUrl, stripUnit, type GeoPoint } from "@/lib/map-urls";
+export {
+  directionsUrl,
+  embedUrl,
+  formatDrive,
+  routeUrl,
+  searchUrl,
+  stripUnit,
+  type Drive,
+  type GeoPoint,
+} from "@/lib/map-urls";
 
 /**
  * Maps, without an API key or an account.
@@ -121,6 +131,76 @@ async function lookup(address: string): Promise<GeoPoint | null> {
     return { lat, lon, label: first.display_name ?? address };
   } catch {
     // Offline, blocked, rate-limited or too slow. The caller shows text.
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const OSRM = "https://router.project-osrm.org/route/v1/driving";
+
+/*
+ * Routes are held for the life of the process, not in Postgres.
+ *
+ * A geocode is worth a table because the answer is permanent; a drive between
+ * two fixed points is cheap to ask for again and the roads do occasionally
+ * change. One app instance is the deployment (see lib/station-events.ts), so a
+ * module-level map is the whole cache.
+ *
+ * ponytail: in-process cache, move it to a table if OSRM ever rate-limits us.
+ */
+const routes = new Map<string, Drive | null>();
+
+/**
+ * How long it takes to drive from an address to the shop.
+ *
+ * Keyless, like the rest of the map layer: OSRM's public router takes the two
+ * points the geocoder already found. It is a typical-traffic estimate and is
+ * labelled as one wherever it is shown — never a promise about a given
+ * morning.
+ *
+ * Returns null whenever anything is missing or slow, same contract as
+ * `geocode()`: no throwing, and the caller simply shows one line less.
+ */
+export const driveToShop = cache(async function driveToShop(
+  address: string | null | undefined
+): Promise<(Drive & { from: GeoPoint; to: GeoPoint }) | null> {
+  if (!address || address.trim() === "") return null;
+
+  const config = await getConfig();
+  const [from, to] = await Promise.all([geocode(address), geocode(config.shopAddress)]);
+  if (!from || !to) return null;
+
+  const key = `${from.lat},${from.lon};${to.lat},${to.lon}`;
+  if (!routes.has(key)) routes.set(key, await route(from, to));
+
+  const drive = routes.get(key) ?? null;
+  return drive && { ...drive, from, to };
+});
+
+/** One OSRM call. Returns null on any failure — never throws. */
+async function route(from: GeoPoint, to: GeoPoint): Promise<Drive | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
+
+  try {
+    const pair = `${from.lon},${from.lat};${to.lon},${to.lat}`;
+    const response = await fetch(`${OSRM}/${pair}?overview=false`, {
+      signal: controller.signal,
+      headers: { "User-Agent": "GentleGroomer/1.0 (shop management app; self-hosted)" },
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+
+    const body = (await response.json()) as {
+      code?: string;
+      routes?: { distance?: number; duration?: number }[];
+    };
+    const first = body.code === "Ok" ? body.routes?.[0] : undefined;
+    if (!Number.isFinite(first?.distance) || !Number.isFinite(first?.duration)) return null;
+
+    return { metres: first!.distance!, seconds: first!.duration! };
+  } catch {
     return null;
   } finally {
     clearTimeout(timer);

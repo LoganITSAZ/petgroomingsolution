@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { THEME_PRESETS, brandText, darkTokens, type ThemeTokens } from "@/lib/themes";
+import { THEME_PRESETS, resolveTheme, brandText, darkTokens, type ThemeTokens } from "@/lib/themes";
 
 /**
  * A shop can pick any of these themes, and now any of them in either mode.
@@ -63,3 +63,13 @@ describe("brandText", () => {
     expect(brandText(tokens)).toBe("0 0 0");
   });
 });
+
+ it("can disable shop colors without discarding the saved brand color or banner", () => {
+  const settings = { themePreset: "default", themeAutoSeasonal: false, themeBrandColor: "#123456", shopTagline: "Welcome" };
+  const enabled = resolveTheme({ ...settings, themeUseShopColors: true }, { month: 9, day: 13 });
+  const disabled = resolveTheme({ ...settings, themeUseShopColors: false }, { month: 9, day: 13 });
+  expect(enabled.tokens).not.toEqual(disabled.tokens);
+  expect(disabled.tokens).toEqual(disabled.preset.tokens);
+  expect(disabled.bannerText).toBe("Welcome");
+  expect(settings.themeBrandColor).toBe("#123456");
+ });

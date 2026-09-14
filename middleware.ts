@@ -48,6 +48,14 @@ export default auth(function middleware(req: NextRequest & { auth: { user?: { us
     return withSecurityHeaders(NextResponse.redirect(new URL("/admin/settings", req.url)));
   }
 
+  // Pricing tiers are the shop's loyalty tiers — same named rate off the visit
+  // total, named for what the shop calls it.
+  if (pathname === "/admin/pricing") {
+    return withSecurityHeaders(
+      NextResponse.redirect(new URL(`/admin/loyalty${req.nextUrl.search}`, req.url))
+    );
+  }
+
   // ── Portal: customers only ──────────────────────────────
   if (pathname.startsWith("/portal")) {
     if (!session?.user) {
@@ -59,9 +67,9 @@ export default auth(function middleware(req: NextRequest & { auth: { user?: { us
   }
 
   // ── Staff dashboard: staff only ─────────────────────────
-  if (pathname.startsWith("/staff")) {
+  if (pathname.startsWith("/staff") || pathname.startsWith("/station/")) {
     if (!session?.user) {
-      return withSecurityHeaders(NextResponse.redirect(new URL("/login?type=staff", req.url)));
+      return withSecurityHeaders(NextResponse.redirect(new URL(`/login?type=staff&callbackUrl=${encodeURIComponent(pathname)}`, req.url)));
     }
     if (session.user.userType !== "staff") {
       return withSecurityHeaders(NextResponse.redirect(new URL("/portal", req.url)));
@@ -71,7 +79,7 @@ export default auth(function middleware(req: NextRequest & { auth: { user?: { us
   // ── Admin panel: ADMIN role only ────────────────────────
   if (pathname.startsWith("/admin")) {
     if (!session?.user) {
-      return withSecurityHeaders(NextResponse.redirect(new URL("/login?type=staff", req.url)));
+      return withSecurityHeaders(NextResponse.redirect(new URL(`/login?type=staff&callbackUrl=${encodeURIComponent(pathname)}`, req.url)));
     }
     // Staff only here; whether they are an admin is confirmed against the
     // database in the admin layout, which is the authority. Middleware runs on
@@ -88,7 +96,6 @@ export default auth(function middleware(req: NextRequest & { auth: { user?: { us
 export const config = {
   // Broadened from the auth-only routes so every page (public site, kiosk
   // included) gets the CSP/security headers. The pathname checks above still
-  // gate only /portal, /staff and /admin — this does not add a login
-  // requirement to /station or the public site.
+  // protect the portal, staff, admin and station workspaces.
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };

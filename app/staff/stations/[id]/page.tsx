@@ -145,16 +145,16 @@ export default async function StaffStationDetailPage(props: PageProps) {
           {isAdmin && (
             <Link
               href={`/admin/stations/${station.id}/edit`}
-              className="text-sm text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
+              className="inline-flex items-center justify-center whitespace-nowrap rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
             >
-              Edit station →
+              Edit Station
             </Link>
           )}
           <Link
             href={`/station/${station.id}`}
-            className="text-sm text-stone-500 hover:text-stone-800 underline whitespace-nowrap"
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
           >
-            Open touchscreen display
+            Open Station Display
           </Link>
         </>
       }
@@ -215,7 +215,7 @@ export default async function StaffStationDetailPage(props: PageProps) {
                       ? "bg-stone-100 border-stone-200"
                       : inside.length > 0
                         ? "bg-white border-emerald-300"
-                        : "bg-stone-50 border-dashed border-stone-300"
+                        : "bg-well border-well-line"
                   }`}
                 >
                   <div className="flex items-center justify-between">

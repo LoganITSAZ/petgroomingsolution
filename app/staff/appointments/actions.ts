@@ -8,6 +8,7 @@ import { resolveSelectedServices, setAppointmentServices } from "@/lib/appointme
 import { broadcastKennelBoard, kennelHasRoom, KENNELABLE_STATUSES } from "@/lib/kennels";
 import { AppointmentStatus, StationRole, VisitEventType } from "@prisma/client";
 import { isFloorStaff } from "@/lib/utils";
+import { shopDateTimeLocal } from "@/lib/shop-time";
 import { OCCUPYING_STATUSES, stationHasRoom } from "@/lib/stations";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -112,8 +113,9 @@ export async function updateAssignment(formData: FormData): Promise<void> {
   const scheduledAtRaw = ((formData.get("scheduledAt") as string | null) ?? "").trim();
   const durationRaw = ((formData.get("durationMins") as string | null) ?? "").trim();
 
-  const scheduledAt = scheduledAtRaw ? new Date(scheduledAtRaw) : null;
-  if (scheduledAt && Number.isNaN(scheduledAt.getTime())) back(appointmentId, "?error=bad_date");
+  // Shop wall clock off the form, never the server's zone.
+  const scheduledAt = scheduledAtRaw ? shopDateTimeLocal(scheduledAtRaw) : null;
+  if (scheduledAtRaw && !scheduledAt) back(appointmentId, "?error=bad_date");
 
   const durationMins = durationRaw ? Number(durationRaw) : null;
   if (durationMins != null && (!Number.isInteger(durationMins) || durationMins <= 0)) {

@@ -122,7 +122,7 @@ export default function ServicePricingExplorer({ services, extras }: { services:
                     setPetType(type);
                     if (type === "CAT" || petType !== type) setDogSize(null);
                   }}
-                  className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-200 md:p-6 ${
+                  className={`glass-choice group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-200 md:p-6 ${
                     petType === type
                       ? "border-brand-500 bg-brand-100/60 text-brand-text shadow-lg shadow-brand-900/10"
                       : "border-well-line bg-well/70 text-ink hover:-translate-y-0.5 hover:border-brand-300 hover:bg-surface hover:shadow-lg hover:shadow-brand-900/5"
@@ -209,7 +209,7 @@ export default function ServicePricingExplorer({ services, extras }: { services:
                     const hasSizePrices = petType === "DOG" && dogSize !== null && SIZE_LABELS.some(([, , field]) => service[field] != null);
                     const selectedPrice = hasSizePrices && dogSize ? service[dogSize] : null;
                     return (
-                      <article key={service.id} className="rounded-xl border border-well-line bg-well/70 p-4 shadow-sm transition hover:border-brand-300/70 hover:shadow-md hover:shadow-brand-900/5">
+                      <article key={service.id} className="glass-tile rounded-xl border border-well-line bg-well/70 p-4 shadow-sm transition hover:border-brand-300/70 hover:shadow-md hover:shadow-brand-900/5">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <h4 className="font-bold text-ink">{service.name}</h4>

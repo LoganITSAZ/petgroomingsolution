@@ -4,7 +4,8 @@ import type { ServiceOption } from "@/components/ServicePicker";
 import { Species, type ServiceType } from "@prisma/client";
 import { getConfig } from "@/lib/config";
 import { sendBookingConfirmation } from "@/lib/email";
-import { formatServiceType } from "@/lib/utils";
+import { smsBookingConfirmation } from "@/lib/sms";
+import { formatServiceType, formatShopDate, formatShopTime } from "@/lib/utils";
 
 /**
  * A visit can carry several services. `Appointment.serviceType` stays the
@@ -124,33 +125,50 @@ export async function getServiceOptions(now: Date = new Date()): Promise<Service
 }
 
 /**
- * Tell the customer their booking landed. Notification failures never fail a
- * booking, and the shop can switch email off entirely.
+ * Tell the customer their booking landed, by whichever channels the shop runs.
+ *
+ * Email and SMS are gated separately — the shop switches each on by itself, so
+ * neither early-returns on the other's flag. Notification failures never fail a
+ * booking.
  */
-export async function sendBookingEmail(appointmentId: string): Promise<void> {
+export async function sendBookingNotifications(appointmentId: string): Promise<void> {
   const [config, appointment] = await Promise.all([
     getConfig(),
     prisma.appointment.findUnique({
       where: { id: appointmentId },
       include: {
         pet: { select: { name: true } },
-        customer: { select: { email: true, firstName: true, lastName: true } },
+        customer: {
+          select: { email: true, phone: true, firstName: true, lastName: true, smsOptOut: true },
+        },
         services: { include: { service: true }, orderBy: { sortOrder: "asc" } },
       },
     }),
   ]);
 
-  if (!config.featureEmailNotify || !appointment?.customer.email) return;
+  if (!appointment) return;
 
   const serviceNames = appointment.services
     .map((line) => line.service?.name ?? formatServiceType(line.serviceType))
     .join(", ");
 
-  await sendBookingConfirmation({
-    to: appointment.customer.email,
-    ownerName: `${appointment.customer.firstName} ${appointment.customer.lastName}`,
-    petName: appointment.pet.name,
-    scheduledAt: appointment.scheduledAt,
-    serviceType: serviceNames || formatServiceType(appointment.serviceType),
-  }).catch(console.error);
+  if (config.featureEmailNotify && appointment.customer.email) {
+    await sendBookingConfirmation({
+      to: appointment.customer.email,
+      ownerName: `${appointment.customer.firstName} ${appointment.customer.lastName}`,
+      petName: appointment.pet.name,
+      scheduledAt: appointment.scheduledAt,
+      serviceType: serviceNames || formatServiceType(appointment.serviceType),
+    }).catch(console.error);
+  }
+
+  if (appointment.customer.phone && !appointment.customer.smsOptOut) {
+    await smsBookingConfirmation({
+      to: appointment.customer.phone,
+      petName: appointment.pet.name,
+      shopName: config.shopName,
+      // Shop wall clock, like everything else the customer is told.
+      when: `${formatShopDate(appointment.scheduledAt)} at ${formatShopTime(appointment.scheduledAt)}`,
+    }).catch(console.error);
+  }
 }

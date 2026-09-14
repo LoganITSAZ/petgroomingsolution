@@ -6,9 +6,8 @@
   :root {
     --radius: 0.625rem;
 
-    /* Theme defaults: a warm amber. The public site overrides
-       these per request from the theme chosen in the admin panel; every other
-       screen inherits them and stays neutral. */
+    /* Fallback palette. Website and back-office shells override these
+       per request with the theme chosen in the admin panel. */
     --brand-100: 253 240 213;
     --brand-300: 245 198 116;
     --brand-500: 236 139 26;
@@ -133,6 +132,20 @@
   .dark .bg-indigo-100 { background-color: #312e81; }
   .dark .bg-violet-50 { background-color: #2e1065; }
   .dark .bg-violet-100 { background-color: #4c1d95; }
+
+  /* Saturated 300/400 fills — the dashboard's meter bars. The label sits *on*
+     the fill and is `text-stone-900`, which flips to near-white here, so the
+     fill has to travel with it: the light-mode 400 step would put white type
+     at about 2:1. Same paired-override rule as the tints above. */
+  .dark .bg-emerald-400 { background-color: #065f46; }
+  .dark .bg-amber-400 { background-color: #92400e; }
+  .dark .bg-orange-400 { background-color: #9a3412; }
+  .dark .bg-red-400 { background-color: #991b1b; }
+  .dark .bg-sky-400 { background-color: #075985; }
+  .dark .bg-violet-400 { background-color: #5b21b6; }
+  .dark .bg-rose-400 { background-color: #9f1239; }
+  .dark .bg-amber-300 { background-color: #92400e; }
+  .dark .bg-stone-300 { background-color: #46433d; }
 
   /* Opacity variants of the fills above. `bg-stone-50/60` is a different class
      from `bg-stone-50`, so none of the rules above touch it — the nested-card
@@ -590,5 +603,80 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Shared list striping follows the theme on every page card. */
+.page-card tbody > tr:nth-child(odd),
+.page-card .divide-y:not(tbody):not(.grid) > :nth-child(odd) {
+  background-color: rgb(var(--surface, 255 255 255));
+}
+.page-card tbody > tr:nth-child(even),
+.page-card .divide-y:not(tbody):not(.grid) > :nth-child(even) {
+  background-color: rgb(var(--well));
+}
+.page-card [data-column-hidden] { display: none !important; }
+
+/* Color gives headings a separate role from the neutral striped data rows.
+   Mix with the current surface so shop palettes work in either color mode. */
+.page-card > .page-heading {
+  background-color: color-mix(in srgb, rgb(var(--brand-500)) 22%, rgb(var(--surface)));
+  border-bottom: 2px solid rgb(var(--brand-500));
+}
+.page-card .section-heading {
+  background-color: color-mix(in srgb, rgb(var(--brand-500)) 14%, rgb(var(--surface)));
+  border-inline-start: 3px solid rgb(var(--brand-500));
+}
+.service-group-heading,
+.service-group {
+  --pet-color: #4766ad;
+  --pet-ink: #ffffff;
+}
+[data-pet-group="Dogs"], .service-group-dogs { --pet-color: #0f766e; }
+[data-pet-group="Cats"], .service-group-cats { --pet-color: #7c3fa0; }
+[data-pet-group="Any pet"], .service-group-any-pet { --pet-color: #a65313; }
+.page-card .service-group-heading > th,
+.page-card .service-group > .section-heading {
+  background-color: var(--pet-color);
+  color: var(--pet-ink);
+  border-color: var(--pet-color);
+}
+.page-card .service-group > .section-heading h2 {
+  color: var(--pet-ink);
+}
+.dark .service-group-heading,
+.dark .service-group { --pet-ink: #ffffff; }
+
+/* Navigation stays bright in light mode, with the shop color marking location. */
+.office-navigation {
+  background-color: rgb(var(--surface));
+  color: rgb(var(--ink));
+  border-top: 3px solid rgb(var(--brand-500));
+}
+.office-nav-link:hover,
+.nav-menu-toggle {
+  background-color: color-mix(in srgb, rgb(var(--brand-500)) 16%, rgb(var(--surface)));
+  color: rgb(var(--ink));
+}
+.office-nav-link[aria-current="page"] {
+  background-color: rgb(var(--brand-700));
+  color: rgb(var(--brand-on-700));
+  box-shadow: inset 3px 0 0 rgb(var(--brand-300));
+}
+
+/* Long settings forms use document scrolling, with no nested page scrollbar. */
+#main-content:has(.shop-settings) {
+  height: auto;
+  overflow: visible;
+}
+
+.shop-settings {
+  flex: none;
+  overflow: visible;
+}
+
+@media (min-width: 1024px) {
+  .shop-settings #shop-branding fieldset > .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

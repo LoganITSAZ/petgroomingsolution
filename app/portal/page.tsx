@@ -110,7 +110,7 @@ export default async function PortalDashboard() {
               <Link
                 key={pet.id}
                 href={`/portal/pets/${pet.id}`}
-                className="rounded-lg border border-well-line bg-well ring-1 ring-well-line/60 px-3 py-2 flex items-center gap-3 hover:bg-white transition-colors"
+                className="glass-tile rounded-lg border border-well-line bg-well px-3 py-2 flex items-center gap-3 hover:bg-white transition-colors"
               >
                 <span className="text-3xl" aria-hidden="true">{pet.species === "CAT" ? "🐱" : "🐶"}</span>
                 <div>

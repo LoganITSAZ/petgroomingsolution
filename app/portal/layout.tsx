@@ -22,7 +22,7 @@ export default async function PortalLayout({ children }: { children: React.React
   return (
     <div
       id="portal-root"
-      className={`min-h-screen bg-page flex flex-col ${customer?.themePreference === "DARK" ? "dark" : ""}`}
+      className={`liquid-shell min-h-screen bg-page flex flex-col ${customer?.themePreference === "DARK" ? "dark" : ""}`}
     >
       {customer?.themePreference === "SYSTEM" && <SystemThemeScript rootId="portal-root" nonce={nonce} />}
 

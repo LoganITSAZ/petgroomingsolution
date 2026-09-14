@@ -47,6 +47,10 @@ export default async function PortalProfilePage() {
     const phone = posted("phone");
     const address = posted("address");
     const themePreference = formData.get("themePreference");
+    // The checkbox reads as an opt-*in* to the customer and is stored as an
+    // opt-out, so the marker decides whether it is being edited and the box
+    // itself decides which way.
+    const smsPosted = formData.get("smsPrefPosted") !== null;
 
     // A form that carries the name must carry a usable one; a form that does
     // not carry it at all is not editing it.
@@ -59,6 +63,7 @@ export default async function PortalProfilePage() {
         ...(namesPosted && { firstName, lastName }),
         ...(phone !== undefined && { phone: phone || null }),
         ...(address !== undefined && { address: address || null }),
+        ...(smsPosted && { smsOptOut: formData.get("smsNotify") === null }),
         // A form that does not carry the theme is not editing it.
         ...(themePreference !== null && { themePreference: readTheme(themePreference) }),
       },
@@ -195,6 +200,25 @@ export default async function PortalProfilePage() {
               placeholder="e.g. (555) 867-5309"
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm text-stone-800"
             />
+
+            {/* An unchecked box posts nothing, so a marker says the form carried
+                the preference at all — same reason `phone` is read with
+                `posted()` above. */}
+            <input type="hidden" name="smsPrefPosted" value="1" />
+            <label className="mt-2 flex items-start gap-2 text-sm text-stone-700">
+              <input
+                type="checkbox"
+                name="smsNotify"
+                defaultChecked={!customer.smsOptOut}
+                className="mt-0.5 accent-amber-700"
+              />
+              <span>
+                Text me when my pet is ready
+                <span className="block text-xs text-stone-400">
+                  Visit updates only — never marketing. You can also reply STOP to any message.
+                </span>
+              </span>
+            </label>
           </div>
 
           <div>

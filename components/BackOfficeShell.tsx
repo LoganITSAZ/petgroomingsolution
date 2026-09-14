@@ -1,6 +1,7 @@
 import { auth, signOut } from "@/lib/auth";
 import { canManage, getStaffRoles } from "@/lib/staff-roles";
-import { isFloorStaff } from "@/lib/utils";
+import { resolveTheme, themeCss } from "@/lib/themes";
+import { shopDayKey, isFloorStaff } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
 import { headers } from "next/headers";
@@ -34,7 +35,7 @@ const NAV = [
   { href: "/staff/appointments", label: "Appointments" },
   { href: "/staff/customers", label: "Customers" },
   { href: "/staff/stations", label: "Stations" },
-  { href: "/staff/team", label: "Staff" },
+  { href: "/staff/team", label: "Team" },
   { href: "/staff/schedule", label: "Schedule" },
   { href: "/staff/services", label: "Services" },
   { href: "/staff/resources", label: "Resources" },
@@ -43,17 +44,16 @@ const NAV = [
 /**
  * What the shop edits about itself: the records and documents a manager
  * changes during a working week. One flat "Shop" group carried all eleven of
- * these, which put "Pricing Tiers" and "Appearance" — a rate a customer is on
+ * these, which put "Loyalty Tiers" and "Appearance" — a rate a customer is on
  * and the colour of the website — in the same list with nothing between them.
  */
 const MANAGE_NAV = [
   { href: "/admin/services", label: "Services & Pricing" },
-  { href: "/admin/pricing", label: "Pricing Tiers" },
-  { href: "/admin/staff", label: "Manage Staff" },
-  { href: "/admin/schedule", label: "Edit Schedule" },
-  { href: "/admin/stations", label: "Manage Stations" },
+  { href: "/admin/loyalty", label: "Loyalty Tiers" },
+  { href: "/admin/staff", label: "Staff" },
+  { href: "/admin/schedule", label: "Schedule" },
+  { href: "/admin/stations", label: "Stations" },
   { href: "/admin/marketing", label: "Marketing" },
-  { href: "/admin/waiver", label: "Liability Waiver" },
 ];
 
 /** What the shop reads about itself. Nothing here is editable. */
@@ -86,7 +86,7 @@ function NavGroup({ label, items, first = false }: { label: string; items: { hre
   return (
     <>
       <p
-        className={`px-3 pb-1 font-display text-[0.8125rem] font-bold tracking-tight text-stone-300 ${first ? "" : "mt-4 border-t border-stone-700/70 pt-3"}`}
+        className={`px-3 pb-1 font-display text-[0.8125rem] font-bold tracking-tight nav-group-label text-brand-text ${first ? "" : "mt-4 border-t border-line pt-3"}`}
       >
         {label}
       </p>
@@ -110,6 +110,8 @@ export default async function BackOfficeShell({ children }: { children: React.Re
     }),
     getConfig(),
   ]);
+  const [, month, day] = shopDayKey(new Date()).split("-").map(Number);
+  const theme = resolveTheme(config, { month, day });
   const isAdmin = roles.includes("ADMIN");
   const canManageShop = canManage(roles);
   // Presence describes someone who takes pets. An admin-only account never
@@ -122,12 +124,12 @@ export default async function BackOfficeShell({ children }: { children: React.Re
     <>
       <NavGroup
         first
-        label="Floor"
+        label="Storefront"
         items={onFloor ? [...NAV.slice(0, 1), { href: "/staff/me", label: "My Shift" }, ...NAV.slice(1)] : NAV}
       />
       {canManageShop && (
         <>
-          <NavGroup label="Manage" items={MANAGE_NAV} />
+          <NavGroup label="Management" items={MANAGE_NAV} />
           <NavGroup label="Insights" items={INSIGHTS_NAV} />
           <NavGroup label="Settings" items={SETTINGS_NAV} />
         </>
@@ -139,8 +141,9 @@ export default async function BackOfficeShell({ children }: { children: React.Re
   return (
     <div
       id="back-office-root"
-      className={`app-dense min-h-screen bg-page md:flex ${me?.themePreference === "DARK" ? "dark" : ""}`}
+      className={`liquid-shell app-dense min-h-screen bg-page text-ink md:flex ${me?.themePreference === "DARK" ? "dark" : ""}`}
     >
+      <style nonce={nonce} dangerouslySetInnerHTML={{ __html: themeCss(theme.tokens, "#back-office-root") }} />
       {me?.themePreference === "SYSTEM" && <SystemThemeScript rootId="back-office-root" nonce={nonce} />}
 
       <a href="#main-content" className="skip-link">
@@ -148,11 +151,11 @@ export default async function BackOfficeShell({ children }: { children: React.Re
       </a>
 
       {/* Phone: presence first, navigation behind a tap */}
-      <header className="md:hidden sticky top-0 z-40 bg-stone-900 text-stone-200 px-3 py-2">
+      <header className="md:hidden sticky top-0 z-40 office-navigation border-b border-line px-3 py-2">
         <div className="flex items-center gap-3">
-          <MobileMenu>{links}</MobileMenu>
+          <MobileMenu summaryClassName="nav-menu-toggle" menuClassName="office-navigation border border-line max-h-[75dvh] overflow-y-auto">{links}</MobileMenu>
 
-          <Link href="/staff" className="font-display font-extrabold tracking-tight text-white truncate">
+          <Link href="/staff" className="font-display font-extrabold tracking-tight text-ink truncate">
             <span aria-hidden="true">🐾</span> {session.user.name}
           </Link>
 
@@ -165,26 +168,26 @@ export default async function BackOfficeShell({ children }: { children: React.Re
       </header>
 
       {/* Terminal: the familiar sidebar */}
-      <aside className="hidden md:flex w-52 bg-stone-900 text-stone-200 flex-col py-5 px-3 fixed h-full">
+      <aside className="hidden md:flex w-52 office-navigation border-r border-line flex-col py-5 px-3 fixed h-full">
         {/* The display face at text-lg put a two-word shop name on the first
             group header. Tight leading and its own space, rather than an
             ellipsis — a shop should not read its own name cut off. */}
         <Link
           href="/"
-          className="mb-4 block px-2 font-display text-base font-extrabold leading-tight tracking-[-0.02em] text-white"
+          className="mb-4 block px-2 font-display text-base font-extrabold leading-tight tracking-[-0.02em] text-ink"
         >
           <span aria-hidden="true">🐾</span> {config.shopName}
         </Link>
         {/* The admin group makes this list long enough to outrun a short screen. */}
         <nav className="flex-1 space-y-1 text-sm overflow-y-auto">{links}</nav>
-        <div className="text-xs text-stone-300 px-2 space-y-1 pt-2">
+        <div className="text-xs text-muted px-2 space-y-1 pt-3 mt-3 border-t border-line">
           {/* Presence: the control the floor touches most */}
           {onFloor && (
             <PresenceSwitcher action={setMyPresence} current={presence} returnTo="/staff" />
           )}
           <Link
             href="/staff/profile"
-            className="block pt-1 text-stone-300 hover:text-white hover:underline"
+            className="block pt-1 text-muted hover:text-ink hover:underline"
           >
             {session.user.name}
           </Link>
@@ -194,12 +197,20 @@ export default async function BackOfficeShell({ children }: { children: React.Re
               await signOut({ redirectTo: "/" });
             }}
           >
-            <button type="submit" className="text-stone-300 hover:text-white mt-1">Sign out</button>
+            <button type="submit" className="text-muted hover:text-ink mt-1">Sign out</button>
           </form>
         </div>
       </aside>
 
-      <main id="main-content" className="flex-1 md:ml-52 p-3 md:p-4 flex flex-col">{children}</main>
+      {/* On a terminal the shell owns the viewport, so a page card's own scroll
+          band does the scrolling and its scrollbar stays on screen. Phones keep
+          document scroll — there is no visible bar to strand there. */}
+      <main
+        id="main-content"
+        className="flex-1 min-w-0 md:ml-52 p-3 md:p-4 flex flex-col md:h-screen md:overflow-hidden"
+      >
+        {children}
+      </main>
     </div>
   );
 }

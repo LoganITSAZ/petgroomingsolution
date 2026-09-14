@@ -1,5 +1,6 @@
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { KIOSK_APPOINTMENT_SELECT, subscribeToStation } from "@/lib/station-events";
+import { STATION_APPOINTMENT_SELECT, subscribeToStation } from "@/lib/station-events";
 import { getKennelBoard } from "@/lib/kennels";
 import { OCCUPYING_STATUSES } from "@/lib/stations";
 import { StationRole } from "@prisma/client";
@@ -9,6 +10,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user || session.user.userType !== "staff") {
+    return new Response("Staff sign-in required", { status: 401 });
+  }
   const { id: stationId } = await params;
 
   // Verify station exists
@@ -26,12 +31,13 @@ export async function GET(
     ? []
     : await prisma.appointment.findMany({
         where: { stationId, status: { in: OCCUPYING_STATUSES } },
-        select: KIOSK_APPOINTMENT_SELECT,
+        select: STATION_APPOINTMENT_SELECT,
         orderBy: { checkedInAt: "asc" },
       });
 
   const encoder = new TextEncoder();
 
+  let closeStream = () => {};
   const stream = new ReadableStream({
     start(controller) {
       const unsubscribe = subscribeToStation(stationId, controller);
@@ -53,19 +59,26 @@ export async function GET(
         }
       }, 30_000);
 
-      // Cleanup on disconnect
-      req.signal.addEventListener("abort", () => {
+      // Periodically reauthenticate and pick up edits made on a phone.
+      const expiry = setTimeout(cleanup, 60_000);
+      function cleanup() {
+        clearTimeout(expiry);
         clearInterval(heartbeat);
         unsubscribe();
         try { controller.close(); } catch { /* already closed */ }
-      });
+        req.signal.removeEventListener("abort", cleanup);
+      }
+      closeStream = cleanup;
+      req.signal.addEventListener("abort", cleanup);
+      if (req.signal.aborted) cleanup();
     },
+    cancel() { closeStream(); },
   });
 
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
+      "Cache-Control": "private, no-store, no-transform",
       Connection: "keep-alive",
       "X-Accel-Buffering": "no", // disable Nginx buffering
     },

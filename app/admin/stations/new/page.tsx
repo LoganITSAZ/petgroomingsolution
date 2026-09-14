@@ -8,7 +8,6 @@ import { PageShell } from "@/components/ui";
 export const metadata = { title: "Add Station" };
 
 const ERRORS: Record<string, string> = {
-  name_required: "A station needs a name.",
   invalid_role: "Pick one of the listed roles.",
   invalid_grid: "Kennel units need at least one row and one kennel per row.",
 };
@@ -38,7 +37,6 @@ export default async function NewStationPage(props: PageProps) {
         action={createStation}
         submitLabel="Create Station"
         initial={{
-          name: "",
           allowedRoles: [],
           role: StationRole.GROOMER,
           isActive: true,

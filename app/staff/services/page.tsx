@@ -67,7 +67,6 @@ export default async function StaffServicesPage() {
           {services.length} service{services.length !== 1 ? "s" : ""} offered ·{" "}
           {walkIns.length} available as walk-ins
           {promoCount > 0 && ` · ${promoCount} running promotion${promoCount !== 1 ? "s" : ""}`}
-          {" · tap one to read it"}
         </>
       }
       actions={
@@ -86,121 +85,108 @@ export default async function StaffServicesPage() {
           No services are listed yet.
         </PageSection>
       ) : (
-        groups.map((group) => (
-          <PageSection
-            key={group.heading}
-            title={group.heading}
-            padded={false}
-            bodyClassName="divide-y divide-stone-100 border-t border-stone-100 mt-2"
-          >
-              {group.items.map((service) => {
-                const offers = promotions.get(service.id) ?? [];
-                const booked = bookedByService.get(service.id) ?? 0;
+        <PageSection grow scroll padded={false}>
+          <table className="w-full text-sm">
+            {/* The column names are the same for every species, so they are
+                written once at the top and each group is a labelled tbody. */}
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-well border-b border-stone-200 text-left">
+                {["Service", "Category", "Time", "Small", "Medium", "Large", "XL", "Walk-in", "90 days"].map(
+                  (heading) => (
+                    <th
+                      key={heading}
+                      scope="col"
+                      className="px-3 py-2 text-xs font-semibold text-stone-500 tracking-tight whitespace-nowrap"
+                    >
+                      {heading}
+                    </th>
+                  )
+                )}
+              </tr>
+            </thead>
+            {groups.map((group) => (
+              <tbody key={group.heading} className="divide-y divide-stone-100">
+                <tr className="service-group-heading" data-pet-group={group.heading}>
+                  <th
+                    scope="colgroup"
+                    colSpan={9}
+                    className="border-y px-3 py-2 text-left font-display text-[0.75rem] font-bold uppercase tracking-[0.09em]"
+                  >
+                    {group.heading}
+                  </th>
+                </tr>
+                  {group.items.map((service) => {
+                    const offers = promotions.get(service.id) ?? [];
+                    const booked = bookedByService.get(service.id) ?? 0;
 
-                return (
-                  <details key={service.id} className="group">
-                    <summary className="px-3 py-2 cursor-pointer flex items-center justify-between gap-3 hover:bg-well transition-colors">
-                      <span className="min-w-0">
-                        <span className="font-semibold text-stone-900">{service.name}</span>
-                        {service.walkInEligible && (
-                          <span className="ml-2 text-[10px] font-bold text-emerald-700 ">
-                            Walk-in
-                          </span>
-                        )}
-                        {offers.length > 0 && (
-                          <span className="ml-2 text-[10px] font-bold text-amber-700 ">
-                            Promo
-                          </span>
-                        )}
-                        <span className="block text-xs text-stone-400">
-                          {SERVICE_CATEGORY_LABEL[service.category]}
-                          {service.durationMins ? ` · ${service.durationMins} min` : ""}
-                          {booked > 0 ? ` · booked ${booked}× in 90 days` : ""}
-                        </span>
-                      </span>
-                      <span className="text-sm font-medium text-stone-700 whitespace-nowrap">
-                        {servicePriceLabel(service)}
-                        <span className="ml-2 text-stone-400 group-open:hidden">▾</span>
-                        <span className="ml-2 text-stone-400 hidden group-open:inline">▴</span>
-                      </span>
-                    </summary>
-
-                    <div className="px-3 pb-3 pt-1 border-t border-stone-100 space-y-2">
-                      {service.description && (
-                        <p className="text-sm text-stone-600">{service.description}</p>
-                      )}
-
-                      {service.staffNotes && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                          <p className="text-[10px] font-bold text-amber-800 tracking-tight">
-                            Staff notes
-                          </p>
-                          <p className="text-sm text-stone-700 whitespace-pre-wrap">
-                            {service.staffNotes}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* What to quote */}
-                      {isSizePriced(service) ? (
-                        <div className="grid grid-cols-4 gap-2 text-sm">
-                          {[
-                            { label: "Small", cents: service.priceSmallCents },
-                            { label: "Medium", cents: service.priceMediumCents },
-                            { label: "Large", cents: service.priceLargeCents },
-                            { label: "XL", cents: service.priceXlCents },
-                          ].map((tier) => (
-                            <div
-                              key={tier.label}
-                              className="bg-stone-50 border border-stone-200 rounded-lg px-2 py-1.5"
+                    return (
+                      <tr key={service.id} className="align-top hover:bg-well transition-colors">
+                        <td className="px-3 py-2.5">
+                          <span className="font-semibold text-stone-900">{service.name}</span>
+                          {service.description && (
+                            <span className="block text-xs text-stone-500">{service.description}</span>
+                          )}
+                          {service.staffNotes && (
+                            <span className="mt-1 block rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-stone-700 whitespace-pre-wrap">
+                              <span className="font-bold text-amber-800">Staff notes: </span>
+                              {service.staffNotes}
+                            </span>
+                          )}
+                          {offers.map((promotion) => (
+                            <span
+                              key={promotion.id}
+                              className="mt-1 block rounded-lg border border-amber-200 bg-amber-100 px-2 py-1 text-xs text-stone-700"
                             >
-                              <p className="text-[10px] text-stone-500 ">{tier.label}</p>
-                              <p className="font-bold text-stone-900">{formatCents(tier.cents)}</p>
-                            </div>
+                              <span className="font-bold text-stone-900">{promotion.title}</span>
+                              {promotion.code && (
+                                <span className="ml-2 rounded border border-amber-300 bg-white px-1 py-0.5 font-mono text-[10px] text-amber-800">
+                                  {promotion.code}
+                                </span>
+                              )}
+                              <span className="block whitespace-pre-wrap">{promotion.body}</span>
+                            </span>
                           ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-stone-600">
-                          <span className="font-semibold text-stone-900">
-                            {servicePriceLabel(service)}
-                          </span>{" "}
-                          whatever the size.
-                        </p>
-                      )}
-
-                      {offers.map((promotion) => (
-                        <div
-                          key={promotion.id}
-                          className="bg-amber-100 border border-amber-200 rounded-lg px-3 py-2"
-                        >
-                          <p className="text-sm font-bold text-stone-900">
-                            {promotion.title}
-                            {promotion.code && (
-                              <span className="ml-2 font-mono text-xs bg-white border border-amber-300 text-amber-800 px-1.5 py-0.5 rounded">
-                                {promotion.code}
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-sm text-stone-700 whitespace-pre-wrap">
-                            {promotion.body}
-                          </p>
-                        </div>
-                      ))}
-
-                      <p className="text-xs text-stone-400">
-                        {service.walkInEligible
-                          ? "Can be taken as a walk-in."
-                          : "Appointment only."}
-                        {service.durationMins
-                          ? ` Allow about ${service.durationMins} minutes.`
-                          : ""}
-                      </p>
-                    </div>
-                  </details>
-                );
-              })}
-          </PageSection>
-        ))
+                        </td>
+                        <td className="px-3 py-2.5 text-stone-600 whitespace-nowrap">
+                          {SERVICE_CATEGORY_LABEL[service.category]}
+                        </td>
+                        <td className="px-3 py-2.5 text-stone-600 whitespace-nowrap">
+                          {service.durationMins ? `${service.durationMins} min` : "\u2014"}
+                        </td>
+                        {isSizePriced(service) ? (
+                          [
+                            service.priceSmallCents,
+                            service.priceMediumCents,
+                            service.priceLargeCents,
+                            service.priceXlCents,
+                          ].map((cents, i) => (
+                            <td key={i} className="px-3 py-2.5 font-medium text-stone-900 whitespace-nowrap">
+                              {formatCents(cents)}
+                            </td>
+                          ))
+                        ) : (
+                          <td colSpan={4} className="px-3 py-2.5 whitespace-nowrap">
+                            <span className="font-medium text-stone-900">{servicePriceLabel(service)}</span>
+                            <span className="text-stone-400"> any size</span>
+                          </td>
+                        )}
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          {service.walkInEligible ? (
+                            <span className="font-bold text-emerald-700">Yes</span>
+                          ) : (
+                            <span className="text-stone-400">Appointment</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-stone-600 whitespace-nowrap">
+                          {booked > 0 ? `${booked}\u00d7` : "\u2014"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            ))}
+          </table>
+        </PageSection>
       )}
 
       {surcharges.length > 0 && (

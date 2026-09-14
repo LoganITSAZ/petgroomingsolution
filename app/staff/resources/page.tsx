@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { PageShell, PageSection, Panel } from "@/components/ui";
+import { PageShell, PageSection } from "@/components/ui";
 import { RESOURCE_SECTIONS } from "@/lib/resources";
 
 export const metadata = { title: "Resources" };
@@ -15,6 +15,12 @@ export const dynamic = "force-dynamic";
  * who actually needed it at the table were the ones who could not open it.
  * Everything here is read-only and reachable from the floor; editing the breed
  * guide stays with whoever runs the shop.
+ *
+ * Every section is a closed card. The page used to print all five in full with
+ * a grid of anchor links above them, so the same five titles appeared twice and
+ * a groomer looking up a blade number scrolled past the bite procedure to get
+ * there. A card opens where it stands — native `<details>`, so it is keyboard
+ * reachable, announced, and found by the browser's own in-page search.
  */
 export default async function ResourcesPage() {
   const breedCount = await prisma.breedGuide.count();
@@ -24,64 +30,64 @@ export default async function ResourcesPage() {
       title="Resources"
       subtitle="Guidance, not instruction — the pet's own notes always come first"
     >
-      <PageSection tone="muted" padded={false}>
-        <div className="px-3 py-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <PageSection grow scroll padded={false}>
+        <div className="px-3 py-3 space-y-2">
           <Link
             href="/staff/resources/breeds"
-            className="group rounded-lg border border-stone-200 bg-white px-3 py-3 hover:border-stone-300 hover:shadow-sm transition-all"
+            className="group flex items-center gap-3 rounded-lg border border-well-line bg-well px-3 py-2.5 hover:bg-white transition-colors"
           >
-            <span className="block font-bold text-stone-900 group-hover:text-brand-text transition-colors">
-              Breed guide
+            <span className="flex-1 min-w-0">
+              <span className="block font-bold text-stone-900 group-hover:text-brand-text transition-colors">
+                Breed guide
+              </span>
+              <span className="block text-sm text-stone-500">
+                Coat, typical time and what this shop has learned.
+              </span>
             </span>
-            <span className="block text-sm text-stone-500 mt-0.5">
-              Coat, typical time and what this shop has learned, for {breedCount}{" "}
-              {breedCount === 1 ? "breed" : "breeds"}.
+            <span className="text-xs text-stone-500 tabular-nums shrink-0">
+              {breedCount} {breedCount === 1 ? "breed" : "breeds"}
             </span>
           </Link>
-          {RESOURCE_SECTIONS.map((section) => (
-            <a
-              key={section.slug}
-              href={`#${section.slug}`}
-              className="group rounded-lg border border-stone-200 bg-white px-3 py-3 hover:border-stone-300 hover:shadow-sm transition-all"
-            >
-              <span className="block font-bold text-stone-900 group-hover:text-brand-text transition-colors">
-                {section.title}
-              </span>
-              <span className="block text-sm text-stone-500 mt-0.5">{section.blurb}</span>
-            </a>
-          ))}
-        </div>
-      </PageSection>
 
-      <PageSection grow scroll padded={false}>
-        <div className="divide-y divide-stone-100">
           {RESOURCE_SECTIONS.map((section) => (
-            <section key={section.slug} id={section.slug} className="px-3 py-4 scroll-mt-4">
-              <h2 className="font-bold text-stone-700 text-xs tracking-tight">
-                {section.title}
-              </h2>
-              <p className="text-sm text-stone-600 mt-1 max-w-3xl">{section.blurb}</p>
-              {section.caution && (
-                <Panel title="Worth knowing" className="mt-2 max-w-3xl">
-                  <p className="text-sm text-stone-700">{section.caution}</p>
-                </Panel>
-              )}
-              <dl className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
-                {section.entries.map((entry) => (
-                  <div key={entry.term}>
-                    <dt className="text-sm font-bold text-stone-900">
-                      {entry.term}
-                      {entry.note && (
-                        <span className="ml-2 font-medium text-xs text-stone-500 tabular-nums">
-                          {entry.note}
-                        </span>
-                      )}
-                    </dt>
-                    <dd className="text-sm text-stone-600 mt-0.5">{entry.detail}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
+            <details
+              key={section.slug}
+              id={section.slug}
+              className="disclosure rounded-lg border border-well-line bg-well scroll-mt-4"
+            >
+              <summary className="px-3 py-2.5">
+                <span className="flex-1 min-w-0">
+                  <span className="block font-bold text-stone-900">{section.title}</span>
+                  <span className="block text-sm text-stone-500">{section.blurb}</span>
+                </span>
+                <span className="text-xs text-stone-500 tabular-nums shrink-0">
+                  {section.entries.length}
+                </span>
+              </summary>
+
+              <div className="border-t border-well-line px-3 py-3">
+                {section.caution && (
+                  <p className="text-sm text-stone-700 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 max-w-3xl">
+                    {section.caution}
+                  </p>
+                )}
+                <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-3 mt-3 first:mt-0">
+                  {section.entries.map((entry) => (
+                    <div key={entry.term}>
+                      <dt className="text-sm font-bold text-stone-900">
+                        {entry.term}
+                        {entry.note && (
+                          <span className="ml-2 font-medium text-xs text-stone-500 tabular-nums">
+                            {entry.note}
+                          </span>
+                        )}
+                      </dt>
+                      <dd className="text-sm text-stone-600 mt-0.5">{entry.detail}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </details>
           ))}
         </div>
       </PageSection>

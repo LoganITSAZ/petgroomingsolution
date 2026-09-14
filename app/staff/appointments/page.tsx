@@ -29,6 +29,7 @@ import {
 import { PICKUP_LEVEL_CLASS, PICKUP_LEVEL_LABEL, formatWait, pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
 import FilterAutoSubmit from "@/components/FilterAutoSubmit";
+import DateJump from "@/components/DateJump";
 import { PageShell, PageSection, StatStrip, Well } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
@@ -248,9 +249,7 @@ export default async function StaffAppointmentsPage(props: PageProps) {
       _count: { _all: true },
     }),
     prisma.appointment.findMany({
-      // READY_PICKUP joins IN_SHOP here and nowhere else: the board's last
-      // column holds a finished pet whose owner has been told, and the counts
-      // above it still mean what they always did.
+      // Include finished pets in the board’s pickup column.
       where: {
         scheduledAt: range,
         status: { in: [AppointmentStatus.SCHEDULED, ...IN_SHOP, AppointmentStatus.READY_PICKUP] },
@@ -284,13 +283,8 @@ export default async function StaffAppointmentsPage(props: PageProps) {
 
   const listQuery = queryString(filters);
 
-  /*
-   * The three live bands answer "what is happening in the shop right now" over
-   * the whole range. The moment the counter narrows to one groomer, station,
-   * type or name they are asking a different question, and the bands answer a
-   * set they can no longer see — so the page becomes the list alone. The view
-   * and date are navigation, not a filter: the bands follow the range.
-   */
+  // The floor follows the selected date range. Hide it when the list is
+  // narrowed so its pets do not contradict the filtered results below.
   const isFiltered =
     Boolean(filters.q || filters.staffId || filters.stationId || filters.type) ||
     filters.group !== DEFAULT_GROUP;
@@ -355,17 +349,14 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     { label: VIEWS.month, patch: { view: "month" }, active: filters.view === "month" },
   ];
 
-  /*
-    The tabs change what the card is showing, so they stay on its toolbar.
-    Booking creates something new instead, which is the page's action — it sits
-    beside the title, where every other screen keeps its action.
-  */
+  // Date navigation shares a dedicated toolbar below the page actions.
   const viewTabs = (
     <div className="flex items-center gap-0.5 rounded-lg border border-well-line bg-well p-0.5">
       {tabs.map((tab) => (
         <Link
           key={tab.label}
           href={`/staff/appointments${queryString(filters, tab.patch)}`}
+          aria-current={tab.active ? "page" : undefined}
           className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
             tab.active
               ? "bg-stone-800 text-white shadow-sm"
@@ -382,9 +373,10 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     Filters is a control on the toolbar, and the panel it opens is a band across
     the whole card — a <details> cannot straddle the two, and this page is a
     server component with no client JS of its own. A checkbox its label toggles
-    does it in CSS: the input is the `peer`, the label is the button, and the
-    panel below shows on `peer-checked`. `defaultChecked` opens it when filters
-    are already applied, so nothing is narrowing the list invisibly.
+    does it in CSS: the input is the `peer` (for the label's focus ring), the
+    label is the button, and the panel shows when the card `:has()` the box
+    checked. `defaultChecked` opens it when filters are already applied, so
+    nothing is narrowing the list invisibly.
   */
   const filtersToggle = (
     <label
@@ -400,12 +392,96 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     </label>
   );
 
+  /*
+    Everything the list is narrowed by, carried through the date form so
+    jumping to a day keeps the filters that were applied to it.
+  */
+  const carryFields = (
+    <>
+      {Object.entries({
+        view: filters.view,
+        group: filters.group,
+        q: filters.q,
+        staffId: filters.staffId,
+        stationId: filters.stationId,
+        type: filters.type,
+      })
+        .filter(([, value]) => value)
+        .map(([name, value]) => (
+          <input key={name} type="hidden" name={name} value={value} />
+        ))}
+    </>
+  );
+
+  /*
+    The readable date is the picker: DateJump lays a transparent date field over
+    it and opens the browser's own calendar on click — no picker library.
+    Choosing a day auto-submits this little GET form, which is why the filters
+    ride along hidden.
+  */
+  const datePicker = (label: string, widthClass: string) => (
+    <form method="GET" className="relative flex">
+      <FilterAutoSubmit scope="daynav">
+        {carryFields}
+        <DateJump
+          name="date"
+          defaultValue={filters.date}
+          ariaLabel="Jump to date"
+          label={label}
+          widthClass={widthClass}
+        />
+      </FilterAutoSubmit>
+    </form>
+  );
+
+  /* The day being read, and the arrows that change it. */
+  const dayNav =
+    filters.view === "day" ? (
+      <div className="flex items-center gap-1">
+        <Link
+          href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, -1) })}`}
+          aria-label="Previous day"
+          className="px-2 py-1 rounded-lg text-stone-500 hover:bg-white hover:text-stone-800 transition-colors"
+        >
+          ←
+        </Link>
+        {/*
+          The date, and only the date. "Today" and "Tomorrow" are the two tabs
+          to the right, which light up on these same dates — saying it here as
+          well named the day twice and gave the shop two controls for going
+          back to today.
+        */}
+        {/*
+          A fixed slot: "Fri, May 1" and "Wednesday, September 24" are different
+          widths, so an auto-width date moved the arrow the counter had just
+          clicked out from under the pointer. Wide enough for the longest
+          weekday and month.
+        */}
+        {datePicker(
+          formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" }),
+          "w-56"
+        )}
+        <Link
+          href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, 1) })}`}
+          aria-label="Next day"
+          className="px-2 py-1 rounded-lg text-stone-500 hover:bg-white hover:text-stone-800 transition-colors"
+        >
+          →
+        </Link>
+      </div>
+    ) : (
+      datePicker(
+        `From ${formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}`,
+        "w-64"
+      )
+    );
+
   const newVisit = (
     <Link
       href="/staff/appointments/new"
       className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-3 py-1.5 rounded-lg text-sm font-semibold shadow-sm transition-colors whitespace-nowrap"
     >
-      + New
+      + New appointment
     </Link>
   );
 
@@ -418,63 +494,38 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     <PageShell
       title="Appointments"
       subtitle={`${appointments.length} shown`}
-      actions={newVisit}
-    >
-        <input
-          id="filters-open"
-          type="checkbox"
-          className="peer sr-only"
-          defaultChecked={activeFilters > 0}
-          aria-label="Show filters"
-        />
-        {/* The day being read and the views that change it, on one line */}
-        <div className="bg-band px-2 py-1.5 flex items-center gap-2 flex-wrap">
-          <div className="flex flex-1 items-center gap-1">
-          {filters.view === "day" ? (
-            <>
-              <Link
-                href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, -1) })}`}
-                aria-label="Previous day"
-                className="px-2 py-1 rounded-lg text-stone-500 hover:bg-white hover:text-stone-800 transition-colors"
-              >
-                ←
-              </Link>
-              {/*
-                The date, and only the date. "Today" and "Tomorrow" are the two
-                tabs to the right, which light up on these same dates — saying
-                it here as well named the day twice and gave the shop two
-                controls for going back to today.
-              */}
-              <span className="text-sm font-semibold text-stone-800">
-                {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
-              </span>
-              <Link
-                href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, 1) })}`}
-                aria-label="Next day"
-                className="px-2 py-1 rounded-lg text-stone-500 hover:bg-white hover:text-stone-800 transition-colors"
-              >
-                →
-              </Link>
-            </>
-          ) : (
-            <span className="flex-1 px-2 text-sm font-semibold text-stone-800">
-              From {formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}
-            </span>
-          )}
-          </div>
-          {viewTabs}
+      actions={
+        <>
+          {/* The checkbox rides with its label so the toggle still draws a
+              focus ring. The panel it opens is a band further down the card,
+              which is no longer a sibling — `:has()` on the card reaches it. */}
+          <input
+            id="filters-open"
+            type="checkbox"
+            className="peer sr-only"
+            defaultChecked={activeFilters > 0}
+            aria-label="Show filters"
+          />
           {filtersToggle}
+          {newVisit}
+        </>
+      }
+    >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-well-line bg-band px-3 py-2">
+          {dayNav}
+          {viewTabs}
         </div>
 
-        {/* The panel the toggle above opens. `peer-checked` is what connects the
-            two — the toggle is a control on the toolbar and the panel is a band
-            under it, which a <details> cannot span. */}
+        {/* The panel the header's toggle opens. */}
         <form
           method="GET"
-          className="hidden peer-checked:flex px-3 py-2 border-t border-stone-100 flex-wrap items-center gap-2"
+          className="hidden [.page-card:has(#filters-open:checked)_&]:flex px-3 py-2 border-t border-stone-100 flex-wrap items-center gap-2"
         >
-          <FilterAutoSubmit>
+          <FilterAutoSubmit scope="filters">
             <input type="hidden" name="view" value={filters.view} />
+            {/* The date is chosen in the header, not here — but it has to
+                survive a filter change, so it rides along hidden. */}
+            <input type="hidden" name="date" value={filters.date} />
             <input
               name="q"
               type="search"
@@ -483,7 +534,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
               placeholder="Pet, owner or phone…"
               className={`${selectClass} w-52`}
             />
-            <input name="date" type="date" aria-label="Filter by date" defaultValue={filters.date} className={selectClass} />
             <select name="group" aria-label="Group by" defaultValue={filters.group} className={selectClass}>
               {Object.entries(GROUPS).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -603,8 +653,8 @@ export default async function StaffAppointmentsPage(props: PageProps) {
             )}
           </PageSection>
         ) : (
-          <PageSection grow scroll padded={false}>
-            <table className="w-full text-sm text-center">
+          <PageSection title="Appointment list" hint={`${appointments.length} visits shown`} grow scroll padded={false}>
+            <table className="w-full min-w-[860px] text-sm text-left">
               <thead className="bg-well text-stone-500 text-[10px] tracking-tight sticky top-0 z-10 shadow-[0_1px_0_rgb(var(--well-line))]">
                 <tr>
                   <th scope="col" className="px-3 py-2 text-left">Stage</th>
@@ -614,7 +664,7 @@ export default async function StaffAppointmentsPage(props: PageProps) {
                   <th scope="col" className="px-3 py-2">Services</th>
                   <th scope="col" className="px-3 py-2">Groomer</th>
                   <th scope="col" className="px-3 py-2">Where</th>
-                  <th scope="col" className="px-3 py-2">Move</th>
+                  <th scope="col" className="px-3 py-2">Next step</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -633,7 +683,7 @@ export default async function StaffAppointmentsPage(props: PageProps) {
                       : formatServiceType(appt.serviceType);
                   return (
                     <tr key={appt.id} className="hover:bg-well transition-colors">
-                      <td className="px-3 py-1.5 whitespace-nowrap text-left">
+                      <td className="px-3 py-3 whitespace-nowrap text-left">
                         {(() => {
                           const arrivalAlert = lateness && lateness !== "on_time";
                           return (
@@ -655,7 +705,7 @@ export default async function StaffAppointmentsPage(props: PageProps) {
                           );
                         })()}
                       </td>
-                      <td className="px-3 py-1.5 whitespace-nowrap">
+                      <td className="px-3 py-3 whitespace-nowrap">
                         <Link
                           href={`/staff/appointments/${appt.id}`}
                           className={`font-medium hover:text-brand-text ${
@@ -670,7 +720,7 @@ export default async function StaffAppointmentsPage(props: PageProps) {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-1.5">
+                      <td className="px-3 py-3">
                         <Link
                           href={`/staff/pets/${appt.pet.id}`}
                           className="font-semibold text-stone-900 hover:text-brand-text"
@@ -683,7 +733,7 @@ export default async function StaffAppointmentsPage(props: PageProps) {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-1.5 text-stone-600 whitespace-nowrap">
+                      <td className="px-3 py-3 text-stone-600 whitespace-nowrap">
                         <Link
                           href={`/staff/customers/${appt.customer.id}`}
                           className="hover:text-brand-text"
@@ -691,18 +741,18 @@ export default async function StaffAppointmentsPage(props: PageProps) {
                           {appt.customer.firstName} {appt.customer.lastName}
                         </Link>
                       </td>
-                      <td className="px-3 py-1.5 text-stone-600 max-w-[16rem] truncate" title={services}>
+                      <td className="px-3 py-3 text-stone-600 max-w-[16rem] truncate" title={services}>
                         {services}
                       </td>
-                      <td className="px-3 py-1.5 text-stone-500 whitespace-nowrap">
+                      <td className="px-3 py-3 text-stone-500 whitespace-nowrap">
                         {appt.staff?.name ?? <span className="text-amber-700">Unassigned</span>}
                       </td>
-                      <td className="px-3 py-1.5 text-stone-500 whitespace-nowrap">
+                      <td className="px-3 py-3 text-stone-500 whitespace-nowrap">
                         {appt.kennel
                           ? `${appt.kennel.station.name} ${appt.kennel.label}`
                           : (appt.station?.name ?? <span className="text-stone-400">—</span>)}
                       </td>
-                      <td className="px-3 py-1.5 whitespace-nowrap">
+                      <td className="px-3 py-3 whitespace-nowrap">
                         {next === AppointmentStatus.CHECKED_IN ? (
                           <CheckInDialog
                             action={checkInWithKennel}

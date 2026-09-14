@@ -1,0 +1,74 @@
+/* Dedicated screen typography and spacing stay independent of office density. */
+.station-hud {
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  background-image: radial-gradient(ellipse at 0 0, rgb(var(--brand-500) / 0.12), transparent 55rem);
+  line-height: 1.55;
+}
+.station-hud .station-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem 2rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 1.25rem;
+  overflow: visible;
+}
+.station-heading { flex: 1 1 20rem; min-width: 0; }
+.station-hud .station-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.6;
+  text-transform: uppercase;
+  color: #c5bdaF;
+  overflow-wrap: anywhere;
+}
+.station-title {
+  margin-block: 0.25rem 0.5rem;
+  padding-block: 0.08em;
+  font-size: clamp(1.625rem, 2.8vw, 2.5rem);
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+.station-connection { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; font-size: 0.8125rem; }
+.station-live-dot { display: inline-block; width: 0.4375rem; height: 0.4375rem; margin-right: 0.5rem; border-radius: 50%; background: currentColor; vertical-align: middle; }
+.station-clock { color: #d6d3d1; font-variant-numeric: tabular-nums; }
+.station-hud .station-control {
+  color: #e7e5e4;
+  border-color: rgb(255 255 255 / 0.17);
+  background-color: rgb(255 255 255 / 0.035);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-align: center;
+  transition: background-color 150ms, border-color 150ms;
+}
+.station-hud .station-control:hover,
+.station-hud .station-control[aria-pressed="true"] { background-color: rgb(255 255 255 / 0.1); border-color: rgb(var(--brand-300) / 0.6); }
+.station-hud .station-panel { border: 1px solid rgb(255 255 255 / 0.1); padding: clamp(1.125rem, 2vw, 1.75rem); }
+.station-identity { padding-bottom: 1.25rem; border-bottom: 1px solid rgb(255 255 255 / 0.09); }
+.station-pet-name { font-size: clamp(2rem, 3.5vw, 3rem); line-height: 1.2; padding-block: 0.08em; letter-spacing: -0.025em; overflow-wrap: anywhere; }
+.station-section-title { line-height: 1.3; padding-block: 0.1em; overflow-wrap: anywhere; }
+.station-label { color: #bdb6ac; font-size: 0.75rem; line-height: 1.5; }
+.station-value { color: #f5f5f4; font-size: 0.9375rem; line-height: 1.6; overflow-wrap: anywhere; }
+.station-facts { padding-bottom: 1.25rem; border-bottom: 1px solid rgb(255 255 255 / 0.09); }
+.station-hud .station-inset { background: rgb(255 255 255 / 0.045); border: 1px solid rgb(255 255 255 / 0.08); }
+.station-hud .station-progress { border: 1px solid rgb(var(--brand-300) / 0.22); border-left: 3px solid rgb(var(--brand-400)); padding: 1.25rem 1.5rem; }
+.station-advance { line-height: 1.4; overflow-wrap: anywhere; }
+.station-warning { border: 1px solid rgb(255 255 255 / 0.16); line-height: 1.5; }
+.station-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; min-height: 60vh; padding: 2.5rem 1.25rem; text-align: center; border: 1px dashed rgb(255 255 255 / 0.14); border-radius: 1.25rem; background: rgb(255 255 255 / 0.015); }
+.station-empty h2 { line-height: 1.3; padding-block: 0.1em; }
+.station-empty-mark { width: 4.5rem; height: 4.5rem; padding: 1rem; margin-bottom: 0.5rem; border-radius: 1.25rem; color: rgb(var(--brand-300)); background: rgb(var(--brand-500) / 0.1); border: 1px solid rgb(var(--brand-300) / 0.18); }
+.station-empty-description { max-width: 30rem; color: #bdb6ac; line-height: 1.7; }
+.station-empty > a { margin-top: 0.5rem; }
+@media (min-width: 640px) { .station-hud { padding: max(1.5rem, env(safe-area-inset-top)) max(1.5rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1.5rem, env(safe-area-inset-left)); } }
+@media (max-width: 639px) {
+  .station-hud .station-header { padding: 1.125rem; gap: 1rem; }
+  .station-toolbar { width: 100%; }
+  .station-toolbar > a { flex: 1; }
+  .station-identity { flex-wrap: wrap; }
+  .station-empty { min-height: 55vh; }
+}
+@media (prefers-reduced-motion: reduce) { .station-hud .station-control { transition: none; } }

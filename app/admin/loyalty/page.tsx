@@ -14,7 +14,7 @@ import SaveToast from "@/components/SaveToast";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Pricing Tiers" };
+export const metadata = { title: "Loyalty Tiers" };
 
 /**
  * The rates the shop honours below its published prices.
@@ -36,7 +36,7 @@ interface PageProps {
   searchParams: Promise<{ saved?: string; deleted?: string; error?: string }>;
 }
 
-export default async function PricingTiersPage(props: PageProps) {
+export default async function LoyaltyTiersPage(props: PageProps) {
   const searchParams = await props.searchParams;
   const [tiers, counts] = await Promise.all([listPricingTiers(), tierCustomerCounts()]);
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
@@ -44,7 +44,7 @@ export default async function PricingTiersPage(props: PageProps) {
 
   return (
     <PageShell
-      title="Pricing Tiers"
+      title="Loyalty Tiers"
       subtitle={
         <>
           Rates below the published price, for legacy customers and anyone else the shop has agreed

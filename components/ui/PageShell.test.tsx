@@ -1,11 +1,32 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { axe } from "jest-axe";
 import { PageSection, PageShell, Panel, Well } from "./PageShell";
 
+beforeEach(() => {
+  localStorage.clear();
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+});
+
 describe("PageShell", () => {
+  it("places column controls after page actions and toggles table columns", () => {
+    render(<PageShell title="Records" actions={<button type="button">Add record</button>}>
+      <table><thead><tr><th>Name</th><th>Email</th></tr></thead>
+        <tbody><tr><td>Sam</td><td>sam@example.com</td></tr></tbody>
+      </table>
+    </PageShell>);
+    const trigger = screen.getByRole("button", { name: "Choose columns" });
+    expect(trigger.closest("header")).toContainElement(screen.getByRole("button", { name: "Add record" }));
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Email" }));
+    expect(screen.getByText("sam@example.com")).toHaveAttribute("data-column-hidden");
+    expect(screen.getByText("Sam")).not.toHaveAttribute("data-column-hidden");
+    fireEvent.click(screen.getByRole("button", { name: "Reset columns" }));
+    expect(screen.getByText("sam@example.com")).not.toHaveAttribute("data-column-hidden");
+  });
   it("renders a polished single-card surface with a subtle ring and depth", () => {
     render(
       <PageShell title="Schedule" subtitle="This week">
@@ -14,7 +35,7 @@ describe("PageShell", () => {
     );
 
     const card = screen.getByText("Body copy").closest("section");
-    expect(card).toHaveClass("bg-white", "shadow-card", "ring-1", "ring-well-line/80");
+    expect(card).toHaveClass("bg-surface", "shadow-card");
   });
 
   // A well is a recess, so it is drawn with a hairline rather than a shadow —
@@ -28,7 +49,7 @@ describe("PageShell", () => {
     );
 
     const well = screen.getByText("Inset content").closest("div");
-    expect(well).toHaveClass("bg-well", "border-well-line", "ring-1", "ring-well-line/60");
+    expect(well).toHaveClass("bg-well", "border-well-line");
     expect(well?.className).not.toMatch(/shadow|hover:/);
   });
 
@@ -40,8 +61,21 @@ describe("PageShell", () => {
     );
 
     const panel = screen.getByText("Panel body").closest("div");
-    expect(panel).toHaveClass("bg-well", "border-well-line", "ring-1", "ring-well-line/60");
+    expect(panel).toHaveClass("bg-well", "border-well-line");
     expect(panel?.className).not.toMatch(/shadow|hover:|translate/);
+  });
+
+  // The action belongs to the surface it acts on. A button outside the card
+  // reads as chrome, and it was outside on one screen and inside on others.
+  it("renders the page action inside the card", () => {
+    render(
+      <PageShell title="Appointments" actions={<button type="button">+ New</button>}>
+        <p>Body copy</p>
+      </PageShell>
+    );
+
+    const card = screen.getByText("Body copy").closest("section");
+    expect(card).toContainElement(screen.getByRole("button", { name: "+ New" }));
   });
 
   it("renders the back link with keyboard-visible focus styling", () => {

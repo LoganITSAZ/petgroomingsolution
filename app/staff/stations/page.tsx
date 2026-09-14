@@ -11,7 +11,7 @@ import {
 import { stationCapacity } from "@/lib/stations";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
-import { currentStaffIsAdmin } from "@/lib/staff-roles";
+import { currentStaffCanManage } from "@/lib/staff-roles";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -26,6 +26,39 @@ const OCCUPYING = KENNELABLE_STATUSES.filter((status) => status !== "READY_PICKU
 
 
 
+/**
+ * Corner link to the station's own touchscreen screen. It opens in a new tab
+ * because the kiosk is what a Pi shows all day — the person clicking it is
+ * usually setting that screen up, not leaving this page. It sits outside the
+ * tile's <Link> rather than inside it: an anchor inside an anchor is invalid.
+ */
+function DisplayLink({ station }: { station: { id: string; name: string } }) {
+  return (
+    <a
+      href={`/station/${station.id}`}
+      target="_blank"
+      rel="noopener"
+      title="Open touchscreen display"
+      aria-label={`Open the ${station.name} touchscreen display in a new tab`}
+      className="absolute top-2 right-2 rounded-md p-1 text-stone-400 hover:text-stone-800 hover:bg-well transition-colors"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="w-3.5 h-3.5"
+        aria-hidden="true"
+      >
+        <rect x="2" y="3" width="20" height="14" rx="2" />
+        <path d="M8 21h8M12 17v4" />
+      </svg>
+    </a>
+  );
+}
+
 /** Minutes since a moment, or null when it never started. */
 function minutesSince(from: Date | null): number | null {
   if (!from) return null;
@@ -36,7 +69,7 @@ export default async function StaffStationsPage(props: {
   searchParams: Promise<{ error?: string }>;
 }) {
   const searchParams = await props.searchParams;
-  const isAdmin = await currentStaffIsAdmin();
+  const canManageStations = await currentStaffCanManage();
 
   const { start, end } = shopDayRange();
   const [stations, occupying, demand] = await Promise.all([
@@ -122,12 +155,12 @@ export default async function StaffStationsPage(props: {
       title="Stations"
       subtitle={summary.length > 0 ? summary.join(" · ") : "Nothing configured yet."}
       actions={
-        isAdmin ? (
+        canManageStations ? (
           <Link
             href="/admin/stations"
-            className="text-sm text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
           >
-            Manage Stations →
+            Manage Stations
           </Link>
         ) : null
       }
@@ -154,33 +187,19 @@ export default async function StaffStationsPage(props: {
           >
               {list.map((station) => {
                 const occupants = occupantsByStation.get(station.id) ?? [];
-                const capacity = stationCapacity(station);
-                const full = occupants.length >= capacity;
 
                 return (
+                  <div key={station.id} className="relative">
                   <Link
-                    key={station.id}
                     href={`/staff/stations/${station.id}`}
-                    className={`rounded-xl p-3 border transition-colors ${
+                    className={`glass-tile block rounded-lg p-3 border transition-colors ${
                       occupants.length > 0
                         ? "bg-white border-stone-200 hover:border-amber-300"
-                        : "bg-stone-50 border-dashed border-stone-300 hover:border-stone-400"
+                        : "bg-well border-well-line hover:border-stone-300"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="mb-1.5 pr-7">
                       <span className="font-semibold text-stone-800 truncate">{station.name}</span>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
-                          full
-                            ? "bg-red-100 text-red-700"
-                            : occupants.length > 0
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-stone-200 text-stone-500"
-                        }`}
-                      >
-                        {occupants.length}/{capacity}
-                        {full ? " full" : ""}
-                      </span>
                     </div>
 
                     {station.allowedRoles.length > 0 && (
@@ -192,12 +211,17 @@ export default async function StaffStationsPage(props: {
                     {occupants.length === 0 ? (
                       <p className="text-sm text-stone-400">No pet here right now.</p>
                     ) : (
-                      <ul className="divide-y divide-stone-100 text-sm">
+                      <ul className="space-y-1.5 text-sm">
                         {occupants.map((appt) => {
                           const mins = minutesSince(appt.checkedInAt);
                           const over = appt.durationMins != null && mins != null && mins > appt.durationMins;
                           return (
-                            <li key={appt.id} className="py-1">
+                            /* The chip is the "occupied" signal — the tile no longer
+                               carries a count, because a work station holds one pet. */
+                            <li
+                              key={appt.id}
+                              className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5"
+                            >
                               <p className="font-bold text-stone-900 truncate">
                                 {appt.pet.name}
                                 {appt.pet.hasBiteHistory && (
@@ -227,6 +251,8 @@ export default async function StaffStationsPage(props: {
                       </ul>
                     )}
                   </Link>
+                  <DisplayLink station={station} />
+                  </div>
                 );
               })}
           </PageSection>
@@ -248,12 +274,12 @@ export default async function StaffStationsPage(props: {
               );
               const outOfService = station.kennels.filter((k) => !k.isActive).length;
               return (
+                <div key={station.id} className="relative">
                 <Link
-                  key={station.id}
                   href={`/staff/stations/${station.id}`}
-                  className="bg-white border border-stone-200 rounded-lg p-4 hover:border-emerald-300 transition-colors"
+                  className="glass-tile block bg-white border border-stone-200 rounded-lg p-4 hover:border-emerald-300 transition-colors"
                 >
-                  <div className="flex items-baseline justify-between gap-2">
+                  <div className="flex items-baseline justify-between gap-2 pr-7">
                     <span className="font-bold text-stone-900 text-base truncate">
                       {station.name}
                     </span>
@@ -319,6 +345,8 @@ export default async function StaffStationsPage(props: {
                     </ul>
                   )}
                 </Link>
+                <DisplayLink station={station} />
+                </div>
               );
             })}
         </PageSection>
@@ -326,11 +354,9 @@ export default async function StaffStationsPage(props: {
 
       {active.length === 0 && (
         <PageSection grow className="text-center text-stone-400 text-sm">
-          Nothing active yet. An admin adds one on{" "}
-          <Link href="/admin/stations/new" className="text-amber-700 hover:underline">
-            Manage Stations
-          </Link>
-          .
+          {canManageStations
+            ? "Nothing active yet. Use Manage Stations to add a station."
+            : "Nothing active yet."}
         </PageSection>
       )}
 

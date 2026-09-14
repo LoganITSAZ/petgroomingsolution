@@ -1,10 +1,9 @@
 /**
- * Front-of-house theming.
+ * Shared shop theming.
  *
- * The public site paints from CSS variables, so the shop can restyle it at
- * runtime — a fixed palette, or one that follows the calendar into the
- * seasons and holidays. Staff and admin screens deliberately stay neutral:
- * changing the shop's look must never make the working screens harder to read.
+ * The website and back office share the configured palette and seasonal
+ * calendar. Contrast tokens adapt to each screen’s light or dark preference;
+ * operational status colors stay independent of the brand.
  */
 
 export interface ThemeTokens {
@@ -34,6 +33,61 @@ export interface ThemePreset {
   tokens: ThemeTokens;
 }
 
+export const SHOP_COLOR_FIELDS = [
+  { key: "brand100", label: "Soft accent", hint: "Pale background glow and navigation highlights.", group: "Accents and buttons" },
+  { key: "brand300", label: "Secondary accent", hint: "Secondary button borders and background highlights.", group: "Accents and buttons" },
+  { key: "brand500", label: "Main accent", hint: "Decorative background color, focus rings, and hover borders.", group: "Accents and buttons" },
+  { key: "brand600", label: "Primary buttons", hint: "Book Now, booking buttons, and the mobile menu button.", group: "Accents and buttons" },
+  { key: "brand700", label: "Banner, links, and button hover", hint: "Tagline banner, shop name, links, and primary buttons on hover.", group: "Accents and buttons" },
+  { key: "brand900", label: "Deep accent", hint: "Card and button shadows and the subtle background pattern.", group: "Accents and buttons" },
+  { key: "pageBg", label: "Page background", hint: "The base behind the site's decorative background.", group: "Backgrounds and text" },
+  { key: "surface", label: "Cards and navigation", hint: "Card, navigation bar, and secondary button backgrounds; glass panels use a translucent version.", group: "Backgrounds and text" },
+  { key: "ink", label: "Main text", hint: "Page headings, body text, and secondary button labels.", group: "Backgrounds and text" },
+  { key: "muted", label: "Supporting text", hint: "Descriptions, hours, and other secondary information.", group: "Backgrounds and text" },
+  { key: "line", label: "Borders and dividers", hint: "Theme borders around content and between sections.", group: "Backgrounds and text" },
+  { key: "footerBg", label: "Footer background", hint: "The bottom section containing shop details, hours, and contact information.", group: "Backgrounds and text" },
+  { key: "footerInk", label: "Footer text", hint: "Shop details, hours, and contact information in the footer.", group: "Backgrounds and text" },
+] as const satisfies readonly { key: keyof ThemeTokens; label: string; hint: string; group: string }[];
+
+export type ShopColors = Partial<Record<keyof ThemeTokens, string>>;
+
+/** Only known color roles and valid hex values can become CSS values. */
+export function parseShopColors(value: unknown): ShopColors {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const result: ShopColors = {};
+  for (const { key } of SHOP_COLOR_FIELDS) {
+    const color = (value as Record<string, unknown>)[key];
+    if (typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color.trim())) {
+      result[key] = color.trim().toLowerCase();
+    }
+  }
+  return result;
+}
+
+export function shopColorsFromForm(form: FormData): ShopColors | null {
+  const colors: ShopColors = {};
+  for (const { key } of SHOP_COLOR_FIELDS) {
+    const value = form.get(`shopColor.${key}`);
+    if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value.trim())) return null;
+    colors[key] = value.trim().toLowerCase();
+  }
+  return colors;
+}
+
+export function colorsFromTokens(tokens: ThemeTokens): Record<keyof ThemeTokens, string> {
+  return Object.fromEntries(SHOP_COLOR_FIELDS.map(({ key }) => [key,
+    `#${tokens[key].split(" ").map(channel => Number(channel).toString(16).padStart(2, "0")).join("")}`,
+  ])) as Record<keyof ThemeTokens, string>;
+}
+
+export function applyShopColors(base: ThemeTokens, value: unknown): ThemeTokens {
+  const tokens = { ...base };
+  for (const [key, color] of Object.entries(parseShopColors(value))) {
+    tokens[key as keyof ThemeTokens] = hexToRgbTriplet(color)!;
+  }
+  return tokens;
+}
+
 const AMBER: ThemeTokens = {
   brand100: "253 240 213",
   brand300: "245 198 116",
@@ -52,6 +106,25 @@ const AMBER: ThemeTokens = {
 
 export const THEME_PRESETS: ThemePreset[] = [
   { id: "default", label: "Amber", group: "Default", tokens: AMBER },
+  // Year-round palettes share the neutral surfaces and accessible text tokens.
+  ...[
+    { id: "sage", label: "Sage", color: "#64876b" },
+    { id: "forest", label: "Forest", color: "#28734f" },
+    { id: "teal", label: "Teal", color: "#0d9488" },
+    { id: "ocean", label: "Ocean", color: "#247bb5" },
+    { id: "indigo", label: "Indigo", color: "#6154b8" },
+    { id: "lavender", label: "Lavender", color: "#9770bb" },
+    { id: "rose", label: "Rose", color: "#c65c7a" },
+    { id: "terracotta", label: "Terracotta", color: "#bb6546" },
+    { id: "espresso", label: "Espresso", color: "#795548" },
+    { id: "slate", label: "Slate", color: "#64748b" },
+  ].map(({ id, label, color }): ThemePreset => ({
+    id,
+    label,
+    group: "Default",
+    tokens: rampFromColor(color, AMBER),
+  })),
+
 
   {
     id: "spring",
@@ -294,7 +367,9 @@ export interface ThemeSettings {
   themePreset: string;
   themeAutoSeasonal: boolean;
   themeBrandColor: string | null;
-  themeBannerText: string | null;
+  themeShopColors?: unknown;
+  themeUseShopColors?: boolean;
+  shopTagline: string | null;
 }
 
 export interface ResolvedTheme {
@@ -305,23 +380,24 @@ export interface ResolvedTheme {
   automatic: boolean;
 }
 
-/** The theme the public site should paint right now. */
+/** The theme the website and dashboard should paint right now. */
 export function resolveTheme(
   settings: ThemeSettings,
   now: { month: number; day: number }
 ): ResolvedTheme {
   const automatic = settings.themeAutoSeasonal;
   const preset = getPreset(
-    automatic ? seasonalPresetId(now.month, now.day) : settings.themePreset
+    automatic ? seasonalPresetId(now.month, now.day) : settings.themeUseShopColors === true ? "default" : settings.themePreset
   );
-  const tokens = settings.themeBrandColor
-    ? rampFromColor(settings.themeBrandColor, preset.tokens)
-    : preset.tokens;
+  const useShopColors = !automatic && settings.themeUseShopColors !== false;
+  const base = useShopColors && settings.themeBrandColor
+    ? rampFromColor(settings.themeBrandColor, preset.tokens) : preset.tokens;
+  const tokens = useShopColors ? applyShopColors(base, settings.themeShopColors) : base;
 
   return {
     preset,
     tokens,
-    bannerText: settings.themeBannerText?.trim() || null,
+    bannerText: settings.shopTagline?.trim() || null,
     automatic,
   };
 }

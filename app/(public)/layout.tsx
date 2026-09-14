@@ -127,7 +127,7 @@ export default async function PublicLayout({ children }: { children: React.React
             className="md:hidden"
             label="Open main navigation"
             summaryClassName="bg-brand-600 px-3 py-2 text-brand-on-600"
-            menuClassName="left-auto right-0 w-52 border border-line bg-surface text-ink shadow-xl"
+            menuClassName="glass-panel left-auto right-0 w-52 border border-line text-ink shadow-xl"
           >
             <Link href="/about" className="block rounded-lg px-3 py-2.5 font-medium hover:bg-brand-100/40">About</Link>
             <Link href="/services" className="block rounded-lg px-3 py-2.5 font-medium hover:bg-brand-100/40">Services</Link>

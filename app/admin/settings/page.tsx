@@ -1,3 +1,4 @@
+import { resolveTheme, shopColorsFromForm } from "@/lib/themes";
 import { getConfig } from "@/lib/config";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -7,6 +8,8 @@ import Link from "next/link";
 import AddressMap from "@/components/AddressMap";
 import ThresholdLiveWarning from "@/components/admin/ThresholdLiveWarning";
 import { PageShell, PageSection } from "@/components/ui";
+import BrandColorField from "@/components/admin/BrandColorField";
+import WaiverSettings from "./WaiverSettings";
 import SaveToast from "@/components/SaveToast";
 
 // Screen readers announce the title first; without one every page in the
@@ -28,8 +31,13 @@ async function saveSettings(formData: FormData) {
 
   await requireManager();
 
+  const themeShopColors = shopColorsFromForm(formData);
+  if (!themeShopColors) {
+    redirect("/admin/settings?error=bad_color#shop-branding");
+  }
+
   const shopName = formData.get("shopName") as string;
-  const shopTagline = formData.get("shopTagline") as string;
+  const shopTagline = String(formData.get("shopTagline") ?? "").trim() || null;
   const shopPhone = formData.get("shopPhone") as string;
   const shopEmail = formData.get("shopEmail") as string;
   const shopAddress = formData.get("shopAddress") as string;
@@ -78,6 +86,7 @@ async function saveSettings(formData: FormData) {
   await prisma.systemConfig.update({
     where: { id: "global" },
     data: {
+      themeShopColors,
       shopName,
       shopTagline,
       shopPhone,
@@ -106,6 +115,8 @@ async function saveSettings(formData: FormData) {
     },
   });
 
+  revalidatePath("/", "layout");
+  revalidatePath("/admin/appearance");
   revalidatePath("/admin/settings");
   revalidatePath("/portal");
   revalidatePath("/staff/customers");
@@ -117,7 +128,7 @@ const FIELD =
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <PageSection title={title} bodyClassName="space-y-5">
+    <PageSection title={title} bodyClassName="space-y-3">
       {hint && <p className="text-sm text-stone-500">{hint}</p>}
       {children}
     </PageSection>
@@ -165,7 +176,7 @@ function FeatureToggle({
        "checkbox, unchecked" with nothing to say which feature it was. The row
        is the label now, and the description hangs off it by aria-describedby
        so it is read second rather than folded into the name. */
-    <div className="py-4 border-b border-stone-100 last:border-0">
+    <div className="py-2 border-b border-stone-100 last:border-0">
       <label className="flex items-start gap-3 cursor-pointer">
         <span className="flex-1 text-sm font-medium text-stone-800">{label}</span>
         <span className="relative inline-flex flex-none items-center mt-0.5">
@@ -187,7 +198,7 @@ function FeatureToggle({
 }
 
 interface PageProps {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; waiverSaved?: string; waiverError?: string; version?: string; bumped?: string; restored?: string }>;
 }
 
 export default async function SettingsPage(props: PageProps) {
@@ -197,6 +208,7 @@ export default async function SettingsPage(props: PageProps) {
   return (
     <PageShell
       title="Shop Settings"
+      className="shop-settings"
       subtitle="Your shop's details, the features it runs, and the numbers behind them."
     >
 
@@ -206,7 +218,8 @@ export default async function SettingsPage(props: PageProps) {
         </SaveToast>
       )}
 
-      <form action={saveSettings}>
+      {searchParams.error === "bad_color" && <SaveToast tone="error">Enter every color as #rrggbb.</SaveToast>}
+      <form action={saveSettings} className="grid items-start lg:grid-cols-2">
         <Section title="Shop Information">
           <Field name="shopName" label="Shop Name" hint="Used across the public site, emails and the staff screens.">
             <input type="text" id="shopName" name="shopName" defaultValue={config?.shopName ?? ""} placeholder="Your Grooming Shop" className={FIELD} />
@@ -215,7 +228,7 @@ export default async function SettingsPage(props: PageProps) {
           <Field
             name="shopTagline"
             label="Tagline"
-            hint="The line under the shop name on the public home page. Leave it empty to show no tagline at all."
+            hint="Shown under the shop name on the home page and in the banner across public pages. Leave blank to hide both."
           >
             <input type="text" id="shopTagline" name="shopTagline" defaultValue={config?.shopTagline ?? ""} placeholder="The best and bubbliest groomer in town" className={FIELD} />
           </Field>
@@ -255,6 +268,8 @@ export default async function SettingsPage(props: PageProps) {
           </Field>
         </Section>
 
+
+
         <Section title="Features" hint="What the shop offers. Each one can be switched off without losing the data behind it.">
           <div className="-mt-2">
             <FeatureToggle
@@ -289,11 +304,11 @@ export default async function SettingsPage(props: PageProps) {
             />
           </div>
           <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
-            The liability waiver is switched on and off on the{" "}
-            <Link href="/admin/waiver" className="text-amber-700 hover:text-amber-900 underline">
+            The liability waiver is switched on and off in the{" "}
+            <Link href="#liability-waiver" className="text-amber-700 hover:text-amber-900 underline">
               Liability Waiver
             </Link>{" "}
-            page, alongside its text and version. The sender address and Twilio credentials live on{" "}
+            section below, alongside its text and version. The sender address and Twilio credentials live on{" "}
             <Link href="/admin/notifications" className="text-amber-700 hover:text-amber-900 underline">
               Notifications
             </Link>
@@ -392,7 +407,7 @@ export default async function SettingsPage(props: PageProps) {
             <input type="number" id="lateArrivalLateMins" name="lateArrivalLateMins" defaultValue={config?.lateArrivalLateMins ?? 15} min={1} max={480} className={FIELD} />
           </Field>
 
-          <Field name="lateArrivalMissedMins" label="Missed after (mins)" hint="Treated as a no-show on the floor screens.">
+          <Field name="lateArrivalMissedMins" label="Missed after (mins)" hint="Treated as a no-show on the storefront screens.">
             <input type="number" id="lateArrivalMissedMins" name="lateArrivalMissedMins" defaultValue={config?.lateArrivalMissedMins ?? 30} min={1} max={480} className={FIELD} />
           </Field>
 
@@ -428,7 +443,16 @@ export default async function SettingsPage(props: PageProps) {
           />
         </Section>
 
-        <PageSection tone="muted" bodyClassName="flex justify-end">
+        <div id="shop-branding" className="scroll-mt-4 lg:col-span-2">
+          <Section title="Shop Branding">
+            <BrandColorField
+              initialTokens={resolveTheme({ ...config, themeAutoSeasonal: false, themeUseShopColors: true }, { month: 1, day: 1 }).tokens}
+              shopName={config.shopName}
+            />
+          </Section>
+        </div>
+
+        <PageSection tone="muted" className="lg:col-span-2" bodyClassName="flex justify-end">
           <button
             type="submit"
             className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-6 py-2 rounded-lg text-sm font-semibold transition-colors"
@@ -437,6 +461,7 @@ export default async function SettingsPage(props: PageProps) {
           </button>
         </PageSection>
       </form>
+      <WaiverSettings searchParams={props.searchParams} />
     </PageShell>
   );
 }

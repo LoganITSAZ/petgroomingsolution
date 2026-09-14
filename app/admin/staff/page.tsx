@@ -10,7 +10,7 @@ import { PageShell, PageSection } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Manage Staff" };
+export const metadata = { title: "Staff" };
 
 async function toggleStaffActive(formData: FormData) {
   "use server";
@@ -67,7 +67,7 @@ export default async function StaffPage(props: PageProps) {
 
   return (
     <PageShell
-      title="Manage Staff"
+      title="Staff"
       subtitle={
         <>
           {activeCount} of {staffList.length} staff members active · default commission{" "}

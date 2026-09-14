@@ -65,7 +65,7 @@ export default async function PortalPetsPage() {
             {pets.map((pet) => (
               <div
                 key={pet.id}
-                className="rounded-lg border border-well-line bg-well ring-1 ring-well-line/60 p-3 space-y-3"
+                className="rounded-lg border border-well-line bg-well p-3 space-y-3"
               >
                 {/* Pet name + bite badge */}
                 <div className="flex items-start justify-between gap-2">

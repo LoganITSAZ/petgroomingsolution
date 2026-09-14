@@ -95,13 +95,13 @@ export default function StaffForm({
               id: role,
               label: ROLE_LABEL[role],
             }))}
-            addLabel="+ Add a role"
+            optionsLabel="Roles"
             emptyLabel="No roles yet"
             noun="role"
           />
           <span className="block text-xs text-stone-400 mt-1">
             Someone can hold several — a groomer who also baths, an admin who still works the
-            floor. Admin is what unlocks the admin panel.
+            storefront. Admin is what unlocks the admin panel.
           </span>
         </div>
 

@@ -14,7 +14,6 @@ import SaveToast from "@/components/SaveToast";
 export const metadata = { title: "Edit Station" };
 
 const ERRORS: Record<string, string> = {
-  name_required: "A station needs a name.",
   invalid_role: "Pick one of the listed roles.",
   invalid_grid: "Kennel units need at least one row and one kennel per row.",
   kennels_occupied:
@@ -105,7 +104,6 @@ export default async function EditStationPage(props: PageProps) {
         stationId={station.id}
         occupiedLabels={occupied.map((kennel) => kennel.label)}
         initial={{
-          name: station.name,
           allowedRoles: station.allowedRoles,
           role: station.role,
           isActive: station.isActive,

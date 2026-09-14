@@ -10,10 +10,11 @@ import { randomBytes } from "crypto";
 import { defaultAssignment } from "@/lib/stations";
 import { capacityConflicts, kennelAvailableFor } from "@/lib/kennels";
 import { formatShopTime24, shopDayKey, shopDayRange } from "@/lib/utils";
+import { shopDateTimeLocal } from "@/lib/shop-time";
 import {
   getServiceOptions,
   resolveSelectedServices,
-  sendBookingEmail,
+  sendBookingNotifications,
   setAppointmentServices,
 } from "@/lib/appointment-services";
 import { bookingRateSnapshot } from "@/lib/pricing-tiers";
@@ -72,8 +73,10 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
 
     // Booking a pet that is standing at the counter should not require typing
     // a time: an empty field is stamped with the moment the record is saved.
-    const scheduledFor = scheduledAt ? new Date(scheduledAt) : new Date();
-    if (Number.isNaN(scheduledFor.getTime())) {
+    // The field carries shop wall clock. Reading it with `new Date` would read
+    // it in the server's zone, which is UTC in production.
+    const scheduledFor = scheduledAt ? shopDateTimeLocal(scheduledAt) : new Date();
+    if (!scheduledFor) {
       throw new Error("That date and time could not be read");
     }
 
@@ -205,7 +208,7 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
     });
 
     await setAppointmentServices(appointment.id, services);
-    await sendBookingEmail(appointment.id);
+    await sendBookingNotifications(appointment.id);
 
     await prisma.appointmentStatusHistory.create({
       data: {

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import {
+  formatShopDate,
   formatStatus,
   formatServiceType,
   formatSpecies,
@@ -13,6 +14,8 @@ import InsightList from "@/components/InsightList";
 import { petInsights } from "@/lib/insights";
 import { setPetPhoto } from "@/app/staff/customers/actions";
 import { photoUrl } from "@/lib/photos";
+import ModalButton from "@/components/ModalButton";
+import { PetForm, healthFlagOptions } from "@/app/staff/customers/PetForm";
 import { notFound } from "next/navigation";
 
 // Screen readers announce the title first; without one every page in the
@@ -42,7 +45,7 @@ const visitEventColor: Record<string, string> = {
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ photo?: string; error?: string }>;
+  searchParams: Promise<{ photo?: string; updated?: string; error?: string }>;
 }
 
 export default async function PetDetailPage(props: PageProps) {
@@ -79,6 +82,7 @@ export default async function PetDetailPage(props: PageProps) {
   });
 
   const insights = await petInsights(params.id);
+  const flagOptions = await healthFlagOptions();
 
   const age = pet.dateOfBirth
     ? Math.floor(
@@ -92,9 +96,12 @@ export default async function PetDetailPage(props: PageProps) {
       back={{ href: "/staff/customers", label: "Back to Customers" }}
       title={pet.name}
       subtitle={`${formatSpecies(pet.species)}${pet.breed ? ` · ${pet.breed}` : ""}`}
-      className="max-w-5xl mx-auto w-full"
+      className="max-w-5xl w-full"
     >
 
+      {searchParams.updated === "1" && <p role="status" className="px-3 py-2 text-green-800 text-sm">Profile updated.</p>}
+      {searchParams.error === "pet_name" && <p role="alert" className="px-3 py-2 text-red-800 text-sm">A pet needs a name.</p>}
+      {searchParams.error === "bad_weight" && <p role="alert" className="px-3 py-2 text-red-800 text-sm">Enter a valid weight greater than zero.</p>}
       {searchParams.photo === "1" && (
         <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Photo updated.
@@ -117,7 +124,22 @@ export default async function PetDetailPage(props: PageProps) {
       )}
 
       {/* Pet header */}
-      <PageSection>
+      <PageSection
+        title="Profile Details"
+        actions={
+          <>
+          <ModalButton label="Edit Profile" title={`Edit ${pet.name}`} variant="secondary">
+            <PetForm customerId={pet.customer.id} pet={pet} flagOptions={flagOptions} returnToPet />
+          </ModalButton>
+            <Link
+              href={`/staff/appointments/new?petId=${pet.id}&customerId=${pet.customer.id}`}
+              className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+            >
+              + New Appointment
+            </Link>
+          </>
+        }
+      >
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
             <PhotoUpload
@@ -174,12 +196,7 @@ export default async function PetDetailPage(props: PageProps) {
             </div>
             </div>
           </div>
-          <Link
-            href={`/staff/appointments/new?petId=${pet.id}&customerId=${pet.customer.id}`}
-            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
-          >
-            + New Appointment
-          </Link>
+
         </div>
       </PageSection>
 
@@ -189,11 +206,9 @@ export default async function PetDetailPage(props: PageProps) {
         </PageSection>
       )}
 
-      {/* Two-column info grid */}
-      <PageSection bodyClassName="grid grid-cols-1 md:grid-cols-2 gap-3">
+
         {/* Owner card */}
-        <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="text-sm font-bold text-stone-500 tracking-tight mb-3">Owner</h2>
+        <PageSection title="Owner">
           <p className="font-bold text-stone-900">
             {pet.customer.firstName} {pet.customer.lastName}
           </p>
@@ -215,13 +230,27 @@ export default async function PetDetailPage(props: PageProps) {
           >
             View customer profile →
           </Link>
-        </div>
+        </PageSection>
 
         {/* Health flags */}
-        <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="text-sm font-bold text-stone-500 tracking-tight mb-3">
-            Health Flags
-          </h2>
+        <PageSection title="Health Flags">
+          {/* Vaccinations sit with the flags because they are the same question
+              a groomer asks before the pet is on the table. Unconfirmed is
+              stated rather than left blank: silence reads as fine. */}
+          <p className="mb-3 text-sm">
+            {pet.vaccinationsConfirmedAt ? (
+              <span className="text-stone-700">
+                <span className="font-medium text-green-700">✓ Vaccinations confirmed</span>{" "}
+                <span className="text-stone-500">
+                  on {formatShopDate(pet.vaccinationsConfirmedAt)}
+                </span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold px-2.5 py-1">
+                ⚠ Vaccinations not confirmed
+              </span>
+            )}
+          </p>
           {pet.healthFlags.length === 0 ? (
             <p className="text-sm text-stone-400">None on file.</p>
           ) : (
@@ -236,32 +265,25 @@ export default async function PetDetailPage(props: PageProps) {
               ))}
             </div>
           )}
-        </div>
+        </PageSection>
 
         {/* Grooming notes */}
-        <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="text-sm font-bold text-stone-500 tracking-tight mb-3">
-            Grooming Notes
-          </h2>
+        <PageSection title="Grooming Notes">
           {pet.groomingNotes ? (
             <p className="text-sm text-stone-700 whitespace-pre-wrap">{pet.groomingNotes}</p>
           ) : (
             <p className="text-sm text-stone-400">No grooming notes.</p>
           )}
-        </div>
+        </PageSection>
 
         {/* Temperament notes */}
-        <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="text-sm font-bold text-stone-500 tracking-tight mb-3">
-            Temperament Notes
-          </h2>
+        <PageSection title="Temperament Notes">
           {pet.temperamentNotes ? (
             <p className="text-sm text-stone-700 whitespace-pre-wrap">{pet.temperamentNotes}</p>
           ) : (
             <p className="text-sm text-stone-400">No temperament notes.</p>
           )}
-        </div>
-            </PageSection>
+        </PageSection>
 
       {/* Visit event log */}
       <PageSection title="Visit Events">

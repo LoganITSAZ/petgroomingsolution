@@ -7,9 +7,9 @@ import FilterAutoSubmit from "./FilterAutoSubmit";
 /* `q` is a prop because the reload re-renders the form server-side with the
    search term already in the box — which is the state the caret has to land
    at the end of. */
-function Filters({ q = "" }: { q?: string }) {
+function Filters({ q = "", scope }: { q?: string; scope?: string }) {
   return (
-    <FilterAutoSubmit debounceMs={300}>
+    <FilterAutoSubmit debounceMs={300} scope={scope}>
       <form>
         <input type="search" name="q" defaultValue={q} aria-label="Search" />
         <input type="date" name="on" aria-label="Date" />
@@ -48,6 +48,28 @@ describe("FilterAutoSubmit", () => {
     expect(HTMLFormElement.prototype.requestSubmit).toHaveBeenCalledTimes(1);
   });
 
+  it("submits immediately when a date is picked", () => {
+    render(<Filters />);
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-09-24" } });
+    expect(HTMLFormElement.prototype.requestSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  /* /staff/appointments wraps only the fields, not the form. Looking for the
+     form downwards alone found nothing there and auto-submit quietly did
+     nothing — including when a date was picked. */
+  it("finds a form it is nested inside", () => {
+    render(
+      <form>
+        <FilterAutoSubmit debounceMs={300}>
+          <input type="date" name="on" aria-label="Date" />
+        </FilterAutoSubmit>
+      </form>
+    );
+    fireEvent.input(screen.getByLabelText("Date"), { target: { value: "2026-09-24" } });
+    vi.advanceTimersByTime(300);
+    expect(HTMLFormElement.prototype.requestSubmit).toHaveBeenCalledTimes(1);
+  });
+
   it("submits immediately when a select changes", () => {
     render(<Filters />);
     fireEvent.change(screen.getByLabelText("Group"), { target: { value: "b" } });
@@ -75,6 +97,21 @@ describe("FilterAutoSubmit", () => {
     const search = screen.getByLabelText("Search") as HTMLInputElement;
     expect(search).toHaveFocus();
     expect(search.selectionStart).toBe(4);
+  });
+
+  it("does not let a form in another scope claim the focus", () => {
+    const first = render(<Filters scope="filters" />);
+    fireEvent.change(screen.getByLabelText("Group"), { target: { value: "b" } });
+    first.unmount();
+
+    // A second auto-submitting form on the same page must neither take the
+    // focus nor swallow the key before its owner mounts.
+    const other = render(<Filters scope="daynav" />);
+    expect(screen.getByLabelText("Group")).not.toHaveFocus();
+    other.unmount();
+
+    render(<Filters scope="filters" />);
+    expect(screen.getByLabelText("Group")).toHaveFocus();
   });
 
   it("leaves focus alone on an ordinary arrival", () => {

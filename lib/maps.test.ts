@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { embedUrl, searchUrl, stripUnit } from './map-urls';
+import { embedUrl, formatDrive, routeUrl, searchUrl, stripUnit } from './map-urls';
 
 /**
  * The part of the map code that has no network in it.
@@ -57,6 +57,31 @@ describe('searchUrl', () => {
   it('encodes the address', () => {
     expect(searchUrl('8911 N Central Ave #104')).toBe(
       'https://www.openstreetmap.org/search?query=8911%20N%20Central%20Ave%20%23104'
+    );
+  });
+});
+
+describe('formatDrive', () => {
+  it('rounds to whole minutes and miles the shop would say', () => {
+    expect(formatDrive({ metres: 8690, seconds: 754 })).toBe('13 min · 5.4 mi');
+    expect(formatDrive({ metres: 41500, seconds: 2100 })).toBe('35 min · 26 mi');
+  });
+
+  it('never reads as no time at all', () => {
+    expect(formatDrive({ metres: 200, seconds: 20 })).toBe('1 min · 0.1 mi');
+  });
+
+  it('breaks an hour out', () => {
+    expect(formatDrive({ metres: 120000, seconds: 3600 })).toBe('1 hr · 75 mi');
+    expect(formatDrive({ metres: 120000, seconds: 4500 })).toBe('1 hr 15 min · 75 mi');
+  });
+});
+
+describe('routeUrl', () => {
+  it('asks for a car route between the two points', () => {
+    expect(routeUrl({ lat: 33.5, lon: -112.1 }, { lat: 33.566196, lon: -112.073797 })).toBe(
+      'https://www.openstreetmap.org/directions?engine=fossgis_osrm_car' +
+        '&route=33.500000,-112.100000;33.566196,-112.073797'
     );
   });
 });

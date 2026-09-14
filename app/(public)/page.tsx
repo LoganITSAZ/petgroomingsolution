@@ -58,7 +58,7 @@ export default async function HomePage() {
         </div>
 
         {/* Today, in the order someone standing on the pavement asks it. */}
-        <div className="glass-panel rounded-3xl p-6 md:p-7">
+        <div className="glass-panel glass-feature rounded-3xl p-6 md:p-7">
           {/* The header carries whether the shop is open right now; this is the
           other half — the hours it keeps today. */}
           {/* An <h2>, not a <p>: this is the panel's heading, and a styled

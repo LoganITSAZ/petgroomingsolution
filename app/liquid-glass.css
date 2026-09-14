@@ -1,0 +1,213 @@
+/* Shared glass material. Semantic surfaces keep data rows and status colors legible. */
+:root {
+  --glass-alpha: 0.76;
+  --glass-rim: 255 255 255;
+  --glass-rim-alpha: 0.72;
+  --glass-sheen: 0.38;
+  --glass-shadow: 52 40 28;
+}
+.dark {
+  --glass-alpha: 0.82;
+  --glass-rim-alpha: 0.17;
+  --glass-sheen: 0.075;
+  --glass-shadow: 0 0 0;
+}
+
+.liquid-shell {
+  background-color: rgb(var(--page-bg));
+  background-image:
+    radial-gradient(ellipse at 4% 0%, rgb(var(--brand-300) / 0.32), transparent 48rem),
+    radial-gradient(ellipse at 96% 45%, rgb(var(--brand-500) / 0.16), transparent 42rem),
+    radial-gradient(ellipse at 30% 100%, rgb(var(--brand-300) / 0.22), transparent 38rem);
+  background-attachment: fixed;
+}
+/* The login route has its own full-height shell inside the auth layout. */
+.liquid-shell .liquid-shell { background: transparent; }
+
+:is(.glass-panel, .glass-panel-subtle, .page-card, .office-navigation, .app-modal, .save-toast),
+.station-glass .bg-stone-800,
+.liquid-shell > header,
+.liquid-shell :is(div, section, article, nav).bg-white:where([class*="rounded-"]) {
+  background-color: rgb(var(--surface) / var(--glass-alpha));
+  background-image: linear-gradient(145deg,
+    rgb(255 255 255 / var(--glass-sheen)), transparent 42%,
+    rgb(255 255 255 / 0.025) 68%, rgb(255 255 255 / var(--glass-sheen)));
+  border-color: rgb(var(--glass-rim) / var(--glass-rim-alpha));
+  box-shadow:
+    inset 0 1px 0 rgb(var(--glass-rim) / var(--glass-rim-alpha)),
+    inset 1px 0 0 rgb(var(--glass-rim) / 0.12),
+    inset 0 -1px 0 rgb(var(--glass-shadow) / 0.12),
+    0 16px 40px -24px rgb(var(--glass-shadow) / 0.38);
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
+  backdrop-filter: blur(22px) saturate(165%);
+}
+
+/* Override the existing public dark material with the shared material tokens. */
+.dark :is(.glass-panel, .glass-panel-subtle) {
+  background-color: rgb(var(--surface) / var(--glass-alpha));
+  border-color: rgb(var(--glass-rim) / var(--glass-rim-alpha));
+}
+.page-card { border-radius: 1.25rem; }
+.office-navigation { border-top-color: rgb(var(--brand-500) / 0.7); }
+.page-card > .page-heading {
+  background-color: rgb(var(--brand-500) / 0.16);
+  background-image: linear-gradient(110deg, rgb(var(--surface) / 0.35), transparent);
+}
+.page-card .section-heading { background-color: rgb(var(--brand-500) / 0.1); }
+.page-card tbody > tr:nth-child(odd),
+.page-card .divide-y:not(tbody):not(.grid) > :nth-child(odd) {
+  background-color: rgb(var(--surface) / 0.65);
+}
+.page-card tbody > tr:nth-child(even),
+.page-card .divide-y:not(tbody):not(.grid) > :nth-child(even) {
+  background-color: rgb(var(--well) / 0.8);
+}
+
+/* Controls get a polished rim without adding a costly blur to every table cell. */
+:is(.liquid-shell, .public-shell) :is(button, a):where([class*="bg-brand-"], [class*="bg-white"], .public-primary-button, .public-secondary-button),
+.office-nav-link[aria-current="page"] {
+  background-image: linear-gradient(175deg, rgb(255 255 255 / 0.23), transparent 55%, rgb(0 0 0 / 0.06));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 3px 8px rgb(var(--glass-shadow) / 0.1);
+}
+:is(.liquid-shell, .public-shell) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea) {
+  background-color: rgb(var(--surface) / 0.85);
+  box-shadow: inset 0 1px 3px rgb(var(--glass-shadow) / 0.07), 0 1px 0 rgb(var(--glass-rim) / 0.3);
+}
+.app-modal::backdrop {
+  background: rgb(12 14 18 / 0.38);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* Opaque material for unsupported browsers and accessibility preferences. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --glass-alpha: 1; }
+  .dark { --glass-alpha: 1; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root, .dark { --glass-alpha: 1; --glass-sheen: 0; }
+  :is(.glass-panel, .glass-panel-subtle, .page-card, .office-navigation, .app-modal, .save-toast),
+  .dark :is(.glass-panel, .glass-panel-subtle),
+  .station-glass .bg-stone-800,
+.liquid-shell > header,
+  .liquid-shell :is(div, section, article, nav).bg-white:where([class*="rounded-"]) {
+    background-color: rgb(var(--surface));
+    background-image: none;
+    border-color: rgb(var(--line));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  .liquid-shell, .public-shell { background-image: none; }
+  .app-modal::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media print {
+  .liquid-shell, .public-shell { background: white; }
+  .page-card { background: white; box-shadow: none; backdrop-filter: none; }
+}
+
+/* The station uses a permanently dark palette independent of theme preference. */
+.station-glass {
+  --page-bg: 19 18 17;
+  --surface: 33 32 29;
+  --glass-alpha: 0.9;
+  --glass-rim-alpha: 0.17;
+  --glass-sheen: 0.075;
+  --glass-shadow: 0 0 0;
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .station-glass { --glass-alpha: 1; --glass-sheen: 0; }
+}
+
+/* Smaller tiles use a lighter material and a local color pool, so glass still
+   reads inside a page card. No overlays: links, drag targets and text stay clear. */
+:is(.liquid-shell, .public-shell) .glass-tile {
+  background-color: rgb(var(--surface) / 0.7);
+  background-image:
+    radial-gradient(ellipse at 0% 0%, rgb(var(--brand-300) / 0.16), transparent 72%),
+    linear-gradient(135deg, rgb(255 255 255 / var(--glass-sheen)), transparent 48%);
+  border-color: rgb(var(--line) / 0.8);
+  border-radius: 1rem;
+  box-shadow:
+    inset 0 1px 0 rgb(var(--glass-rim) / var(--glass-rim-alpha)),
+    inset 0 -1px 0 rgb(var(--glass-shadow) / 0.07),
+    0 6px 16px -12px rgb(var(--glass-shadow) / 0.3),
+    0 0 18px -12px rgb(var(--brand-500) / 0.22);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+  transition: box-shadow 180ms ease, border-color 180ms ease, background-color 180ms ease;
+}
+.dark .glass-tile {
+  background-color: rgb(var(--surface) / 0.8);
+}
+.glass-well {
+  background-color: rgb(var(--well) / 0.65);
+  background-image: linear-gradient(120deg, rgb(var(--surface) / 0.3), transparent);
+  box-shadow: inset 0 1px 2px rgb(var(--glass-shadow) / 0.05), inset 0 -1px 0 rgb(var(--glass-rim) / 0.12);
+}
+.glass-stat-strip {
+  background-color: rgb(var(--band) / 0.68);
+  background-image: linear-gradient(100deg, rgb(var(--brand-300) / 0.14), transparent 70%);
+  box-shadow: inset 0 1px 0 rgb(var(--glass-rim) / 0.2);
+}
+/* Ambient accents are static; only interactive tiles brighten on interaction. */
+.glass-feature {
+  box-shadow: inset 0 1px 0 rgb(var(--glass-rim) / var(--glass-rim-alpha)),
+    0 22px 55px -30px rgb(var(--glass-shadow) / 0.4),
+    0 0 65px -20px rgb(var(--brand-500) / 0.25);
+}
+.dark .glass-feature {
+  box-shadow: inset 0 1px 0 rgb(var(--glass-rim) / var(--glass-rim-alpha)),
+    0 22px 55px -30px rgb(0 0 0 / 0.6),
+    0 0 65px -20px rgb(var(--brand-500) / 0.3);
+}
+:is(.liquid-shell, .public-shell) .glass-choice {
+  background-image: linear-gradient(140deg, rgb(255 255 255 / var(--glass-sheen)), transparent 55%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+}
+:is(.liquid-shell, .public-shell) .glass-choice[aria-pressed="true"],
+.office-nav-link[aria-current="page"] {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3),
+    0 0 0 1px rgb(var(--brand-500) / 0.25),
+    0 5px 22px -8px rgb(var(--brand-500) / 0.4);
+}
+@media (hover: hover) and (pointer: fine) {
+  :is(.liquid-shell, .public-shell) :is(a, button).glass-tile:hover,
+  :is(.liquid-shell, .public-shell) .glass-choice:hover {
+    border-color: rgb(var(--brand-500) / 0.55);
+    box-shadow: inset 0 1px 0 rgb(var(--glass-rim) / var(--glass-rim-alpha)),
+      0 8px 20px -12px rgb(var(--glass-shadow) / 0.3),
+      0 0 26px -10px rgb(var(--brand-500) / 0.35);
+  }
+  :is(.liquid-shell, .public-shell) :is(button, a):where(.bg-brand-600, .public-primary-button):not(:disabled):hover {
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4),
+      0 5px 18px -8px rgb(var(--brand-900) / 0.35),
+      0 0 24px -8px rgb(var(--brand-500) / 0.45);
+  }
+}
+:is(.liquid-shell, .public-shell) :is(a, button).glass-tile:focus-visible {
+  box-shadow: 0 0 24px -8px rgb(var(--brand-500) / 0.4);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :is(.liquid-shell, .public-shell) :is(.glass-tile, .glass-choice) {
+    background-color: rgb(var(--surface));
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more), print {
+  :is(.liquid-shell, .public-shell) :is(.glass-tile, .glass-well, .glass-stat-strip, .glass-choice, .glass-feature) {
+    background-color: rgb(var(--surface));
+    background-image: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-color: rgb(var(--line));
+  }
+  /* Include interactive states so hover cannot reintroduce decorative glow. */
+  :is(.liquid-shell, .public-shell) :is(.glass-tile, .glass-well, .glass-stat-strip, .glass-choice, .glass-feature, .office-nav-link, button, a) {
+    box-shadow: none !important;
+  }
+  :is(.liquid-shell, .public-shell) .glass-choice[aria-pressed="true"] {
+    border: 2px solid rgb(var(--brand-500));
+  }
+}

@@ -111,7 +111,7 @@ async function main() {
   let kennelStation = stations.find((s) => s.role === "KENNEL");
   if (!kennelStation) {
     kennelStation = await prisma.station.create({
-      data: { name: "Kennel Bank A", role: "KENNEL", kennelRows: 6, kennelColumns: 8 },
+      data: { name: "Kennel Bank 1", role: "KENNEL", kennelRows: 6, kennelColumns: 8 },
     });
     await prisma.kennel.createMany({
       data: Array.from({ length: 6 }, (_, r) =>

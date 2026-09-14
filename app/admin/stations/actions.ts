@@ -8,6 +8,7 @@ import {
   syncKennelGrid,
 } from "@/lib/kennels";
 import { requireManager } from "@/lib/auth-guards";
+import { suggestStationName } from "@/lib/stations";
 import { KENNELABLE_STATUSES } from "@/lib/kennels";
 import { StaffRole, StationRole } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -22,16 +23,29 @@ interface ParsedStation {
   kennelColumns: number | null;
 }
 
-function parseStation(formData: FormData): ParsedStation | { error: string } {
-  const name = ((formData.get("name") as string | null) ?? "").trim();
+/**
+ * A station is not named by hand: it is its role plus the next free number, so
+ * the shop adds a second bath without deciding what to call it. An existing
+ * station keeps its name until its role changes, which renames it.
+ *
+ * ponytail: two managers adding a station at the same instant can land on the
+ * same number — `Station.name` is not unique. Serialise it if that ever bites.
+ */
+async function parseStation(
+  formData: FormData,
+  existing?: { id: string; role: StationRole; name: string }
+): Promise<ParsedStation | { error: string }> {
   const roleRaw = (formData.get("role") as string | null) ?? StationRole.GROOMER;
   const isActive = formData.get("isActive") === "on";
 
-  if (!name) return { error: "name_required" };
   if (!Object.values(StationRole).includes(roleRaw as StationRole)) {
     return { error: "invalid_role" };
   }
   const role = roleRaw as StationRole;
+  const name =
+    existing && existing.role === role
+      ? existing.name
+      : await suggestStationName(role, existing?.id);
 
   let kennelRows: number | null = null;
   let kennelColumns: number | null = null;
@@ -75,7 +89,7 @@ function parseStation(formData: FormData): ParsedStation | { error: string } {
 export async function createStation(formData: FormData): Promise<void> {
   await requireManager();
 
-  const parsed = parseStation(formData);
+  const parsed = await parseStation(formData);
   if ("error" in parsed) redirect(`/admin/stations/new?error=${parsed.error}`);
 
   const station = await prisma.station.create({ data: parsed });
@@ -103,7 +117,7 @@ export async function updateStation(formData: FormData): Promise<void> {
   });
   if (!existing) redirect("/admin/stations?error=not_found");
 
-  const parsed = parseStation(formData);
+  const parsed = await parseStation(formData, existing);
   if ("error" in parsed) redirect(`/admin/stations/${id}/edit?error=${parsed.error}`);
 
   const occupied = existing.kennels.filter((kennel) => kennel.appointments.length > 0);

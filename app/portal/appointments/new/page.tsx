@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { shopDayKey } from "@/lib/utils";
+import { shopMoment } from "@/lib/shop-time";
 import ServicePicker from "@/components/ServicePicker";
 import { PageShell, PageSection, Well } from "@/components/ui";
 import {
   getServiceOptions,
   resolveSelectedServices,
-  sendBookingEmail,
+  sendBookingNotifications,
   setAppointmentServices,
 } from "@/lib/appointment-services";
 import { bookingRateSnapshot } from "@/lib/pricing-tiers";
@@ -138,7 +139,10 @@ now.getTime() + (config.bookingWindowDays ?? 30) * 24 * 60 * 60 * 1000
     const pet = await prisma.pet.findFirst({ where: { id: petId, customerId, isActive: true } });
     if (!pet) throw new Error("Pet not found");
 
-    const scheduledAt = new Date(`${preferredDate}T${preferredTime}:00`);
+    // Shop wall clock, not the server's: in production this runs in UTC, and a
+    // nine o'clock booking would otherwise be stored as two in the morning.
+    const scheduledAt = shopMoment(preferredDate, preferredTime);
+    if (Number.isNaN(scheduledAt.getTime())) throw new Error("Pick a valid date and time");
 
     // Customers on a negotiated rate are quoted it from the moment they book.
     const rate = await bookingRateSnapshot(customerId, services.lines);
@@ -159,7 +163,7 @@ now.getTime() + (config.bookingWindowDays ?? 30) * 24 * 60 * 60 * 1000
     });
 
     await setAppointmentServices(appointment.id, services);
-    await sendBookingEmail(appointment.id);
+    await sendBookingNotifications(appointment.id);
 
     await prisma.appointmentStatusHistory.create({
       data: {

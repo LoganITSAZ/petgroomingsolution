@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { KIOSK_APPOINTMENT_SELECT, broadcastToStation } from "@/lib/station-events";
+import { STATION_APPOINTMENT_SELECT, broadcastToStation } from "@/lib/station-events";
 import { broadcastKennelBoard, releaseKennelForAppointment } from "@/lib/kennels";
 import { sendReadyForPickup } from "@/lib/email";
+import { smsReadyForPickup } from "@/lib/sms";
+import { getConfig } from "@/lib/config";
 import { AppointmentStatus } from "@prisma/client";
 import { OCCUPYING_STATUSES } from "@/lib/stations";
 import { syncRewardForVisit } from "@/lib/rewards";
@@ -32,7 +34,7 @@ export async function broadcastStationBoard(stationId: string): Promise<void> {
     prisma.station.findUnique({ where: { id: stationId } }),
     prisma.appointment.findMany({
       where: { stationId, status: { in: OCCUPYING_STATUSES } },
-      select: KIOSK_APPOINTMENT_SELECT,
+      select: STATION_APPOINTMENT_SELECT,
       orderBy: { checkedInAt: "asc" },
     }),
   ]);
@@ -65,7 +67,9 @@ export async function changeAppointmentStatus({
     },
     include: {
       pet: true,
-      customer: { select: { firstName: true, lastName: true, phone: true, email: true } },
+      customer: {
+        select: { firstName: true, lastName: true, phone: true, email: true, smsOptOut: true },
+      },
       staff: { select: { name: true } },
       station: true,
     },
@@ -83,13 +87,27 @@ export async function changeAppointmentStatus({
     if (freedStationId) await broadcastKennelBoard(freedStationId);
   }
 
-  // Notification failures must never fail the status change.
-  if (status === AppointmentStatus.READY_PICKUP && updated.customer.email) {
-    await sendReadyForPickup({
-      to: updated.customer.email,
-      ownerName: `${updated.customer.firstName} ${updated.customer.lastName}`,
-      petName: updated.pet.name,
-    }).catch(console.error);
+  // Notification failures must never fail the status change. Both channels are
+  // tried: the shop switches each on independently, and a customer who reads
+  // neither email nor text is no reason for the pet to sit uncollected.
+  if (status === AppointmentStatus.READY_PICKUP) {
+    if (updated.customer.email) {
+      await sendReadyForPickup({
+        to: updated.customer.email,
+        ownerName: `${updated.customer.firstName} ${updated.customer.lastName}`,
+        petName: updated.pet.name,
+      }).catch(console.error);
+    }
+
+    if (updated.customer.phone && !updated.customer.smsOptOut) {
+      const config = await getConfig();
+      await smsReadyForPickup({
+        to: updated.customer.phone,
+        petName: updated.pet.name,
+        shopName: config.shopName,
+        phone: config.shopPhone,
+      }).catch(console.error);
+    }
   }
 
   return updated;

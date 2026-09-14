@@ -9,6 +9,7 @@ function LoginForm() {
   const params = useSearchParams();
   const router = useRouter();
   const defaultType = params.get("type") === "staff" ? "staff" : "customer";
+  const justReset = params.get("reset") === "1";
 
   const [userType, setUserType] = useState<"customer" | "staff">(defaultType);
   const [email, setEmail] = useState("");
@@ -31,13 +32,20 @@ function LoginForm() {
       setError("Invalid email or password.");
       return;
     }
-    router.push(userType === "staff" ? "/staff" : "/portal");
+    const callback = params.get("callbackUrl");
+    router.push(userType === "staff" && callback?.startsWith("/station/") && !callback.includes("\\")
+      ? callback : userType === "staff" ? "/staff" : "/portal");
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
+    <div className="liquid-shell min-h-screen bg-stone-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
         <h1 className="text-2xl font-black text-stone-900 mb-1">Sign in</h1>
+        {justReset && (
+          <p role="status" className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
+            Your password has been changed. Sign in with the new one.
+          </p>
+        )}
         {/* Toggle customer / staff */}
         <div className="flex rounded-lg border border-stone-200 p-1 mb-6 gap-1">
           {(["customer", "staff"] as const).map((t) => (
@@ -101,8 +109,17 @@ function LoginForm() {
           </button>
         </form>
 
+        <p className="text-center text-sm text-stone-500 mt-6">
+          <Link
+            href={`/forgot-password?type=${userType}`}
+            className="text-brand-text hover:underline font-medium"
+          >
+            Forgot your password?
+          </Link>
+        </p>
+
         {userType === "customer" && (
-          <p className="text-center text-sm text-stone-500 mt-6">
+          <p className="text-center text-sm text-stone-500 mt-2">
             New here?{" "}
             <Link href="/register" className="text-brand-text hover:underline font-medium">
               Create an account
@@ -118,7 +135,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
+        <div className="liquid-shell min-h-screen bg-stone-50 flex items-center justify-center p-4">
           <div className="text-stone-400 text-sm">Loading…</div>
         </div>
       }

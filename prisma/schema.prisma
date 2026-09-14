@@ -16,7 +16,7 @@ model SystemConfig {
   id String @id @default("global") // enforces single row
 
   // Shop identity
-  shopTagline String? // the line under the shop name on the public site
+  shopTagline String? // shared home-page tagline and public-site banner
   shopName    String  @default("Your Grooming Shop")
   shopPhone   String?
   shopEmail   String?
@@ -41,15 +41,23 @@ model SystemConfig {
   // Notification settings
   // No sender-name column: emails go out as the shop name (SystemConfig.shopName).
   emailFromAddress String? // e.g. "no-reply@gentlegroomer.net"
-  twilioAccountSid String? // stored encrypted; null if SMS not configured
-  twilioAuthToken  String? // stored encrypted
+  // Twilio, typed in at /admin/notifications. Null until SMS is configured.
+  //
+  // These are stored in cleartext, and the comment here used to claim they were
+  // encrypted. They are not, and encrypting them at rest would not help: the app
+  // has to present the token to Twilio on every send, so the key would sit in
+  // the same deployment as the ciphertext. The database is the trust boundary —
+  // back it up accordingly, and rotate the token if it is ever exposed.
+  twilioAccountSid String?
+  twilioAuthToken  String?
   twilioFromNumber String?
 
   // Public site appearance
   themePreset       String  @default("default") // id from lib/themes.ts
   themeAutoSeasonal Boolean @default(false) // follow the calendar instead
-  themeBrandColor   String? // #rrggbb override for the brand ramp
-  themeBannerText   String? // seasonal line shown above the site header
+  themeUseShopColors Boolean @default(true)
+  themeBrandColor   String? // legacy base color for shops without a full palette
+  themeShopColors   Json? // hex colors keyed by the 13 template color roles
 
   // How late an arrival may be before the schedule flags it. Green until the
   // first threshold, then amber, orange and finally treated as missed.
@@ -242,6 +250,11 @@ model Customer {
   lastName        String
   email           String          @unique
   phone           String?
+  /// Opt-*out*, not opt-in: a number given to the shop so it can say the dog is
+  /// ready is a number the shop may use for that. Existing customers would all
+  /// start silenced under an opt-in column, which is not what either side
+  /// expects. Every message carries the STOP line that sets this.
+  smsOptOut       Boolean         @default(false)
   passwordHash    String
   isActive        Boolean         @default(true)
   themePreference ThemePreference @default(SYSTEM)
@@ -319,6 +332,10 @@ model Pet {
   coatType         CoatType?
   temperamentNotes String? // e.g. "nervous around other animals, loves treats"
   healthFlags      String[] // e.g. ["elderly", "reactive", "allergy:chicken"]
+  /// When the shop last saw proof of vaccination. Null is "not confirmed" —
+  /// a date rather than a flag, because a record seen two years ago is the
+  /// question the counter actually asks.
+  vaccinationsConfirmedAt DateTime?
   groomingNotes    String? // standing instructions for every visit
   hasBiteHistory   Boolean   @default(false) // true if pet has ever bitten a groomer
   photoUrl         String? // external image, if the shop uses one
@@ -361,7 +378,7 @@ enum CoatType {
 // ─────────────────────────────────────────────
 model Station {
   id        String      @id @default(cuid())
-  name      String // e.g. "Station 1", "Bath Area", "Kennel Bank A"
+  name      String // derived, never typed: role + next free number ("Bath 2")
   role      StationRole @default(GROOMER) // what this station is used for
   isActive  Boolean     @default(true)
   createdAt DateTime    @default(now())
@@ -780,6 +797,40 @@ model RewardRedemption {
   // visit it came off, so the index is wanted; the schema just has to say it.
   @@index([appointmentId])
   @@map("reward_redemptions")
+}
+
+// ─────────────────────────────────────────────
+// PASSWORD RESETS
+// ─────────────────────────────────────────────
+/// A pending "forgot my password" link.
+///
+/// Both sign-in tables are covered by one model: `Customer` and `Staff` are
+/// separate tables with separate unique emails, so the subject says which one a
+/// row belongs to rather than pointing a foreign key at one of them.
+///
+/// Only the *hash* of the token is stored. The token itself exists in the link
+/// that went out and nowhere else, so a copy of this table cannot be replayed
+/// into somebody's account.
+model PasswordReset {
+  id        String               @id @default(cuid())
+  tokenHash String               @unique // sha256 of the token in the emailed link
+  subject   PasswordResetSubject
+  subjectId String
+  expiresAt DateTime
+  /// Set the moment the link is spent. A used row is kept rather than deleted:
+  /// "that link has already been used" is a different answer from "no such
+  /// link", and it is the one that tells someone their reset already happened.
+  usedAt    DateTime?
+  createdAt DateTime             @default(now())
+
+  @@index([subject, subjectId])
+  @@index([expiresAt])
+  @@map("password_resets")
+}
+
+enum PasswordResetSubject {
+  CUSTOMER
+  STAFF
 }
 
 /// Addresses already placed on a map.

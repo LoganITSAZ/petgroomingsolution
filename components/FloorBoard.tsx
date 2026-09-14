@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import $ from "jquery";
+import { jQueryFactory } from "jquery/factory";
 import { BOARD_COLUMNS } from "@/lib/appointment-flow";
 
 /**
@@ -34,6 +34,7 @@ export interface BoardPet {
   /** The station it is standing at, if any — shown on the chip. */
   stationName: string | null;
   hasBiteHistory: boolean;
+  pickupNote?: { label: string; className: string };
 }
 
 /** Per-column occupancy of the stations behind it, for the header. */
@@ -60,6 +61,8 @@ export default function FloorBoard({
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
+    // Initialize only after mounting; server rendering has no document.
+    const $ = jQueryFactory(window);
     const $root = $(root).empty();
 
     const chip = (pet: BoardPet) =>
@@ -68,7 +71,7 @@ export default function FloorBoard({
         draggable: true,
         "data-id": pet.id,
         class:
-          "chip w-full cursor-grab rounded-lg border border-well-line bg-white px-2 py-1 text-left text-xs shadow-sm transition-colors hover:bg-well active:cursor-grabbing",
+          "chip w-full cursor-grab rounded-lg border border-well-line bg-white px-3 py-2 text-left text-xs shadow-sm transition-colors hover:bg-well active:cursor-grabbing",
         title: `${pet.petName}${pet.stationName ? ` · ${pet.stationName}` : ""}. Drag to a stage, or tap and choose.`,
       }).append(
         $("<span>", { class: "block font-semibold text-stone-900", text: pet.petName }).append(
@@ -80,6 +83,12 @@ export default function FloorBoard({
             : []
         ),
         $("<span>", { class: "block truncate text-[10px] text-stone-500", text: pet.ownerName }),
+        pet.pickupNote
+          ? $("<span>", {
+              class: `mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${pet.pickupNote.className}`,
+              text: pet.pickupNote.label,
+            })
+          : [],
         // The station is a detail of the chip now, not a column of its own.
         pet.stationName
           ? $("<span>", {
@@ -91,7 +100,7 @@ export default function FloorBoard({
       );
 
     const column = (key: string, name: string, hint: string) => {
-      const $list = $("<ul>", { class: "drop min-h-[4rem] space-y-1 p-1.5", "data-column": key });
+      const $list = $("<ul>", { class: "drop min-h-[4rem] space-y-2 p-2", "data-column": key });
       const $count = $("<span>", { class: "count shrink-0 text-[10px] font-bold text-stone-400" });
       const $place = $("<button>", {
         type: "button",
@@ -102,15 +111,15 @@ export default function FloorBoard({
       });
       return $("<section>", {
         // Five columns share the width rather than scrolling off the edge.
-        class: "col min-w-0 flex-1 basis-40 rounded-lg border border-well-line bg-well",
+        class: "glass-tile col min-w-0 flex-1 basis-40 rounded-lg border border-well-line bg-well",
         role: "region",
             "aria-label": name,
       }).append(
         $("<header>", {
-          class: "flex items-baseline justify-between gap-1 border-b border-well-line px-2 py-1",
+          class: "flex items-baseline justify-between gap-1 border-b border-well-line px-3 py-2",
         }).append(
           $("<span>", {
-            class: "truncate text-[10px] font-bold tracking-tight text-stone-600",
+            class: "text-xs font-bold tracking-tight text-stone-600",
             text: name,
             title: hint,
           }),
@@ -121,12 +130,12 @@ export default function FloorBoard({
       );
     };
 
-    const $strip = $("<div>", { class: "flex flex-wrap gap-2 pb-1 md:flex-nowrap" });
+    const $strip = $("<div>", { class: "grid grid-cols-1 gap-2 pb-1 sm:grid-cols-2 lg:grid-cols-5" });
     BOARD_COLUMNS.forEach((entry) => {
       const room = capacity[entry.key];
       const hint = room
         ? `${entry.label}: ${room.used} of ${room.capacity} in use`
-        : `${entry.label} — no station of this kind, so nothing is assigned here`;
+        : `${entry.label}: pets at this stage`;
       $strip.append(column(entry.key, entry.label, hint));
     });
     $root.append($strip);

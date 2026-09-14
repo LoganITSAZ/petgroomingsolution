@@ -115,3 +115,39 @@ export async function defaultAssignment(customerId: string): Promise<{
   const hasRoom = await stationHasRoom(station.id);
   return { staffId: staff.id, stationId: hasRoom ? station.id : null };
 }
+
+/**
+ * Stations are named after the work they do, so adding one needs no typing.
+ * The shop can still rename any of them.
+ */
+const STATION_NAME_PREFIX: Record<StationRole, string> = {
+  GROOMER: "Grooming Table",
+  BATHING: "Bath",
+  DRYING: "Dryer",
+  KENNEL: "Kennel Bank",
+};
+
+/**
+ * The lowest unused number for the role, so removing Bath 2 and adding one
+ * back gives Bath 2 again rather than leaving a hole and counting to 4.
+ */
+export function nextStationName(role: StationRole, existingNames: string[]): string {
+  const prefix = STATION_NAME_PREFIX[role];
+  const taken = new Set(existingNames.map((name) => name.trim().toLowerCase()));
+  for (let n = 1; ; n++) {
+    const candidate = `${prefix} ${n}`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
+}
+
+/**
+ * `nextStationName` against what is already on file, active or not. A station
+ * being renamed does not block its own number.
+ */
+export async function suggestStationName(role: StationRole, exceptId?: string): Promise<string> {
+  const existing = await prisma.station.findMany({
+    where: { role, ...(exceptId ? { NOT: { id: exceptId } } : {}) },
+    select: { name: true },
+  });
+  return nextStationName(role, existing.map((station) => station.name));
+}

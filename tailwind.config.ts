@@ -38,9 +38,8 @@ const config: Config = {
         card: "0 1px 2px rgb(28 25 23 / 0.04), 0 4px 16px -8px rgb(28 25 23 / 0.10)",
       },
       colors: {
-        // Brand paints from CSS variables so the public site can be rethemed at
-        // runtime; app/globals.css holds the amber defaults every other screen
-        // keeps using.
+        // Website and dashboard share runtime brand variables; globals.css
+        // supplies the fallback palette before a shell applies its theme.
         brand: {
           50: "#fef9ee",
           100: "rgb(var(--brand-100) / <alpha-value>)",

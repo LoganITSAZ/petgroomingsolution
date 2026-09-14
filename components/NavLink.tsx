@@ -26,10 +26,10 @@ export default function NavLink({ href, label }: { href: string; label: string }
       href={href}
       aria-current={active ? "page" : undefined}
       className={[
-        "relative block px-3 py-2 rounded-lg transition-colors",
+        "office-nav-link relative block px-3 py-2 rounded-lg transition-colors",
         active
-          ? "bg-stone-700/70 text-white font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:rounded-full before:bg-brand-500"
-          : "text-stone-200 hover:bg-stone-700/50 hover:text-white",
+          ? "office-nav-link-active font-semibold"
+          : "text-ink",
       ].join(" ")}
     >
       {label}

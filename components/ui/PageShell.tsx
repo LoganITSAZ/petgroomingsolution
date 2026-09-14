@@ -1,10 +1,11 @@
 import Link from "next/link";
+import PageColumnsButton from "../PageColumnsButton";
 import { cn } from "@/lib/utils";
 
 /**
  * The back-office page shape, factored out of /staff/appointments.
  *
- * One page is one card. The title sits above it; everything the page owns —
+ * One page is one card. The title and everything the page owns —
  * toolbar, counts, panels, list — lives inside a single bordered surface,
  * divided by hairlines rather than floating as separate cards. Split across
  * cards the parts read as unrelated things scattered on the page; inside one
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 export function PageShell({
   title,
   subtitle,
+  center,
   actions,
   back,
   children,
@@ -21,6 +23,8 @@ export function PageShell({
 }: {
   title: string;
   subtitle?: React.ReactNode;
+  /** Sits in the middle of the header, between the title and the actions. */
+  center?: React.ReactNode;
   actions?: React.ReactNode;
   /** Where this page was opened from, on its own line above the title. */
   back?: { href: string; label: string };
@@ -28,32 +32,38 @@ export function PageShell({
   className?: string;
 }) {
   return (
-    <div className="flex-1 min-h-0 flex flex-col gap-3">
+    <div className="flex-1 min-h-0 min-w-0 flex flex-col gap-3">
       {back && (
         <Link
           href={back.href}
-          className="text-sm text-stone-500 hover:text-stone-800 transition-colors -mb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-well-line/80 focus-visible:ring-offset-2"
+          className="text-sm text-muted hover:text-ink transition-colors -mb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-well-line/80 focus-visible:ring-offset-2"
         >
           ← {back.label}
         </Link>
       )}
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <div className="flex items-baseline gap-3">
-          <h1 className="font-display text-[1.6rem] font-extrabold leading-none tracking-[-0.025em] text-stone-900">
-            {title}
-          </h1>
-          {subtitle && <span className="text-sm text-stone-500">{subtitle}</span>}
-        </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
-      </div>
-    <section
-      className={cn(
-        "bg-white border border-stone-200/80 rounded-xl shadow-card ring-1 ring-well-line/80 overflow-hidden flex-1 min-h-0 flex flex-col",
-        className
-      )}
-    >
-      {children}
-    </section>
+      <section
+        className={cn(
+          "page-card bg-surface border border-line/80 rounded-xl shadow-card overflow-x-hidden overflow-y-auto [&>*:first-child]:border-t-0 [&>*:first-child]:shadow-none flex-1 min-h-0 min-w-0 flex flex-col",
+          className
+        )}
+      >
+        <header className="page-heading bg-band px-3 py-3 flex shrink-0 items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0 flex items-baseline gap-x-3 gap-y-1 flex-wrap">
+            <h1 className="font-display text-[1.6rem] font-extrabold leading-tight tracking-[-0.025em] text-ink break-words">
+              {title}
+            </h1>
+            {subtitle && <span className="text-sm text-muted">{subtitle}</span>}
+          </div>
+          {center && (
+            <div className="flex flex-1 basis-auto items-center justify-center">{center}</div>
+          )}
+          <div className="ml-auto flex items-center justify-end gap-2 flex-wrap">
+            {actions}
+            <PageColumnsButton />
+          </div>
+        </header>
+        {children}
+      </section>
     </div>
   );
 }
@@ -68,6 +78,7 @@ export function PageShell({
 export function PageSection({
   title,
   hint,
+  actions,
   tone = "plain",
   grow = false,
   scroll = false,
@@ -79,6 +90,7 @@ export function PageSection({
 }: {
   title?: string;
   hint?: React.ReactNode;
+  actions?: React.ReactNode;
   tone?: "plain" | "muted";
   grow?: boolean;
   scroll?: boolean;
@@ -91,24 +103,37 @@ export function PageSection({
 }) {
   return (
     <div
+      data-page-section
       className={cn(
-        "border-t border-stone-100 first:border-t-0",
+        "min-w-0 border-t border-well-line first:border-t-0",
         tone === "muted" && "bg-band shadow-[inset_0_1px_0_rgb(var(--well-line))]",
         grow && "flex-1 min-h-0 flex flex-col",
         className
       )}
     >
-      {(title || hint) && (
-        <div className="flex items-baseline justify-between gap-3 px-3 pt-3">
-          {title && (
-            <h2 className="font-display text-[0.8125rem] font-bold tracking-tight text-stone-600">{title}</h2>
+      {(title || hint || actions) && (
+        <div
+          className={cn(
+            "section-heading flex items-center justify-between gap-3 flex-wrap px-3 py-1.5",
+            // The heading reads as a label because the strip it sits on does.
+            tone === "plain" && "bg-band border-b border-well-line"
           )}
-          {hint && <span className="text-xs text-stone-400">{hint}</span>}
+        >
+          {title && (
+            <h2 className="font-display text-[0.75rem] font-bold uppercase tracking-[0.09em] text-muted">{title}</h2>
+          )}
+          {hint && <span className="text-xs text-muted">{hint}</span>}
+          {actions && (
+            <div className="ml-auto flex items-center justify-end gap-2 flex-wrap">
+              {actions}
+            </div>
+          )}
         </div>
       )}
       <div
         className={cn(
-          padded && (title || hint ? "px-3 pb-3 pt-2" : "px-3 py-3"),
+          "min-w-0",
+          padded && "px-3 py-3",
           grow && "flex-1 min-h-0",
           scroll && "overflow-auto",
           bodyClassName
@@ -122,10 +147,9 @@ export function PageSection({
 }
 
 /**
- * A well: the inset a list, a summary or a set of figures sits in. It is a
- * recess in the page card, not a second card — one fill, one hairline, no
- * shadow. `bg-well` is a token (app/globals.css) so the shop's whole back
- * office changes depth in one edit, and dark mode flips it with the variable.
+ * An inset list or summary surface. The shared glass-well finish stays
+ * recessed, while Panel uses the brighter glass-tile material for summaries.
+ * Both follow the shop palette and its light/dark surface tokens.
  *
  * Empty is empty: a well with nothing in it keeps one line of height and says
  * nothing, which reads as "nothing here" without wording it.
@@ -144,7 +168,7 @@ export function Well({
   return (
     <Tag
       className={cn(
-        "min-h-7 rounded-lg border border-well-line bg-well px-3 py-1.5 ring-1 ring-well-line/60",
+        "glass-well min-h-7 rounded-lg border border-well-line bg-well px-3 py-1.5",
         className
       )}
     >
@@ -166,11 +190,11 @@ export function Panel({
   return (
     <div
       className={cn(
-        "border border-well-line rounded-lg px-3 py-2 bg-well ring-1 ring-well-line/60",
+        "glass-tile border border-well-line rounded-lg px-3 py-2 bg-well",
         className
       )}
     >
-      <h3 className="font-display text-[0.8125rem] font-bold tracking-tight text-stone-600 mb-1">{title}</h3>
+      <h3 className="font-display text-[0.8125rem] font-bold tracking-tight text-muted mb-1">{title}</h3>
       {children}
     </div>
   );
@@ -187,13 +211,13 @@ export function StatStrip({
   return (
     <div
       className={cn(
-        "bg-band border-t border-stone-100 first:border-t-0 px-3 py-2 flex flex-wrap gap-x-5 gap-y-0.5 text-sm text-stone-500",
+        "glass-stat-strip bg-band border-t border-stone-100 first:border-t-0 px-3 py-2 flex flex-wrap gap-x-5 gap-y-0.5 text-sm text-muted",
         className
       )}
     >
       {stats.map(({ label, value }) => (
         <span key={label}>
-          <span className="font-bold text-stone-800">{value}</span> {label.toLowerCase()}
+          <span className="font-bold text-ink">{value}</span> {label.toLowerCase()}
         </span>
       ))}
     </div>

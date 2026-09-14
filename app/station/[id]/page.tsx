@@ -1,99 +1,125 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
-import { currentShopTime, formatStatus, formatServiceType } from "@/lib/utils";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { currentShopTime, formatStatus, formatServiceType, formatCoatType, formatShopDate, formatShopTime } from "@/lib/utils";
 import { nextStatus } from "@/lib/appointment-flow";
+import type { StationAppointment } from "@/lib/station-events";
 
-type Pet = {
-  name: string;
-  species: string;
-  breed: string | null;
-  weightLbs: number | null;
-  groomingNotes: string | null;
-  healthFlags: string[];
-  hasBiteHistory: boolean;
-  photoUrl: string | null;
-};
+type Station = { id: string; name: string; role: string; isActive: boolean; kennelColumns: number | null };
+type Kennel = { id: string; label: string; isActive: boolean; appointments: StationAppointment[] };
+type Snapshot = { station: Station; appointments?: StationAppointment[]; kennels?: Kennel[] };
+const control = "station-control inline-flex min-h-11 items-center justify-center rounded-xl border border-stone-600 px-4 py-2 text-sm font-semibold hover:bg-stone-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white";
 
-type Customer = {
-  firstName: string;
-  lastName: string;
-};
+function Detail({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="min-w-0"><dt className="station-label">{label}</dt><dd className="station-value mt-1 break-words whitespace-pre-wrap">{children ?? "Not recorded"}</dd></div>;
+}
 
-type AppointmentData = {
-  id: string;
-  status: string;
-  serviceType: string;
-  pet: Pet;
-  customer: Customer;
-  staff: { name: string } | null;
-} | null;
+function ProfilePhoto({ src, name }: { src: string | null; name: string }) {
+  return src ? (
+    // Uploaded photos and optional external profile photos are both supported.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt={name} className="h-20 w-20 shrink-0 rounded-xl object-cover sm:h-28 sm:w-28" />
+  ) : null;
+}
 
-type ShopLocation = {
-  shopName: string;
-  address: string | null;
-  embedUrl: string | null;
-};
+function VisitDetails({ visit }: { visit: StationAppointment }) {
+  const { pet, customer } = visit;
+  return (
+    <div className="station-details grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr]">
+      <section aria-label="Pet information" className="station-panel min-w-0 rounded-2xl bg-stone-800 p-5 space-y-5">
+        <div className="station-identity flex items-start gap-4">
+          <ProfilePhoto src={pet.photoId ? `/api/photos/${pet.photoId}` : pet.photoUrl} name={pet.name} />
+          <div className="min-w-0">
+            <p className="station-eyebrow">Pet profile</p>
+            <h2 className="station-pet-name font-display font-extrabold">{pet.name}</h2>
+            <p className="mt-2 text-stone-300">{pet.breed ?? pet.species} · {pet.sex.toLowerCase()}</p>
+          </div>
+        </div>
+        <dl className="station-facts grid grid-cols-2 gap-4">
+          <Detail label="Weight">{pet.weightLbs != null ? `${pet.weightLbs} lbs` : null}</Detail>
+          <Detail label="Coat">{pet.coatType ? formatCoatType(pet.coatType) : null}</Detail>
+          <Detail label="Date of birth">{pet.dateOfBirth ? formatShopDate(new Date(pet.dateOfBirth)) : null}</Detail>
+          <Detail label="Vaccination proof confirmed">{pet.vaccinationsConfirmedAt ? formatShopDate(new Date(pet.vaccinationsConfirmedAt)) : "Not confirmed"}</Detail>
+          <Detail label="Profile">{pet.isActive ? "Active" : "Inactive"}</Detail>
+          <Detail label="Bite history">{pet.hasBiteHistory ? "Yes — use caution" : "None recorded"}</Detail>
+        </dl>
+        <div>
+          <h3 className="font-bold mb-2">Health alerts</h3>
+          {pet.healthFlags.length ? <ul className="flex flex-wrap gap-2">{pet.healthFlags.map(flag => <li key={flag} className="rounded-lg bg-amber-700 px-3 py-2 text-white">{flag}</li>)}</ul> : <p className="text-stone-300">None recorded</p>}
+        </div>
+        <dl className="space-y-4">
+          <Detail label="Handling & temperament">{pet.temperamentNotes}</Detail>
+          <Detail label="Standing grooming instructions">{pet.groomingNotes}</Detail>
+        </dl>
+        <Link className={control} href={`/staff/pets/${pet.id}`}>Pet record & history</Link>
+      </section>
 
-type Station = {
-  id: string;
-  name: string;
-  role: "GROOMER" | "BATHING" | "DRYING" | "KENNEL";
-  kennelRows: number | null;
-  kennelColumns: number | null;
-};
+      <section aria-label="Current visit" className="station-panel min-w-0 rounded-2xl bg-stone-800 p-5 space-y-5">
+        <h2 className="station-section-title font-display text-2xl font-bold">Current visit</h2>
+        <dl className="station-facts grid grid-cols-2 gap-4">
+          <Detail label="Appointment">{formatShopDate(new Date(visit.scheduledAt))} · {formatShopTime(new Date(visit.scheduledAt))}</Detail>
+          <Detail label="Checked in">{visit.checkedInAt ? formatShopTime(new Date(visit.checkedInAt)) : null}</Detail>
+          <Detail label="Groomer">{visit.staff?.name}</Detail>
+          <Detail label="Estimated duration">{visit.durationMins != null ? `${visit.durationMins} minutes` : null}</Detail>
+        </dl>
+        <div>
+          <h3 className="font-bold mb-2">Booked services</h3>
+          <ul className="space-y-3">{visit.services.length ? visit.services.map(item => (
+            <li key={item.id} className="station-inset rounded-xl bg-stone-700 p-3">
+              <p className="font-semibold">{item.service?.name ?? formatServiceType(item.serviceType)}{item.priceCents != null && <span className="ml-2 text-stone-300">${(item.priceCents / 100).toFixed(2)}</span>}</p>
+              {item.service?.staffNotes && <p className="mt-2 whitespace-pre-wrap text-stone-200">{item.service.staffNotes}</p>}
+            </li>
+          )) : <li>{formatServiceType(visit.serviceType)}</li>}</ul>
+        </div>
+        <dl><Detail label="Notes for this visit">{visit.visitNotes}</Detail></dl>
+        <Link className={control} href={`/staff/appointments/${visit.id}`}>Manage visit & log incident</Link>
+      </section>
 
-/**
- * A door holds several pets when they come from one household, so the board
- * streams a list per compartment (`getKennelBoard`). This read `appointment`,
- * which the route has never sent, so every door on the kiosk said Empty while
- * the shop screens showed it occupied.
- */
-type KennelData = {
-  id: string;
-  label: string;
-  isActive: boolean;
-  appointments: {
-    id: string;
-    status: string;
-    pet: { name: string; hasBiteHistory: boolean };
-    customer: { firstName: string; lastName: string };
-  }[];
-};
-
-type Occupant = NonNullable<AppointmentData>;
-
-type SSEMessage =
-  | { type: "init"; appointments: Occupant[]; station: Station }
-  | { type: "status_update"; appointments: Occupant[]; station: Station }
-  | { type: "init"; station: Station; kennels: KennelData[] }
-  | { type: "kennel_update"; station: Station; kennels: KennelData[] };
-
-async function advanceStatus(appointmentId: string, status: string) {
-  await fetch(`/api/appointments/${appointmentId}/status`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status }),
-  });
+      <section aria-label="Customer information" className="station-panel min-w-0 rounded-2xl bg-stone-800 p-5 space-y-5 lg:col-span-2 xl:col-span-1">
+        <div className="station-identity flex items-start gap-4">
+          <ProfilePhoto src={customer.photoId ? `/api/photos/${customer.photoId}` : null} name={`${customer.firstName} ${customer.lastName}`} />
+          <div className="min-w-0"><p className="station-eyebrow">Customer</p><h2 className="station-section-title font-display text-2xl font-bold break-words">{customer.firstName} {customer.lastName}</h2></div>
+        </div>
+        <dl className="space-y-4">
+          <Detail label="Phone">{customer.phone ? <a className="underline inline-block py-1" href={`tel:${customer.phone}`}>{customer.phone}</a> : null}</Detail>
+          <Detail label="Email"><a className="underline inline-block py-1" href={`mailto:${customer.email}`}>{customer.email}</a></Detail>
+          <Detail label="Address">{customer.address}</Detail>
+          <Detail label="Text notifications">{customer.smsOptOut ? "Opted out" : "Allowed"}</Detail>
+          <Detail label="Preferred groomer">{customer.preferredStaff?.name}</Detail>
+          <Detail label="Pricing tier">{customer.pricingTier?.name ?? "Standard pricing"}</Detail>
+          <Detail label="Pricing notes">{customer.pricingNotes}</Detail>
+          <Detail label="Customer account">{customer.isActive ? "Active" : "Inactive"}</Detail>
+        </dl>
+        <div>
+          <h3 className="font-bold mb-2">Authorized pickup contacts</h3>
+          {customer.alternateContacts.length ? <ul className="space-y-3">{customer.alternateContacts.map(contact => <li key={contact.id} className="station-inset rounded-xl bg-stone-700 p-3 break-words">
+            <p className="font-semibold">{contact.name}</p>
+            {contact.phone && <a className="block py-2 underline" href={`tel:${contact.phone}`}>{contact.phone}</a>}
+            {contact.email && <a className="block py-2 underline" href={`mailto:${contact.email}`}>{contact.email}</a>}
+          </li>)}</ul> : <p className="text-stone-300">No alternate contacts recorded</p>}
+        </div>
+        <Link className={control} href={`/staff/customers/${customer.id}`}>Customer record & history</Link>
+      </section>
+    </div>
+  );
 }
 
 export default function StationDisplay() {
-  // Next 16 hands a page's `params` over as a promise; the kiosk is a client
-// component on React 18, which has no `use()`, so it reads the segment from
-  // the router instead.
-const params = useParams<{ id: string }>();
-  const [appointments, setAppointments] = useState<Occupant[]>([]);
-  const [kennels, setKennels] = useState<KennelData[]>([]);
-  const [station, setStation] = useState<Station | null>(null);
-  const [advancing, setAdvancing] = useState(false);
-  // Empty until mounted: rendering a clock during SSR guarantees a hydration
-  // mismatch, and the kiosk needs the time to actually tick.
+  const { id } = useParams<{ id: string }>();
+  return <StationWorkspace key={id} id={id} />;
+}
+
+function StationWorkspace({ id }: { id: string }) {
+  const router = useRouter();
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
   const [clock, setClock] = useState("");
-  // The shop's own location, for the idle screen. Fetched rather than server
-  // rendered because this page is a client component.
-  const [shopLocation, setShopLocation] = useState<ShopLocation | null>(null);
-  const sourceRef = useRef<EventSource | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [advancing, setAdvancing] = useState(false);
+  const advancingRef = useRef(false);
 
   useEffect(() => {
     const tick = () => setClock(currentShopTime());
@@ -103,292 +129,115 @@ const params = useParams<{ id: string }>();
   }, []);
 
   useEffect(() => {
-    fetch("/api/shop-location")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setShopLocation(data))
-      // A map is never worth a broken kiosk.
-      .catch(() => setShopLocation(null));
-  }, []);
-
-  useEffect(() => {
-    function connect() {
-      const es = new EventSource(`/api/station/${params.id}/events`);
-      sourceRef.current = es;
-
-      es.onmessage = (e) => {
-        const msg: SSEMessage = JSON.parse(e.data);
-        setStation(msg.station);
-        // Kennel units stream a whole board; work stations stream one visit.
-        if ("kennels" in msg) {
-          setKennels(msg.kennels);
-        } else {
-          setAppointments(msg.appointments ?? []);
+    let disposed = false;
+    const es = new EventSource(`/api/station/${id}/events`);
+    es.onmessage = event => {
+      if (disposed) return;
+      try {
+        const data: Snapshot = JSON.parse(event.data);
+        if (!data.station) return;
+        setSnapshot(data);
+        setConnected(true);
+      } catch {
+        setConnected(false);
+      }
+    };
+    es.onerror = async () => {
+      if (disposed) return;
+      setConnected(false);
+      // EventSource reconnects automatically. Check whether a new sign-in is needed.
+      try {
+        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        if (!response.ok) return;
+        const session = await response.json();
+        if (!disposed && session?.user?.userType !== "staff") {
+          es.close();
+          setSnapshot(null);
+          router.replace(`/login?type=staff&callbackUrl=${encodeURIComponent(`/station/${id}`)}`);
         }
-      };
+      } catch { /* Keep the last snapshot visibly offline while wifi reconnects. */ }
+    };
+    return () => { disposed = true; es.close(); };
+  }, [id, router]);
 
-      es.onerror = () => {
-        es.close();
-        // Reconnect after 3s
-        setTimeout(connect, 3000);
-      };
-    }
+  const station = snapshot?.station;
+  const kennels = snapshot?.kennels ?? [];
+  const appointments = snapshot?.appointments ?? kennels.flatMap(kennel => kennel.appointments);
+  const visit = appointments.find(item => item.id === selectedId) ?? appointments[0];
+  const next = visit ? nextStatus(visit.status) : null;
 
-    connect();
-    return () => sourceRef.current?.close();
-  }, [params.id]);
-
-  async function handleAdvance(target: Occupant) {
-    const next = nextStatus(target.status);
-    if (!next) return;
+  async function advance() {
+    if (!visit || !connected || advancingRef.current) return;
+    advancingRef.current = true;
     setAdvancing(true);
-    await advanceStatus(target.id, next);
-    setAdvancing(false);
+    setError(null);
+    try {
+      const response = await fetch(`/api/station/${id}/advance`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId: visit.id }),
+      });
+      if (response.status === 401) {
+        setSnapshot(null);
+        router.replace(`/login?type=staff&callbackUrl=${encodeURIComponent(`/station/${id}`)}`);
+        return;
+      }
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setError(body?.error ?? "Could not update this visit. Try again.");
+      }
+    } catch { setError("No connection to the shop. Try again."); }
+    finally { advancingRef.current = false; setAdvancing(false); }
   }
 
-  // One pet gets the full-screen card; a station holding several shows them
-  // side by side, each with its own advance button.
-  const appointment = appointments.length === 1 ? appointments[0] : null;
-  const pet = appointment?.pet;
-  const next = appointment ? nextStatus(appointment.status) : null;
-  const isKennel = station?.role === "KENNEL";
-  const occupied = kennels.filter((kennel) => kennel.appointments.length > 0).length;
-  const inService = kennels.filter((kennel) => kennel.isActive).length;
-
   return (
-    <div className="min-h-screen bg-stone-900 text-white flex flex-col p-6 gap-6 select-none">
-      {/* Station header */}
-      <div className="flex items-center justify-between">
-        <span className="font-display text-3xl font-extrabold tracking-tight text-white">
-          {station?.name ?? "Station"}
-        </span>
-        <span className="text-stone-300 text-lg tabular-nums">
-          {isKennel
-            ? `${occupied}/${inService} occupied · `
-            : appointments.length > 1
-              ? `${appointments.length} pets · `
-              : ""}
-          {clock}
-        </span>
-      </div>
-
-      {isKennel ? (
-        kennels.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-stone-300 gap-4">
-            <span className="text-8xl" aria-hidden="true">🏠</span>
-            <p className="text-3xl">No kennels configured</p>
-            <p className="text-xl">Set this unit&apos;s layout in the admin panel.</p>
+    <main className="station-hud station-glass liquid-shell min-h-screen bg-stone-900 text-white space-y-4">
+      <header className="station-header">
+        <div className="station-heading">
+          <p className="station-eyebrow">Station workspace</p>
+          <h1 className="station-title font-display font-extrabold">{station?.name ?? "Station display"}</h1>
+          <div className="station-connection">
+            <p role="status" className={connected ? "text-emerald-300" : "text-amber-300"}>
+              <span aria-hidden="true" className="station-live-dot" />
+              {connected ? "Live updates" : snapshot ? "Reconnecting — showing last received information" : "Connecting to station…"}
+            </p>
+            {clock && <span className="station-clock">{clock}</span>}
           </div>
-        ) : (
-          <div
-            className="flex-1 grid gap-3 content-start"
-            style={{
-              gridTemplateColumns: `repeat(${station?.kennelColumns ?? 1}, minmax(0, 1fr))`,
-            }}
-          >
-            {kennels.map((kennel) => {
-              const occupants = kennel.appointments;
-              const occupant = occupants[0] ?? null;
-              const biting = occupants.some((one) => one.pet.hasBiteHistory);
-              return (
-                <div
-                  key={kennel.id}
-                  className={`rounded-2xl p-4 flex flex-col gap-1 min-h-[9rem] ${
-                    !kennel.isActive
-                      ? "bg-stone-800/40 text-stone-300"
-                      : occupant
-                        ? biting
-                          ? "bg-signal-alert/90 text-white"
-                          : "bg-stone-800 text-white"
-                        : "bg-stone-800/60 text-stone-300"
-                  }`}
-                >
-                  <span className="font-display text-3xl font-extrabold tracking-tight text-white/90">{kennel.label}</span>
-                  {!kennel.isActive ? (
-                    <span className="text-lg">Out of service</span>
-                  ) : occupant ? (
-                    <>
-                      {/* A household shares a door; the counter needs every
-                          name behind it, not just the first one in. */}
-                      <span className="font-display text-3xl font-extrabold leading-tight tracking-tight">
-                        {occupants.map((one) => one.pet.name).join(", ")}
-                      </span>
-                      <span className="text-lg text-stone-300">
-                        {occupant.customer.firstName} {occupant.customer.lastName}
-                      </span>
-                      <span className="text-base text-stone-300 mt-auto">
-                        {formatStatus(occupant.status)}
-                      </span>
-                      {biting && (
-                        <span className="text-base font-black tracking-widest">⚠ BITE HISTORY</span>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-2xl mt-auto">Empty</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )
-      ) : appointments.length > 1 ? (
-        <div className="flex-1 grid gap-3 content-start sm:grid-cols-2 lg:grid-cols-3">
-          {appointments.map((occupant) => {
-            const step = nextStatus(occupant.status);
-            return (
-              <div
-                key={occupant.id}
-                className={`rounded-2xl p-5 flex flex-col gap-2 ${
-                  occupant.pet.hasBiteHistory ? "bg-signal-alert/90" : "bg-stone-800"
-                }`}
-              >
-                <span className="font-display text-4xl font-extrabold leading-tight tracking-tight">{occupant.pet.name}</span>
-                <span className="text-xl text-stone-300">
-                  {occupant.customer.firstName} {occupant.customer.lastName}
-                </span>
-                <span className="text-lg text-stone-300">
-                  {formatServiceType(occupant.serviceType)}
-                  {occupant.staff && ` · ${occupant.staff.name}`}
-                </span>
-                {occupant.pet.hasBiteHistory && (
-                  <span className="text-lg font-black tracking-widest">⚠ BITE HISTORY</span>
-                )}
-                <span className="text-2xl font-bold mt-auto">
-                  {formatStatus(occupant.status)}
-                </span>
-                {step && (
-                  <button
-                    type="button"
-                    onClick={() => handleAdvance(occupant)}
-                    disabled={advancing}
-                    className="bg-brand-600 hover:bg-brand-500 active:bg-brand-700 disabled:opacity-50
-                               text-brand-on-600 text-xl font-bold py-4 rounded-xl transition-colors touch-manipulation"
-                  >
-                    {advancing ? "Updating…" : `→ ${formatStatus(step)}`}
-                  </button>
-                )}
-              </div>
-            );
-          })}
         </div>
-      ) : appointment && pet ? (
-        <>
-          {/* Bite history warning */}
-          {pet.hasBiteHistory && (
-            <div className="bite-warning text-2xl py-4">
-              ⚠ BITE HISTORY — USE CAUTION
-            </div>
-          )}
-
-          {/* Main pet card */}
-          <div className="flex-1 bg-stone-800 rounded-2xl p-8 flex flex-col gap-6">
-            <div className="flex items-start gap-6">
-              {/* Photo */}
-              <div className="w-32 h-32 rounded-xl bg-stone-700 overflow-hidden flex-shrink-0">
-                {pet.photoUrl ? (
-                  // Plain <img>: photoUrl is an arbitrary external address the
-                  // shop typed in, so next/image would need a remotePatterns
-                  // entry per host. The kiosk is one Pi on the shop's LAN
-                  // showing one 128px thumbnail — optimisation buys nothing.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={pet.photoUrl} alt={pet.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-5xl" aria-hidden="true">
-                    {pet.species === "CAT" ? "🐱" : "🐶"}
-                  </div>
-                )}
-              </div>
-
-              {/* Identity */}
-              <div className="flex-1">
-                <h1 className="font-display text-6xl font-extrabold tracking-[-0.03em]">{pet.name}</h1>
-                <p className="text-stone-300 text-2xl mt-1">
-                  {pet.breed ?? pet.species}
-                  {pet.weightLbs ? ` · ${pet.weightLbs} lbs` : ""}
-                </p>
-                {/* Name only. This screen faces the waiting room, so a phone
-                    number here is readable by every customer waiting. Staff
-                    read it from /staff/stations/[id] instead. */}
-                <p className="text-stone-300 text-xl mt-2">
-                  Owner: {appointment.customer.firstName} {appointment.customer.lastName}
-                </p>
-              </div>
-            </div>
-
-            {/* Service */}
-            <div className="flex gap-4 flex-wrap">
-              <span className="bg-brand-600 text-brand-on-600 px-4 py-2 rounded-lg text-xl font-semibold">
-                {formatServiceType(appointment.serviceType)}
-              </span>
-              {pet.healthFlags.map((flag) => (
-                <span key={flag} className="bg-amber-700 text-white px-4 py-2 rounded-lg text-lg">
-                  {flag}
-                </span>
-              ))}
-            </div>
-
-            {/* Grooming notes */}
-            {pet.groomingNotes && (
-              <div className="bg-stone-700 rounded-xl p-5">
-                <p className="font-display text-lg font-bold text-stone-300 mb-2">Grooming notes</p>
-                <p className="text-white text-xl leading-relaxed">{pet.groomingNotes}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Status + advance button */}
-          <div className="flex flex-col gap-4">
-            <div className="bg-stone-800 rounded-2xl px-8 py-5 text-center">
-              <p className="text-stone-300 text-lg mb-1">Right now</p>
-              <p className="font-display text-4xl font-extrabold tracking-tight">
-                {formatStatus(appointment.status)}
-              </p>
-            </div>
-
-            {next && (
-              <button
-                type="button"
-                onClick={() => handleAdvance(appointment)}
-                disabled={advancing}
-                className="w-full bg-brand-600 hover:bg-brand-500 active:bg-brand-700 disabled:opacity-50
-                           text-brand-on-600 text-3xl font-bold py-8 rounded-2xl transition-colors touch-manipulation"
-              >
-                {advancing ? "Updating…" : `→ ${formatStatus(next)}`}
-              </button>
-            )}
-
-            {!next && appointment.status === "PICKED_UP" && (
-              <div className="text-center text-stone-300 text-2xl py-6">
-                ✓ Complete — waiting for next pet
-              </div>
-            )}
-          </div>
-        </>
-      ) : (
-        <div className="flex-1 flex flex-col items-center justify-center text-stone-300 gap-4">
-          <span className="text-8xl" aria-hidden="true">🐾</span>
-          <p className="text-3xl">No pet assigned</p>
-          <p className="text-xl">Waiting for next appointment…</p>
-
-          {shopLocation?.address && (
-            <div className="mt-4 w-full max-w-2xl text-center">
-              <p className="text-2xl text-stone-200">{shopLocation.shopName}</p>
-              <p className="text-xl text-stone-300 mt-1">{shopLocation.address}</p>
-              {shopLocation.embedUrl && (
-                <div className="mt-3 rounded-2xl overflow-hidden border border-stone-700">
-                  <iframe
-                    title={`Map showing ${shopLocation.shopName}`}
-                    src={shopLocation.embedUrl}
-                    height={260}
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                    className="w-full block border-0"
-                  />
-                </div>
-              )}
-            </div>
-          )}
+        <nav aria-label="Station controls" className="station-toolbar flex flex-wrap gap-2">
+          <Link className={control} href="/staff/stations">Switch station</Link>
+          <Link className={control} href={`/staff/stations/${id}`}>Manage station</Link>
+          <button type="button" className={`${control} hidden sm:inline-flex`} onClick={() => {
+            const action = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+            action?.catch(() => setError("Full screen is unavailable in this browser."));
+          }}>Full screen</button>
+        </nav>
+      </header>
+      {station && !station.isActive && <p className="rounded-xl bg-amber-700 p-4">This station is inactive.</p>}
+      {error && <p role="alert" className="rounded-xl bg-red-800 p-4">{error}</p>}
+      {station?.role === "KENNEL" && <section aria-label="Kennel doors" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {kennels.map(kennel => <div key={kennel.id} className="rounded-xl bg-stone-800 p-3">
+          <h2 className="font-bold text-xl">{kennel.label}</h2>
+          {!kennel.isActive ? <p className="text-stone-300">Out of service</p> : !kennel.appointments.length ? <p className="text-stone-300">Empty</p> : null}
+          {kennel.appointments.map(item => <button key={item.id} type="button" aria-pressed={visit?.id === item.id} onClick={() => { setSelectedId(item.id); setError(null); }} className={`${control} mt-2 w-full ${visit?.id === item.id ? "bg-stone-600" : ""}`}>{item.pet.name}{item.pet.hasBiteHistory ? " · ⚠ Bite history" : ""}</button>)}
+        </div>)}
+      </section>}
+      {station?.role !== "KENNEL" && appointments.length > 1 && <nav aria-label="Pets at this station" className="flex flex-wrap gap-2">{appointments.map(item => <button type="button" key={item.id} className={control} aria-pressed={visit?.id === item.id} onClick={() => { setSelectedId(item.id); setError(null); }}>{item.pet.name}</button>)}</nav>}
+      {visit ? <>
+        {visit.pet.hasBiteHistory && <div className="station-warning rounded-xl bg-red-800 px-5 py-4 text-xl font-extrabold">⚠ BITE HISTORY — USE CAUTION</div>}
+        <div className="station-progress flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-stone-800 p-4">
+          <div className="min-w-0"><p className="station-eyebrow">Right now · {visit.pet.name}</p><p className="station-section-title font-display text-3xl font-bold">{formatStatus(visit.status)}</p></div>
+          {next && station?.role !== "KENNEL" && <button type="button" onClick={advance} disabled={advancing || !connected} className="station-advance min-h-14 w-full sm:w-auto rounded-xl bg-brand-600 px-6 py-4 text-xl font-bold text-brand-on-600 disabled:opacity-50 touch-manipulation">{advancing ? "Updating…" : `→ ${formatStatus(next)}`}</button>}
         </div>
-      )}
-    </div>
+        <VisitDetails visit={visit} />
+      </> : snapshot ? <section className="station-empty" aria-label="Station ready">
+        <div className="station-empty-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none"><rect x="8" y="10" width="32" height="24" rx="5" stroke="currentColor" strokeWidth="2" /><path d="M18 40h12M24 34v6m-7-18 5 5 10-10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </div>
+        <p className="station-eyebrow">{station?.isActive ? "Ready for the next pet" : "Station inactive"}</p>
+        <h2 className="font-display text-3xl sm:text-4xl font-bold">No pet assigned</h2>
+        <p className="station-empty-description">Customer details, care instructions, and visit progress will appear here when a pet is assigned to this station.</p>
+        <Link className={control} href={`/staff/stations/${id}`}>Manage station <span aria-hidden="true" className="ml-2">→</span></Link>
+      </section> : <div className="py-20 text-center text-stone-300">Loading the station’s working record…</div>}
+    </main>
   );
 }

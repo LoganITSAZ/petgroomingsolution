@@ -249,6 +249,25 @@ export default async function AdminServicesPage(props: PageProps) {
     <PageShell
       title="Services & Pricing"
       subtitle="Edited here, shown on the public pricing page, offered in booking forms, and used for revenue estimates in analytics."
+      actions={
+        <ModalButton
+          label="Add a service"
+          title="Add a service"
+          description="It joins the catalogue, the booking forms and the public pricing page."
+        >
+          <form action={createService} className="space-y-4">
+            <ServiceFields />
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-bold transition-colors"
+              >
+                Add service
+              </button>
+            </div>
+          </form>
+        </ModalButton>
+      }
     >
 
       {searchParams.saved && (
@@ -306,28 +325,6 @@ export default async function AdminServicesPage(props: PageProps) {
         </span>
       </form>
 
-      {/* Adding is one job, so it gets a dialog rather than an accordion that
-          pushes the catalogue down the page while you fill it in. */}
-      <PageSection tone="muted" bodyClassName="flex justify-end">
-        <ModalButton
-          label="Add a service"
-          title="Add a service"
-          description="It joins the catalogue, the booking forms and the public pricing page."
-        >
-          <form action={createService} className="space-y-4">
-            <ServiceFields />
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-bold transition-colors"
-              >
-                Add service
-              </button>
-            </div>
-          </form>
-        </ModalButton>
-      </PageSection>
-
       {/* Catalog */}
       {services.length === 0 ? (
         <PageSection grow className="text-center text-stone-400 text-sm">
@@ -338,6 +335,7 @@ export default async function AdminServicesPage(props: PageProps) {
           <PageSection
             key={group.heading}
             title={group.heading}
+            className={`service-group service-group-${group.heading.toLowerCase().replaceAll(" ", "-")}`}
             padded={false}
             bodyClassName="divide-y divide-stone-100 border-t border-stone-100 mt-2"
           >

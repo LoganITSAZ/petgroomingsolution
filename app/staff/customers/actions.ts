@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/auth-guards";
+import { z } from "zod";
 import { CoatType, Species } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { storePhoto, deletePhotoIfUnused } from "@/lib/photos";
@@ -100,6 +101,49 @@ export async function createCustomer(formData: FormData): Promise<void> {
 
   revalidatePath("/staff/customers");
   redirect(`/staff/customers/${customer.id}?created=1`);
+}
+
+/** Edit the customer's identity and contact details. */
+export async function saveCustomerProfile(formData: FormData): Promise<void> {
+  await requireStaff();
+  const field = (name: string) => String(formData.get(name) ?? "").trim();
+  const customerId = field("customerId");
+  if (!customerId) redirect("/staff/customers?error=not_found");
+  const path = `/staff/customers/${customerId}`;
+  const firstName = field("firstName");
+  const lastName = field("lastName");
+  const email = field("email").toLowerCase();
+  if (!firstName || !lastName || !z.string().email().safeParse(email).success) {
+    redirect(`${path}?error=profile_invalid`);
+  }
+  try {
+    await prisma.customer.update({
+      where: { id: customerId },
+      data: {
+        firstName,
+        lastName,
+        email,
+        phone: field("phone") || null,
+        address: field("address") || null,
+        // Reads as an opt-*in* on the form and is stored as an opt-out, same as
+        // the customer's own portal. The marker says the form carried it at all,
+        // because an unchecked box posts nothing.
+        ...(formData.get("smsPrefPosted") !== null && {
+          smsOptOut: formData.get("smsNotify") === null,
+        }),
+      },
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      redirect(`${path}?error=email_taken`);
+    }
+    throw error;
+  }
+  revalidatePath("/staff/customers");
+  revalidatePath(path);
+  revalidatePath("/staff/pets/[id]", "page");
+  revalidatePath("/portal/profile");
+  redirect(`${path}?updated=1`);
 }
 
 /** The groomer this customer books with; their station follows from it. */
@@ -315,15 +359,33 @@ export async function savePet(formData: FormData): Promise<void> {
   const customerId = field("customerId");
   const petId = field("petId");
   const name = field("name");
+  const returnPath = petId && field("returnToPet") === "1"
+    ? `/staff/pets/${petId}`
+    : `/staff/customers/${customerId}`;
 
   if (!customerId) redirect("/staff/customers?error=not_found");
-  if (!name) redirect(`/staff/customers/${customerId}?error=pet_name`);
+  if (!name) redirect(`${returnPath}?error=pet_name`);
 
   const weightRaw = field("weightLbs");
   const weightLbs = weightRaw ? Number(weightRaw) : null;
   if (weightLbs != null && (!Number.isFinite(weightLbs) || weightLbs <= 0)) {
-    redirect(`/staff/customers/${customerId}?error=bad_weight`);
+    redirect(`${returnPath}?error=bad_weight`);
   }
+
+  /*
+   * Confirming vaccinations stamps the day it was confirmed; unticking it
+   * clears the stamp. The original date is read back rather than posted, so
+   * an ordinary save of some other field does not re-date the check.
+   */
+  const existing = petId
+    ? await prisma.pet.findFirst({
+        where: { id: petId, customerId },
+        select: { vaccinationsConfirmedAt: true },
+      })
+    : null;
+  const vaccinationsConfirmedAt = formData.get("vaccinationsConfirmed")
+    ? existing?.vaccinationsConfirmedAt ?? new Date()
+    : null;
 
   const speciesRaw = field("species");
   const coatRaw = field("coatType");
@@ -337,6 +399,16 @@ export async function savePet(formData: FormData): Promise<void> {
     coatType: Object.values(CoatType).includes(coatRaw as CoatType) ? (coatRaw as CoatType) : null,
     groomingNotes: field("groomingNotes") || null,
     temperamentNotes: field("temperamentNotes") || null,
+    vaccinationsConfirmedAt,
+    // One chip per value, posted under the same name by TagPicker.
+    healthFlags: [
+      ...new Set(
+        formData
+          .getAll("healthFlags")
+          .map((flag) => flag.toString().trim())
+          .filter(Boolean)
+      ),
+    ],
   };
 
   if (petId) {
@@ -347,7 +419,9 @@ export async function savePet(formData: FormData): Promise<void> {
   }
 
   revalidatePath(`/staff/customers/${customerId}`);
-  redirect(`/staff/customers/${customerId}?pet=1`);
+  if (petId) revalidatePath(`/staff/pets/${petId}`);
+  revalidatePath("/staff/customers");
+  redirect(`${returnPath}?${returnPath.startsWith("/staff/pets/") ? "updated" : "pet"}=1`);
 }
 
 /**

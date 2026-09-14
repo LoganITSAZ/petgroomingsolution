@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
-import { broadcastToStation } from "@/lib/station-events";
+import { STATION_APPOINTMENT_SELECT, broadcastToStation } from "@/lib/station-events";
 import { AppointmentStatus } from "@prisma/client";
 import { pickupThresholds } from "@/lib/pickups";
 
@@ -152,12 +152,7 @@ export async function getKennelBoard(stationId: string) {
     include: {
       appointments: {
         where: { status: { in: KENNELABLE_STATUSES } },
-        include: {
-          pet: { select: { id: true, name: true, hasBiteHistory: true, species: true } },
-          // No phone: this board is streamed to the unauthenticated kiosk.
-          customer: { select: { firstName: true, lastName: true } },
-          staff: { select: { name: true } },
-        },
+        select: { ...STATION_APPOINTMENT_SELECT, customerId: true, kenneledAt: true },
         orderBy: { kenneledAt: "asc" },
       },
     },

@@ -18,28 +18,24 @@ import SaveToast from "@/components/SaveToast";
 export const metadata = { title: "Appearance" };
 
 /**
- * How the public site looks. Staff and admin screens are deliberately left
- * alone: the shop's seasonal mood should never make the working screens
- * harder to read.
+ * The website and dashboard share this palette. Staff retain their own
+ * light/dark preference, and operational signals keep their status colors.
  */
 
 const NOTICES: Record<string, string> = {
   unknown_preset: "That theme does not exist.",
-  bad_color: "Enter a colour as #rrggbb.",
 };
 
 function Swatch({ preset, live }: { preset: ThemePreset; live: boolean }) {
   return (
     <label
-      className={`block border rounded-xl p-3 cursor-pointer transition-colors ${
-        live ? "border-amber-500 bg-amber-50" : "border-stone-200 hover:border-stone-300"
-      }`}
+      className="block border border-stone-200 rounded-xl p-3 cursor-pointer transition-colors hover:border-stone-300 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50"
     >
       <span className="flex items-center gap-2">
         <input
           type="radio"
-          name="themePreset"
-          value={preset.id}
+          name="themeChoice"
+          value={`template:${preset.id}`}
           defaultChecked={live}
           className="accent-amber-700"
         />
@@ -47,6 +43,9 @@ function Swatch({ preset, live }: { preset: ThemePreset; live: boolean }) {
           {preset.motif && <span className="mr-1">{preset.motif}</span>}
           {preset.label}
         </span>
+        {preset.id === "default" && (
+          <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900">Default</span>
+        )}
       </span>
       <span className="flex gap-1 mt-2">
         {[
@@ -86,11 +85,11 @@ export default async function AppearancePage(props: PageProps) {
     .split("-")
     .map(Number);
 
+  const choice = config.themeAutoSeasonal ? "calendar" : config.themeUseShopColors ? "shop" : `template:${config.themePreset ?? "default"}`;
   const live = resolveTheme(config, { month, day });
   const calendarPick = getPreset(seasonalPresetId(month, day));
   const errorMessage = searchParams.error ? NOTICES[searchParams.error] : undefined;
 
-  const groups: ThemePreset["group"][] = ["Default", "Seasons", "Holidays"];
 
   return (
     <PageShell
@@ -103,8 +102,8 @@ export default async function AppearancePage(props: PageProps) {
         </>
       }
       actions={
-        <Link href="/" className="text-sm text-amber-700 hover:text-amber-900 underline">
-          View the site →
+        <Link href="/" className="inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2">
+          View the Site
         </Link>
       }
     >
@@ -119,6 +118,33 @@ export default async function AppearancePage(props: PageProps) {
           {errorMessage}
         </SaveToast>
       )}
+
+      <form action={saveAppearance}>
+        <PageSection title="Theme options">
+          <fieldset className="space-y-3">
+            <legend className="sr-only">Theme options</legend>
+            <label className="flex items-start gap-3">
+              <input type="radio" name="themeChoice" value="calendar" defaultChecked={choice === "calendar"} className="accent-amber-700 mt-1" />
+              <span className="text-sm">
+                <span className="font-semibold text-stone-800">Follow the calendar</span>
+                <span className="block text-stone-500">
+                  Switch automatically through the seasons and holidays. Today that would be{" "}
+                  <span className="font-medium text-stone-700">{calendarPick.motif} {calendarPick.label}</span>.
+                </span>
+              </span>
+            </label>
+            <div>
+              <label className="flex items-center gap-3 text-sm">
+                <input type="radio" name="themeChoice" value="shop" defaultChecked={choice === "shop"} className="accent-amber-700" aria-describedby="shop-colors-description" />
+                <span className="font-semibold text-stone-800">Use shop colors</span>
+              </label>
+              <p id="shop-colors-description" className="mt-1 text-sm text-stone-500">
+                Use your saved palette with the default layout. Set your brand colors and tagline in{" "}
+                <Link href="/admin/settings#shop-branding" className="text-amber-700 underline">Shop Settings</Link>.
+              </p>
+            </div>
+          </fieldset>
+        </PageSection>
 
       {/* Live preview of the resolved theme */}
       <PageSection title="Live preview" tone="muted">
@@ -146,75 +172,12 @@ export default async function AppearancePage(props: PageProps) {
       </div>
       </PageSection>
 
-      <form action={saveAppearance}>
-        <PageSection>
-          <label className="flex items-start gap-3">
-            <input
-              type="checkbox"
-              name="themeAutoSeasonal"
-              defaultChecked={config.themeAutoSeasonal}
-              className="accent-amber-700 mt-1"
-            />
-            <span className="text-sm">
-              <span className="font-semibold text-stone-800">Follow the calendar</span>
-              <span className="block text-stone-500">
-                Switch automatically through the seasons and holidays. Today that would be{" "}
-                <span className="font-medium text-stone-700">
-                  {calendarPick.motif} {calendarPick.label}
-                </span>
-                .
-              </span>
-            </span>
-          </label>
-        </PageSection>
-
-        {groups.map((group) => (
-          <PageSection key={group} title={group}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {THEME_PRESETS.filter((preset) => preset.group === group).map((preset) => (
-                <Swatch
-                  key={preset.id}
-                  preset={preset}
-                  live={preset.id === (config.themePreset ?? "default")}
-                />
-              ))}
-            </div>
-          </PageSection>
-        ))}
-
-        <PageSection title="Shop touches" bodyClassName="space-y-3">
-
-          <label className="flex items-center gap-3 text-sm">
-            <input
-              type="checkbox"
-              name="useCustomColor"
-              defaultChecked={Boolean(config.themeBrandColor)}
-              className="accent-amber-700"
-            />
-            <span className="text-stone-700">Use our own brand colour</span>
-            <input
-              type="color"
-              name="themeBrandColor"
-              defaultValue={config.themeBrandColor ?? "#ec8b1a"}
-              className="h-8 w-14 rounded border border-stone-200 bg-white"
-            />
-            <span className="text-xs text-stone-400">
-              Replaces the theme&apos;s brand ramp; the rest of the theme stays.
-            </span>
-          </label>
-
-          <label className="block text-sm">
-            <span className="block text-stone-600 mb-1">Banner line (optional)</span>
-            <input
-              name="themeBannerText"
-              defaultValue={config.themeBannerText ?? ""}
-              placeholder="Holiday hours: closed Dec 25"
-              className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
-            />
-            <span className="block text-xs text-stone-400 mt-1">
-              Shown across the top of every public page.
-            </span>
-          </label>
+        <PageSection title="Color templates">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {THEME_PRESETS.map((preset) => (
+              <Swatch key={preset.id} preset={preset} live={choice === `template:${preset.id}`} />
+            ))}
+          </div>
         </PageSection>
 
         <PageSection tone="muted" bodyClassName="flex justify-end">

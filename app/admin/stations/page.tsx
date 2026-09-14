@@ -53,7 +53,7 @@ export default async function StationsPage(props: PageProps) {
       subtitle={
         <>
           {activeCount} of {stations.length} station{stations.length !== 1 ? "s" : ""} active.
-          Each station carries a role that decides how it is used on the floor.
+          Each station carries a role that decides how it is used in the storefront.
         </>
       }
       actions={

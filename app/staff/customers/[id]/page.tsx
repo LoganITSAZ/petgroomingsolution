@@ -2,9 +2,8 @@ import { prisma } from "@/lib/prisma";
 import {
   formatStatus,
   formatServiceType,
-      formatSpecies,
-      formatCoatType,
-          statusBadgeClass,
+  formatSpecies,
+  statusBadgeClass,
 } from "@/lib/utils";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
@@ -17,7 +16,7 @@ import {
   setCustomerPhoto,
   setPreferredGroomer,
   setPricingTier,
-  savePet,
+  saveCustomerProfile,
   removePet,
 } from "../actions";
 import { describeRate, listPricingTiers } from "@/lib/pricing-tiers";
@@ -29,9 +28,10 @@ import InsightList from "@/components/InsightList";
 import PhotoUpload from "@/components/PhotoUpload";
 import ModalButton from "@/components/ModalButton";
 import AddressMap from "@/components/AddressMap";
+import DriveFromShop from "@/components/DriveFromShop";
 import AddressLink from "@/components/AddressLink";
 import { photoUrl } from "@/lib/photos";
-import { CoatType, Species } from "@prisma/client";
+import { PetForm, healthFlagOptions } from "../PetForm";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -42,6 +42,7 @@ interface PageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{
     created?: string;
+    updated?: string;
     groomer?: string;
     photo?: string;
     alt?: string;
@@ -129,114 +130,6 @@ function AddressForm({ customer }: { customer: { id: string; address: string | n
   );
 }
 
-/** Add or edit a pet. No `pet` is the add case — the action reads it the same way. */
-function PetForm({
-  customerId,
-  pet,
-}: {
-  customerId: string;
-  pet?: {
-    id: string;
-    name: string;
-    species: Species;
-    breed: string | null;
-    weightLbs: number | null;
-    coatType: CoatType | null;
-    groomingNotes: string | null;
-    temperamentNotes: string | null;
-  };
-}) {
-  return (
-    <form action={savePet} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-      <input type="hidden" name="customerId" value={customerId} />
-      {pet && <input type="hidden" name="petId" value={pet.id} />}
-      <label className="text-sm">
-        <span className="block text-stone-500 mb-1">Name</span>
-        <input
-          name="name"
-          required
-          defaultValue={pet?.name ?? ""}
-          className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm"
-        />
-      </label>
-      <label className="text-sm">
-        <span className="block text-stone-500 mb-1">Species</span>
-        <select
-          name="species"
-          defaultValue={pet?.species ?? Species.DOG}
-          className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white"
-        >
-          {Object.values(Species).map((species) => (
-            <option key={species} value={species}>
-              {formatSpecies(species)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="text-sm">
-        <span className="block text-stone-500 mb-1">Breed</span>
-        <input
-          name="breed"
-          defaultValue={pet?.breed ?? ""}
-          className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm"
-        />
-      </label>
-      <label className="text-sm">
-        <span className="block text-stone-500 mb-1">Weight (lbs)</span>
-        <input
-          name="weightLbs"
-          type="number"
-          min="1"
-          step="0.1"
-          defaultValue={pet?.weightLbs ?? ""}
-          className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm"
-        />
-      </label>
-      <label className="text-sm sm:col-span-2">
-        <span className="block text-stone-500 mb-1">Coat</span>
-        <select
-          name="coatType"
-          defaultValue={pet?.coatType ?? ""}
-          className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white"
-        >
-          <option value="">Not recorded</option>
-          {Object.values(CoatType).map((coat) => (
-            <option key={coat} value={coat}>
-              {formatCoatType(coat)}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="text-sm sm:col-span-2">
-        <span className="block text-stone-500 mb-1">Grooming notes</span>
-        <textarea
-          name="groomingNotes"
-          rows={2}
-          defaultValue={pet?.groomingNotes ?? ""}
-          className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm resize-y"
-        />
-      </label>
-      <label className="text-sm sm:col-span-2">
-        <span className="block text-stone-500 mb-1">Temperament notes</span>
-        <textarea
-          name="temperamentNotes"
-          rows={2}
-          defaultValue={pet?.temperamentNotes ?? ""}
-          className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm resize-y"
-        />
-      </label>
-      <div className="sm:col-span-2 flex justify-end">
-        <button
-          type="submit"
-          className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-1.5 rounded-lg text-sm font-semibold"
-        >
-          Save
-        </button>
-      </div>
-    </form>
-  );
-}
-
 export default async function CustomerDetailPage(props: PageProps) {
   const params = await props.params;
   const searchParams = await props.searchParams;
@@ -263,10 +156,11 @@ export default async function CustomerDetailPage(props: PageProps) {
 
   const insights = await customerInsights(params.id);
 
-  const [tiers, card, redemptions] = await Promise.all([
+  const [tiers, card, redemptions, flagOptions] = await Promise.all([
     listPricingTiers(),
     rewardCard(params.id),
     rewardHistory(params.id, 5),
+    healthFlagOptions(),
   ]);
 
   const groomers = await prisma.staff.findMany({
@@ -285,9 +179,12 @@ export default async function CustomerDetailPage(props: PageProps) {
       back={{ href: "/staff/customers", label: "Back to Customers" }}
       title={`${customer.firstName} ${customer.lastName}`}
       subtitle={`Member since ${memberSince}`}
-      className="max-w-5xl mx-auto w-full"
+      className="max-w-5xl w-full"
     >
 
+      {searchParams.updated === "1" && <p role="status" className="px-3 py-2 text-green-800 text-sm">Profile updated.</p>}
+      {searchParams.error === "profile_invalid" && <p role="alert" className="px-3 py-2 text-red-800 text-sm">Enter a first name, last name, and valid email address.</p>}
+      {searchParams.error === "email_taken" && <p role="alert" className="px-3 py-2 text-red-800 text-sm">That email address belongs to another customer.</p>}
       {searchParams.photo === "1" && (
         <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Photo updated.
@@ -314,7 +211,55 @@ export default async function CustomerDetailPage(props: PageProps) {
       )}
 
       {/* Customer header */}
-      <PageSection>
+      <PageSection
+        title="Profile Details"
+        actions={
+          <>
+          <ModalButton label="Edit Profile" title="Edit customer profile" variant="secondary">
+            <form action={saveCustomerProfile} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input type="hidden" name="customerId" value={customer.id} />
+              {([
+                ["firstName", "First name", customer.firstName, "text"],
+                ["lastName", "Last name", customer.lastName, "text"],
+                ["email", "Email", customer.email, "email"],
+                ["phone", "Phone", customer.phone ?? "", "tel"],
+              ] as const).map(([name, label, value, type]) => (
+                <label key={name} className="text-sm">
+                  <span className="block text-stone-500 mb-1">{label}</span>
+                  <input name={name} type={type} required={name !== "phone"} defaultValue={value}
+                    className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm" />
+                </label>
+              ))}
+              <input type="hidden" name="smsPrefPosted" value="1" />
+              <label className="text-sm sm:col-span-2 flex items-start gap-2">
+                <input type="checkbox" name="smsNotify" defaultChecked={!customer.smsOptOut}
+                  className="mt-0.5 accent-amber-700" />
+                <span>
+                  Text this customer about their visits
+                  <span className="block text-xs text-stone-500">
+                    Visit updates only. They can also reply STOP to any message.
+                  </span>
+                </span>
+              </label>
+              <label className="text-sm sm:col-span-2">
+                <span className="block text-stone-500 mb-1">Address</span>
+                <textarea name="address" rows={3} defaultValue={customer.address ?? ""}
+                  className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm" />
+              </label>
+              <div className="sm:col-span-2 flex justify-end">
+                <button type="submit" className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-1.5 rounded-lg text-sm font-semibold">Save</button>
+              </div>
+            </form>
+          </ModalButton>
+            <Link
+              href={`/staff/appointments/new?customerId=${customer.id}`}
+              className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+            >
+              + New Appointment
+            </Link>
+          </>
+        }
+      >
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
             <PhotoUpload
@@ -386,12 +331,7 @@ export default async function CustomerDetailPage(props: PageProps) {
             </button>
           </form>
 
-          <Link
-            href={`/staff/appointments/new?customerId=${customer.id}`}
-            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
-          >
-            + New Appointment
-          </Link>
+
         </div>
       </PageSection>
 
@@ -412,9 +352,7 @@ export default async function CustomerDetailPage(props: PageProps) {
       )}
 
       {/* What this customer pays, and what they have earned */}
-      <PageSection bodyClassName="grid gap-3 md:grid-cols-2">
-        <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <h2 className="text-sm font-bold text-stone-800">Pricing</h2>
+      <PageSection title="Pricing">
 
           {customer.pricingTier ? (
             <p className="mt-2 text-sm">
@@ -484,11 +422,10 @@ export default async function CustomerDetailPage(props: PageProps) {
               </button>
             </div>
           </form>
-        </div>
+      </PageSection>
 
-        {card.enabled && (
-          <div className="border border-stone-200 rounded-lg bg-well p-4">
-            <h2 className="text-sm font-bold text-stone-800">Rewards</h2>
+      {card.enabled && (
+          <PageSection title="Rewards">
 
             <div className="mt-2">
               <RewardCard card={card} />
@@ -530,9 +467,8 @@ export default async function CustomerDetailPage(props: PageProps) {
                 ))}
               </ul>
             )}
-          </div>
-        )}
-            </PageSection>
+          </PageSection>
+      )}
 
       {searchParams.alt === "1" && (
         <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
@@ -575,6 +511,69 @@ export default async function CustomerDetailPage(props: PageProps) {
         </p>
       )}
 
+      {/* Pets section */}
+      <PageSection title={`Pets (${customer.pets.length})`}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {customer.pets.map((pet) => (
+            <div
+              key={pet.id}
+              className="bg-well border border-well-line rounded-lg p-4 flex flex-col gap-2"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <Link href={`/staff/pets/${pet.id}`} className="group min-w-0">
+                  <p className="font-bold text-stone-900 group-hover:text-amber-700 transition-colors">
+                    {pet.name}
+                  </p>
+                  <p className="text-sm text-stone-500 mt-0.5">
+                    {formatSpecies(pet.species)}
+                    {pet.breed ? ` · ${pet.breed}` : ""}
+                  </p>
+                  {pet.weightLbs && (
+                    <p className="text-xs text-stone-400 mt-2">{pet.weightLbs} lbs</p>
+                  )}
+                </Link>
+                {pet.hasBiteHistory && (
+                  <span className="flex-shrink-0 bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                    ⚠ Bite
+                  </span>
+                )}
+              </div>
+              <div className="mt-auto flex items-center gap-2">
+                <ModalButton
+                  label="Edit"
+                  title={`Edit ${pet.name}`}
+                  description="What the groomer needs to know about this pet."
+                  variant="secondary"
+                >
+                  <PetForm customerId={customer.id} pet={pet} flagOptions={flagOptions} />
+                </ModalButton>
+                <form action={removePet}>
+                  <input type="hidden" name="customerId" value={customer.id} />
+                  <input type="hidden" name="petId" value={pet.id} />
+                  <button
+                    type="submit"
+                    className="text-sm font-bold px-3 py-1.5 rounded-lg border border-stone-200 text-red-700 hover:bg-red-50 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </form>
+              </div>
+            </div>
+          ))}
+
+          <div className="flex items-center justify-center rounded-lg border border-well-line bg-well p-4">
+            <ModalButton
+              label="Add a Pet +"
+              title="Add a pet"
+              description={`A pet on ${customer.firstName} ${customer.lastName}'s profile.`}
+              variant="secondary"
+            >
+              <PetForm customerId={customer.id} flagOptions={flagOptions} />
+            </ModalButton>
+          </div>
+        </div>
+      </PageSection>
+
       {/* Where they are — for pickups, drop-offs and checking the service area */}
       <PageSection title="Address">
         {customer.address ? (
@@ -602,12 +601,15 @@ export default async function CustomerDetailPage(props: PageProps) {
                 </form>
               </div>
             </div>
-            <AddressMap
-              address={customer.address}
-              title={`Map showing ${customer.firstName} ${customer.lastName}'s address`}
-              height={170}
-              compact
-            />
+            <div>
+              <AddressMap
+                address={customer.address}
+                title={`Map showing ${customer.firstName} ${customer.lastName}'s address`}
+                height={170}
+                compact
+              />
+              <DriveFromShop address={customer.address} className="mt-2" />
+            </div>
           </div>
         ) : (
           <ModalButton
@@ -669,76 +671,10 @@ export default async function CustomerDetailPage(props: PageProps) {
       </PageSection>
 
       {insights.length > 0 && (
-        <section>
-          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-1.5">
-            What their history shows
-          </h2>
+        <PageSection title="What their history shows">
           <InsightList insights={insights} compact />
-        </section>
+        </PageSection>
       )}
-
-      {/* Pets section */}
-      <PageSection title={`Pets (${customer.pets.length})`}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {customer.pets.map((pet) => (
-            <div
-              key={pet.id}
-              className="bg-well border border-well-line ring-1 ring-well-line/60 rounded-lg p-4 flex flex-col gap-2"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <Link href={`/staff/pets/${pet.id}`} className="group min-w-0">
-                  <p className="font-bold text-stone-900 group-hover:text-amber-700 transition-colors">
-                    {pet.name}
-                  </p>
-                  <p className="text-sm text-stone-500 mt-0.5">
-                    {formatSpecies(pet.species)}
-                    {pet.breed ? ` · ${pet.breed}` : ""}
-                  </p>
-                  {pet.weightLbs && (
-                    <p className="text-xs text-stone-400 mt-2">{pet.weightLbs} lbs</p>
-                  )}
-                </Link>
-                {pet.hasBiteHistory && (
-                  <span className="flex-shrink-0 bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                    ⚠ Bite
-                  </span>
-                )}
-              </div>
-              <div className="mt-auto flex items-center gap-2">
-                <ModalButton
-                  label="Edit"
-                  title={`Edit ${pet.name}`}
-                  description="What the groomer needs to know about this pet."
-                  variant="secondary"
-                >
-                  <PetForm customerId={customer.id} pet={pet} />
-                </ModalButton>
-                <form action={removePet}>
-                  <input type="hidden" name="customerId" value={customer.id} />
-                  <input type="hidden" name="petId" value={pet.id} />
-                  <button
-                    type="submit"
-                    className="text-sm font-bold px-3 py-1.5 rounded-lg border border-stone-200 text-red-700 hover:bg-red-50 transition-colors"
-                  >
-                    Remove
-                  </button>
-                </form>
-              </div>
-            </div>
-          ))}
-
-          <div className="flex items-center justify-center rounded-lg border border-dashed border-well-line bg-well p-4">
-            <ModalButton
-              label="Add a Pet +"
-              title="Add a pet"
-              description={`A pet on ${customer.firstName} ${customer.lastName}'s profile.`}
-              variant="secondary"
-            >
-              <PetForm customerId={customer.id} />
-            </ModalButton>
-          </div>
-        </div>
-      </PageSection>
 
       {/* Recent appointments */}
       <PageSection title="Recent Appointments">

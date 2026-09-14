@@ -14,3 +14,28 @@ export const PhotoUrl = z
     (value) => value.startsWith("/") || /^https?:\/\//i.test(value),
     "photoUrl must be an http(s) address or a site-relative path"
   );
+
+/**
+ * The flags a shop reaches for most often, offered as chips on the pet form.
+ *
+ * Presets, not a vocabulary: `Pet.healthFlags` is free text and the form lets
+ * anything be typed. Flags already on the shop's own pets are offered beside
+ * these, so what staff type once is one click the next time.
+ */
+export const HEALTH_FLAG_PRESETS = [
+  "elderly",
+  "puppy",
+  "arthritis",
+  "heart condition",
+  "seizures",
+  "diabetic",
+  "reactive",
+  "anxious",
+  "deaf",
+  "blind",
+  "skin condition",
+  "recent surgery",
+  "pregnant",
+  "allergy:chicken",
+  "no heat drying",
+] as const;

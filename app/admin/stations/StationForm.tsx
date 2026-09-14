@@ -33,7 +33,6 @@ const ROLE_COPY: Record<StationRole, { label: string; description: string }> = {
 const ASSIGNABLE_ROLES: StaffRole[] = [StaffRole.GROOMER, StaffRole.BATHER];
 
 export interface StationFormValues {
-  name: string;
   allowedRoles: StaffRole[];
   role: StationRole;
   isActive: boolean;
@@ -74,27 +73,7 @@ export default function StationForm({
   return (
     <form action={action}>
       {stationId && <input type="hidden" name="id" value={stationId} />}
-      <PageSection title="Identity" bodyClassName="space-y-5">
-
-        <div className="grid grid-cols-3 gap-3 items-start">
-          <label htmlFor="name" className="text-sm font-medium text-stone-700 pt-2">
-            Name <span className="text-red-700">*</span>
-          </label>
-          <div className="col-span-2">
-            <input
-              id="name"
-              name="name"
-              required
-              defaultValue={initial.name}
-              placeholder="Kennel Bank A"
-              className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
-            />
-            <p className="text-xs text-stone-400 mt-1">
-              Used everywhere staff see this station, including the touchscreen.
-            </p>
-          </div>
-        </div>
-
+      <PageSection title="Status" bodyClassName="space-y-5">
         {/* The label wraps the name as well as the switch; empty, the checkbox
             announced as "checkbox, unchecked" and nothing more. */}
         <div className="pt-1">
@@ -112,12 +91,12 @@ export default function StationForm({
             </span>
           </label>
           <p id="isActive-description" className="text-sm text-stone-500 mt-0.5">
-            Inactive stations stay on file but are hidden from the floor.
+            Inactive stations stay on file but are hidden from the storefront.
           </p>
         </div>
       </PageSection>
 
-      {/* Role */}
+      {/* Role — also what the station is named after. */}
       <PageSection title="Role">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {(Object.keys(ROLE_COPY) as StationRole[]).map((value) => (
@@ -146,6 +125,10 @@ export default function StationForm({
             </label>
           ))}
         </div>
+        <p className="text-xs text-stone-400 mt-3">
+          Stations are named after their role and the next free number, so this is also what it is
+          called on the touchscreen. Changing the role renames it.
+        </p>
       </PageSection>
 
       {/* Who may work here */}
@@ -157,7 +140,7 @@ export default function StationForm({
             id: role,
             label: formatRole(role),
           }))}
-          addLabel="+ Add a role"
+          optionsLabel="Roles"
           emptyLabel="Anyone on staff"
           noun="role"
           required={false}

@@ -92,11 +92,13 @@ async function main() {
 
   // Stations. Role decides how a station is used on the floor; kennel units
   // are stations too, with a rows x columns layout instead of a single spot.
+  // Names follow the shop's own rule — role plus the next free number, the
+  // same strings `nextStationName()` hands out, since nobody types one.
   const stations: { name: string; role: StationRole }[] = [
-    { name: "Station 1", role: "GROOMER" },
-    { name: "Station 2", role: "GROOMER" },
-    { name: "Station 3", role: "GROOMER" },
-    { name: "Bath Area", role: "BATHING" },
+    { name: "Grooming Table 1", role: "GROOMER" },
+    { name: "Grooming Table 2", role: "GROOMER" },
+    { name: "Grooming Table 3", role: "GROOMER" },
+    { name: "Bath 1", role: "BATHING" },
   ];
   for (const { name, role } of stations) {
     await prisma.station.upsert({

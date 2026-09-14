@@ -12,37 +12,32 @@
 
 import { Prisma } from "@prisma/client";
 
-/**
- * Exactly what the lobby screen is allowed to see.
- *
- * `/station/[id]` and its event stream are deliberately unauthenticated — the
- * Pi has no login — so anyone who can reach the app can read this payload with
- * only a station id. It is therefore an allowlist of the fields the kiosk
- * actually renders. Never widen it to `pet: true` or a bare customer include:
- * that puts an email address and a pet's whole record on a screen facing the
- * waiting room.
- */
-export const KIOSK_APPOINTMENT_SELECT = {
-  id: true,
-  status: true,
-  serviceType: true,
-  pet: {
-    select: {
-      name: true,
-      species: true,
-      breed: true,
-      weightLbs: true,
-      groomingNotes: true,
-      healthFlags: true,
-      hasBiteHistory: true,
-      photoUrl: true,
-    },
-  },
-  // Name only: a phone number on a lobby-facing screen is readable by
-  // everyone waiting, and this stream needs no login to read.
-  customer: { select: { firstName: true, lastName: true } },
+/** Staff-only station records. Keep account credentials out of the payload. */
+export const STATION_APPOINTMENT_SELECT = {
+  id: true, status: true, serviceType: true, scheduledAt: true,
+  checkedInAt: true, durationMins: true, visitNotes: true,
+  pet: true,
+  customer: { select: {
+    id: true, firstName: true, lastName: true, email: true, phone: true,
+    address: true, photoId: true, smsOptOut: true, pricingNotes: true,
+    isActive: true,
+    preferredStaff: { select: { name: true } },
+    pricingTier: { select: { name: true } },
+    alternateContacts: { select: { id: true, name: true, phone: true, email: true }, orderBy: { createdAt: "asc" } },
+  } },
   staff: { select: { name: true } },
+  services: { select: {
+    id: true, serviceType: true, priceCents: true,
+    service: { select: { name: true, staffNotes: true } },
+  }, orderBy: { sortOrder: "asc" } },
 } satisfies Prisma.AppointmentSelect;
+
+type Serialized<T> = T extends Date ? string : T extends readonly unknown[]
+  ? { [K in keyof T]: Serialized<T[K]> }
+  : T extends object ? { [K in keyof T]: Serialized<T[K]> } : T;
+export type StationAppointment = Serialized<Prisma.AppointmentGetPayload<{
+  select: typeof STATION_APPOINTMENT_SELECT;
+}>>;
 
 const subscribers = new Map<string, Set<ReadableStreamDefaultController>>();
 

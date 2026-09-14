@@ -5,7 +5,7 @@ import { formatCents } from "@/lib/pricing";
  * The arithmetic of a pricing tier, with no database import.
  *
  * Kept apart from lib/pricing-tiers.ts (which touches Prisma) so this half is
- * safe to import from a client component — app/admin/pricing/TierFields.tsx
+ * safe to import from a client component — app/admin/loyalty/TierFields.tsx
  * uses it for a live discount preview, and a Prisma import in that bundle
  * would pull server-only code into the browser.
  */

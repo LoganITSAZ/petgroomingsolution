@@ -4,7 +4,7 @@ import { formatRole, formatServiceType } from "@/lib/utils";
 import { shopInsights } from "@/lib/insights";
 import InsightList from "@/components/InsightList";
 import Link from "next/link";
-import { PageShell, PageSection } from "@/components/ui";
+import { Meter, PageShell, PageSection } from "@/components/ui";
 import { currentStaffCanManage } from "@/lib/staff-roles";
 import { redirect } from "next/navigation";
 
@@ -60,37 +60,60 @@ export default async function AnalyticsPage(props: PageProps) {
     null
   );
   const peakServices = shop.serviceMix.slice(0, 5);
+  // Every 30-day bar in the table is drawn against the leader, not its own row.
+  const topMonth = ranked.reduce((best, row) => Math.max(best, row.month), 0);
   const mixTotal = shop.serviceMix.reduce((n, row) => n + row.count, 0);
   const outcomeTotal = Math.max(shop.finished + shop.cancelled + shop.noShows, 1);
   const outcomes = [
-    { label: "Finished", value: shop.finished, color: "bg-emerald-500", text: "text-emerald-700" },
-    { label: "Cancelled", value: shop.cancelled, color: "bg-rose-500", text: "text-rose-700" },
-    { label: "No-show", value: shop.noShows, color: "bg-amber-500", text: "text-amber-700" },
+    { label: "Finished", value: shop.finished, color: "bg-emerald-700", text: "text-emerald-700" },
+    { label: "Cancelled", value: shop.cancelled, color: "bg-rose-700", text: "text-rose-700" },
+    { label: "No-show", value: shop.noShows, color: "bg-amber-700", text: "text-amber-700" },
   ].filter((outcome) => outcome.value > 0);
-  const mixColors = ["bg-sky-500", "bg-violet-500", "bg-emerald-500", "bg-rose-500", "bg-amber-500"];
+  // Ranked, not categorical: first place is the darkest the label still reads on.
+  const mixColors = ["bg-sky-400", "bg-violet-400", "bg-emerald-400", "bg-rose-400", "bg-amber-400"];
 
-  const headline = [
-    { label: "Finished", value: shop.finished, hint: `${shop.booked} booked`, tone: "border-emerald-200 bg-emerald-50/60", valueTone: "text-emerald-700" },
+  /*
+   * The four figures the shop leads with. Each carries the share it is of, so
+   * the tile reads as a proportion and not only a count; turnaround has no
+   * denominator, so it keeps the tile and loses the bar.
+   */
+  const headline: {
+    label: string;
+    value: string | number;
+    hint: string;
+    tile: string;
+    bar?: string;
+    share?: { used: number; total: number };
+  }[] = [
+    {
+      label: "Finished",
+      value: shop.finished,
+      hint: `of ${shop.booked} booked`,
+      tile: "bg-emerald-100 text-emerald-900",
+      bar: "bg-emerald-400",
+      share: { used: shop.finished, total: shop.booked },
+    },
     {
       label: "Walk-ins",
       value: shop.walkIns,
       hint: `${shop.scheduledAppointments} pre-booked`,
-      tone: "border-sky-200 bg-sky-50/60",
-      valueTone: "text-sky-700",
+      tile: "bg-sky-100 text-sky-900",
+      bar: "bg-sky-400",
+      share: { used: shop.walkIns, total: shop.walkIns + shop.scheduledAppointments },
     },
     {
       label: "No-show rate",
       value: percent(shop.noShowRate),
       hint: `${shop.noShows} no-shows, ${shop.cancelled} cancelled`,
-      tone: "border-amber-200 bg-amber-50/60",
-      valueTone: "text-amber-700",
+      tile: "bg-amber-100 text-amber-900",
+      bar: "bg-amber-400",
+      share: { used: Math.round(shop.noShowRate * 100), total: 100 },
     },
     {
       label: "Avg turnaround",
       value: shop.avgTurnaroundMins != null ? `${shop.avgTurnaroundMins} min` : "—",
       hint: "check-in to finished",
-      tone: "border-violet-200 bg-violet-50/60",
-      valueTone: "text-violet-700",
+      tile: "bg-violet-100 text-violet-900",
     },
   ];
 
@@ -123,11 +146,21 @@ export default async function AnalyticsPage(props: PageProps) {
 
       {/* Headline numbers */}
       <PageSection tone="muted" bodyClassName="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {headline.map(({ label, value, hint, tone, valueTone }) => (
-          <div key={label} className={`border rounded-xl p-4 ${tone}`}>
-            <p className={`text-xl font-black ${valueTone}`}>{value}</p>
-            <p className="text-sm text-stone-600">{label}</p>
-            <p className="text-xs text-stone-400">{hint}</p>
+        {headline.map(({ label, value, hint, tile, bar, share }) => (
+          <div key={label} className={`rounded-xl p-4 ${tile}`}>
+            <p className="text-4xl font-black leading-none tracking-tight tabular-nums">{value}</p>
+            <p className="mt-1.5 text-sm font-semibold">{label}</p>
+            {share && (
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/60">
+                <div
+                  className={`h-full rounded-full ${bar}`}
+                  style={{
+                    width: `${share.total === 0 ? 0 : Math.min(100, Math.round((share.used / share.total) * 100))}%`,
+                  }}
+                />
+              </div>
+            )}
+            <p className="mt-1.5 text-xs opacity-70">{hint}</p>
           </div>
         ))}
       </PageSection>
@@ -142,14 +175,20 @@ export default async function AnalyticsPage(props: PageProps) {
             <p className="text-sm text-stone-400">Nothing finished in this range yet.</p>
           ) : (
             <>
-              <div className="flex items-end gap-1 h-28">
+              <div className="flex h-32 items-end gap-1 border-b border-stone-200">
                 {shop.perDay.map((day) => {
                   const peak = busiestDay?.finished ?? 1;
+                  const isPeak = day.finished === peak && peak > 0;
                   return (
                     <div
                       key={day.dayKey}
                       title={`${day.dayKey}: ${day.finished}`}
-                      className="flex-1 rounded-t bg-gradient-to-t from-amber-500 via-orange-400 to-rose-400 transition-opacity hover:opacity-80"
+                      /* The peak column is the one the eye should land on; the
+                         rest are the same amber a step back, so the shape of
+                         the range reads before any single day does. */
+                      className={`flex-1 rounded-t transition-opacity hover:opacity-80 ${
+                        isPeak ? "bg-orange-500" : "bg-amber-300"
+                      }`}
                       style={{ height: `${Math.max((day.finished / peak) * 100, 4)}%` }}
                     />
                   );
@@ -174,19 +213,16 @@ export default async function AnalyticsPage(props: PageProps) {
           {peakServices.length === 0 ? (
             <p className="text-sm text-stone-400">No services booked in this range.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-1.5">
               {peakServices.map((row, index) => (
-                <li key={row.serviceType} className="text-sm">
-                  <div className="flex justify-between text-stone-700">
-                    <span>{formatServiceType(row.serviceType)}</span>
-                    <span className="text-stone-400">{row.count}</span>
-                  </div>
-                  <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden mt-1">
-                    <div
-                      className={`h-full rounded-full ${mixColors[index % mixColors.length]}`}
-                      style={{ width: `${mixTotal === 0 ? 0 : (row.count / mixTotal) * 100}%` }}
-                    />
-                  </div>
+                <li key={row.serviceType}>
+                  <Meter
+                    label={formatServiceType(row.serviceType)}
+                    used={row.count}
+                    total={mixTotal}
+                    display={String(row.count)}
+                    bar={mixColors[index % mixColors.length]}
+                  />
                 </li>
               ))}
             </ul>
@@ -217,14 +253,22 @@ export default async function AnalyticsPage(props: PageProps) {
           <p className="mt-3 text-sm text-stone-400">No appointment outcomes in this range yet.</p>
         ) : (
           <>
-            <div className="mt-4 flex h-4 overflow-hidden rounded-full bg-stone-100" aria-hidden="true">
+            <div className="mt-4 flex h-7 overflow-hidden rounded-lg bg-stone-100" aria-hidden="true">
               {outcomes.map((outcome) => (
-                <div key={outcome.label} className={outcome.color} style={{ width: `${(outcome.value / outcomeTotal) * 100}%` }} />
+                <div
+                  key={outcome.label}
+                  className={`flex items-center justify-center text-[11px] font-black text-white ${outcome.color}`}
+                  style={{ width: `${(outcome.value / outcomeTotal) * 100}%` }}
+                >
+                  {/* A share under a tenth has no room for its own figure — the
+                      legend below carries every one of them. */}
+                  {outcome.value / outcomeTotal >= 0.1 && percent(outcome.value / outcomeTotal)}
+                </div>
               ))}
             </div>
             <ul className="mt-3 grid gap-2 sm:grid-cols-3">
               {outcomes.map((outcome) => (
-                <li key={outcome.label} className="flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2 text-sm">
+                <li key={outcome.label} className="flex items-center justify-between rounded-lg bg-well px-3 py-2 text-sm ring-1 ring-well-line">
                   <span className="flex items-center gap-2 text-stone-600"><span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${outcome.color}`} />{outcome.label}</span>
                   <span className={`font-black ${outcome.text}`}>{outcome.value} <span className="text-xs font-medium">{percent(outcome.value / outcomeTotal)}</span></span>
                 </li>
@@ -236,22 +280,19 @@ export default async function AnalyticsPage(props: PageProps) {
 
       {/* Customers */}
       <PageSection tone="muted" bodyClassName="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div>
-          <p className="text-xl font-black text-stone-900">{shop.newCustomers}</p>
-          <p className="text-xs text-stone-500">New customers</p>
-        </div>
-        <div>
-          <p className="text-xl font-black text-stone-900">{percent(shop.returningShare)}</p>
-          <p className="text-xs text-stone-500">Booked more than once</p>
-        </div>
-        <div>
-          <p className="text-xl font-black text-stone-900">{shop.walkIns}</p>
-          <p className="text-xs text-stone-500">Walk-ins</p>
-        </div>
-        <div>
-          <p className="text-xl font-black text-stone-900">{shop.cancelled}</p>
-          <p className="text-xs text-stone-500">Cancelled</p>
-        </div>
+        {[
+          { label: "New customers", value: shop.newCustomers },
+          { label: "Booked more than once", value: percent(shop.returningShare) },
+          { label: "Walk-ins", value: shop.walkIns },
+          { label: "Cancelled", value: shop.cancelled },
+        ].map(({ label, value }) => (
+          <div key={label} className="rounded-lg bg-white px-3 py-2 ring-1 ring-well-line">
+            <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-stone-900">
+              {value}
+            </p>
+            <p className="mt-1 text-[11px] font-semibold text-stone-500">{label}</p>
+          </div>
+        ))}
       </PageSection>
 
       {/* Leaderboard */}
@@ -310,7 +351,15 @@ export default async function AnalyticsPage(props: PageProps) {
                       </td>
                       <td className="px-3 py-2 text-right">{row.today}</td>
                       <td className="px-3 py-2 text-right">{row.week}</td>
-                      <td className="px-3 py-2 text-right font-bold text-stone-900">{row.month}</td>
+                      <td className="px-3 py-2 text-right font-bold text-stone-900">
+                        <span className="relative flex h-6 items-center justify-end rounded bg-well px-1.5 ring-1 ring-well-line">
+                          <span
+                            className="absolute inset-y-0 left-0 rounded bg-amber-300"
+                            style={{ width: `${topMonth === 0 ? 0 : (row.month / topMonth) * 100}%` }}
+                          />
+                          <span className="relative tabular-nums">{row.month}</span>
+                        </span>
+                      </td>
                       <td className="px-3 py-2 text-right text-stone-500">{row.lifetime}</td>
                       <td className="px-3 py-2 text-right text-stone-500">{row.bestDay}</td>
                       <td className="px-3 py-2 text-right text-stone-500">
