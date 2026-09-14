@@ -18,7 +18,6 @@ import { DashboardRefresh } from "@/components/DashboardRefresh";
 import { PICKUP_LEVEL_LABEL, PICKUP_LEVEL_CLASS, formatWait, pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
 import { Meter, PageShell, PageSection, fillTone } from "@/components/ui";
-import { currentStaffCanManage } from "@/lib/staff-roles";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -50,7 +49,6 @@ export default async function StaffDashboard(props: {
     kennels,
     roster,
     alerts,
-    canManageShop,
   ] = await Promise.all([
     prisma.appointment.findMany({
       where: { scheduledAt: { gte: start, lt: end } },
@@ -91,7 +89,6 @@ export default async function StaffDashboard(props: {
     kennelDemand(start, end),
     floorRoster(),
     serviceAlerts(),
-    currentStaffCanManage(),
   ]);
 
   // ── Today at a glance ─────────────────────────────────────────
@@ -334,11 +331,6 @@ export default async function StaffDashboard(props: {
         {capacitySegments.length === 0 && <p className="text-sm text-muted">No station capacity configured.</p>}
       </PageSection>
             </div>
-        <nav aria-label="More shop detail" className="flex flex-wrap gap-x-5 gap-y-2 px-1 text-sm text-muted">
-          <Link href="/staff/stations" className="underline">Floor & stations</Link>
-          <Link href="/staff/team" className="underline">Team & workload</Link>
-          {canManageShop && <Link href="/staff/analytics" className="underline">Business analytics</Link>}
-        </nav>
       </div>
     </PageShell>
   );
