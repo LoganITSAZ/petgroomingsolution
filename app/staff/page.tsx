@@ -261,6 +261,28 @@ export default async function StaffDashboard(props: {
         </div>
       )}
 
+        <div id="arrivals" className={`${styles.panel} ${styles.blue}`}>
+      <PageSection title="Arriving next" hint={`${scheduled.length} remaining today`}>
+        {scheduled.length === 0 ? <p className="text-sm text-muted">No more arrivals scheduled today.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">Next four scheduled arrivals, including overdue check-ins</caption>
+              <thead className="text-xs text-muted"><tr><th scope="col" className="py-2">Arrival</th><th scope="col">Pet</th><th scope="col">Assigned to</th><th scope="col">Check-in</th></tr></thead>
+              <tbody className="divide-y divide-stone-100">{scheduled.slice(0, 4).map((appointment) => (
+                <tr key={appointment.id}>
+                  <td className="py-3 whitespace-nowrap pr-3 tabular-nums">{formatShopTime(appointment.scheduledAt)}</td>
+                  <th scope="row" className="pr-3"><Link className="underline" href={`/staff/appointments/${appointment.id}`}>{appointment.pet.name}</Link></th>
+                  <td className="pr-3">{roster.find((member) => member.id === appointment.staffId)?.name ?? "Unassigned"}</td>
+                  <td className={appointment.scheduledAt < now ? "text-amber-700 font-semibold" : "text-muted"}>{appointment.scheduledAt < now ? "Past arrival time" : "Expected"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+            {scheduled.length > 4 && <Link href="/staff/appointments" className="text-sm underline">View all {scheduled.length} expected arrivals</Link>}
+          </div>
+        )}
+      </PageSection>
+        </div>
+
         {workStations.length > 0 && (
           /*
             The floor, arranged by hand. It answers what the "no station" list
@@ -281,46 +303,19 @@ export default async function StaffDashboard(props: {
           </PageSection>
         )}
 
-        <div className={styles.grid}>
-          <div className={styles.column}>
-            <div id="arrivals" className={`${styles.panel} ${styles.blue}`}>
-      <PageSection title="Arriving next" hint={`${scheduled.length} remaining today`}>
-        {scheduled.length === 0 ? <p className="text-sm text-muted">No more arrivals scheduled today.</p> : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">Next four scheduled arrivals, including overdue check-ins</caption>
-              <thead className="text-xs text-muted"><tr><th scope="col" className="py-2">Arrival</th><th scope="col">Pet</th><th scope="col">Assigned to</th><th scope="col">Check-in</th></tr></thead>
-              <tbody className="divide-y divide-stone-100">{scheduled.slice(0, 4).map((appointment) => (
-                <tr key={appointment.id}>
-                  <td className="py-3 whitespace-nowrap pr-3 tabular-nums">{formatShopTime(appointment.scheduledAt)}</td>
-                  <th scope="row" className="pr-3"><Link className="underline" href={`/staff/appointments/${appointment.id}`}>{appointment.pet.name}</Link></th>
-                  <td className="pr-3">{roster.find((member) => member.id === appointment.staffId)?.name ?? "Unassigned"}</td>
-                  <td className={appointment.scheduledAt < now ? "text-amber-700 font-semibold" : "text-muted"}>{appointment.scheduledAt < now ? "Past arrival time" : "Expected"}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-            {scheduled.length > 4 && <Link href="/staff/appointments" className="text-sm underline">View all {scheduled.length} expected arrivals</Link>}
-          </div>
-        )}
-      </PageSection>
-
+        <div id="pickups" className={`${styles.panel} ${styles.green}`}>
+          <PageSection title="Waiting for pickup" hint="Longest wait first">
+            <div className={styles.queue}>
+              {pickups.pets.slice(0, 4).map((pet) => <div key={pet.appointmentId} className={styles.pet}>
+                <div><Link href={`/staff/appointments/${pet.appointmentId}`} className="text-sm font-bold text-ink">{pet.petName}</Link><p className="text-xs text-muted">{pet.ownerName}{pet.kennelLabel && ` · Kennel ${pet.kennelLabel}`}</p>{pet.phone && <a className="text-xs font-semibold text-brand-text" href={`tel:${pet.phone}`}>Call {pet.phone}</a>}</div>
+                <div className="text-right"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${PICKUP_LEVEL_CLASS[pet.level]}`} title={PICKUP_LEVEL_LABEL[pet.level]}>{formatWait(pet.waitingMins)}</span></div>
+              </div>)}
+              {pickups.pets.length > 4 && <Link href="/staff/appointments?status=READY_PICKUP" className="text-sm underline">View all {pickups.pets.length} pickups</Link>}
+              {pickups.pets.length === 0 && <p className="py-3 text-sm text-muted">No pets waiting for pickup.</p>}
             </div>
-          </div>
-          <div className={styles.column}>
-            <div id="pickups" className={`${styles.panel} ${styles.green}`}>
-              <PageSection title="Waiting for pickup" hint="Longest wait first">
-                <div className={styles.queue}>
-                  {pickups.pets.slice(0, 4).map((pet) => <div key={pet.appointmentId} className={styles.pet}>
-                    <div><Link href={`/staff/appointments/${pet.appointmentId}`} className="text-sm font-bold text-ink">{pet.petName}</Link><p className="text-xs text-muted">{pet.ownerName}{pet.kennelLabel && ` · Kennel ${pet.kennelLabel}`}</p>{pet.phone && <a className="text-xs font-semibold text-brand-text" href={`tel:${pet.phone}`}>Call {pet.phone}</a>}</div>
-                    <div className="text-right"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${PICKUP_LEVEL_CLASS[pet.level]}`} title={PICKUP_LEVEL_LABEL[pet.level]}>{formatWait(pet.waitingMins)}</span></div>
-                  </div>)}
-                  {pickups.pets.length > 4 && <Link href="/staff/appointments?status=READY_PICKUP" className="text-sm underline">View all {pickups.pets.length} pickups</Link>}
-                  {pickups.pets.length === 0 && <p className="py-3 text-sm text-muted">No pets waiting for pickup.</p>}
-                </div>
-              </PageSection>
-            </div>
-          </div>
+          </PageSection>
         </div>
+
             <div className={`${styles.panel} ${styles.green}`}>
       <PageSection
         title="Space available now"
