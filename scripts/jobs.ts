@@ -66,7 +66,12 @@ const [command, name] = process.argv.slice(2);
 if (command === "loop") {
   loop();
 } else if (command === "once") {
-  once(name).then(() => process.exit(process.exitCode ?? 0));
+  once(name)
+    .catch((error) => {
+      console.error(`${stamp()} runner failed —`, error);
+      process.exitCode = 1;
+    })
+    .then(() => process.exit(process.exitCode ?? 0));
 } else {
   console.error("Usage: jobs.ts loop | once [job-name]");
   process.exit(1);

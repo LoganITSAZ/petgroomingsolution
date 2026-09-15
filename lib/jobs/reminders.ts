@@ -1,4 +1,4 @@
-import { AppointmentStatus, NotificationKind, Prisma } from "@prisma/client";
+import { AppointmentStatus, NotificationKind, Prisma, type SystemConfig } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
 import { sendAppointmentReminder } from "@/lib/email";
@@ -55,20 +55,47 @@ export function selectVisitsToRemind<T extends RemindableVisit>(
   });
 }
 
-/** One visit's reminder, on whichever channels the shop has switched on. */
-async function remind(visit: {
-  id: string;
-  customerId: string;
-  scheduledAt: Date;
-  pet: { name: string };
-  customer: { firstName: string; lastName: string; email: string; phone: string | null; smsOptOut: boolean };
-}): Promise<boolean> {
-  const config = await getConfig();
+export interface ReminderChannelConfig {
+  featureEmailNotify: boolean;
+  featureSmsNotify: boolean;
+}
+
+export interface Remindable {
+  email: string | null;
+  phone: string | null;
+  smsOptOut: boolean;
+}
+
+/**
+ * Which channels this reminder can actually go down.
+ *
+ * The same rules every other send in the app follows: email when the shop
+ * mails customers and it has an address, SMS when texts are live, there is a
+ * number, and the customer has not opted out.
+ */
+export function reminderChannels(config: ReminderChannelConfig, customer: Remindable): string[] {
   const channels: string[] = [];
-  if (config.featureEmailNotify && visit.customer.email) channels.push("EMAIL");
-  if (config.featureSmsNotify && visit.customer.phone && !visit.customer.smsOptOut) {
-    channels.push("SMS");
-  }
+  if (config.featureEmailNotify && customer.email) channels.push("EMAIL");
+  if (config.featureSmsNotify && customer.phone && !customer.smsOptOut) channels.push("SMS");
+  return channels;
+}
+
+/** One visit's reminder, on whichever channels the shop has switched on. */
+async function remind(
+  visit: {
+    id: string;
+    customerId: string;
+    scheduledAt: Date;
+    pet: { name: string };
+    customer: { firstName: string; lastName: string; email: string; phone: string | null; smsOptOut: boolean };
+  },
+  config: SystemConfig
+): Promise<boolean> {
+  const channels = reminderChannels(config, visit.customer);
+  // Nothing to send it down, so nothing is claimed. Writing the row anyway
+  // would mark the visit reminded for good, and the reminder the shop switches
+  // email back on for would never go.
+  if (channels.length === 0) return false;
 
   /*
    * Claim before send. A crash between the two loses one reminder; the other
@@ -112,7 +139,6 @@ async function remind(visit: {
     }).catch(console.error);
   }
   if (channels.includes("SMS")) {
-    const config = await getConfig();
     await smsAppointmentReminder({
       to: visit.customer.phone,
       petName: visit.pet.name,
@@ -166,7 +192,7 @@ export async function remindUpcomingVisits(now: Date): Promise<JobResult> {
 
   let acted = 0;
   for (const visit of due) {
-    if (await remind(visit)) acted++;
+    if (await remind(visit, config)) acted++;
   }
   return { status: "ran", acted, detail: `${due.length} due` };
 }

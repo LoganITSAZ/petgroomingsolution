@@ -66,14 +66,14 @@ export async function sendBookingConfirmation({
     to,
     subject: `Appointment confirmed for ${petName} — ${config.shopName}`,
     html: `
-      <p>Hi ${ownerName},</p>
-      <p>Your appointment for <strong>${petName}</strong> has been confirmed.</p>
+      <p>Hi ${escapeHtml(ownerName)},</p>
+      <p>Your appointment for <strong>${escapeHtml(petName)}</strong> has been confirmed.</p>
       <ul>
         <li><strong>Date:</strong> ${dateStr}</li>
-        <li><strong>Service:</strong> ${serviceType.replace(/_/g, " ")}</li>
+        <li><strong>Service:</strong> ${escapeHtml(serviceType.replace(/_/g, " "))}</li>
       </ul>
       <p>You can check in online when you arrive at the shop.</p>
-      <p>— ${config.shopName}</p>
+      <p>— ${escapeHtml(config.shopName)}</p>
     `,
   });
 }
@@ -113,15 +113,15 @@ export async function sendAppointmentReminder({
     to,
     subject: `Reminder: ${petName} is booked for ${formatShopDate(scheduledAt)}`,
     html: `
-      <p>Hi ${ownerName},</p>
-      <p>Just a reminder that <strong>${petName}</strong> is booked in with us on
+      <p>Hi ${escapeHtml(ownerName)},</p>
+      <p>Just a reminder that <strong>${escapeHtml(petName)}</strong> is booked in with us on
          <strong>${when}</strong>.</p>
       ${
         config.shopPhone
           ? `<p>If anything has changed, call us on ${escapeHtml(config.shopPhone)}.</p>`
           : `<p>If anything has changed, let us know.</p>`
       }
-      <p>— ${config.shopName}</p>
+      <p>— ${escapeHtml(config.shopName)}</p>
     `,
   });
 }
@@ -208,22 +208,26 @@ export async function sendPasswordReset({
     to,
     subject: `Reset your ${config.shopName} password`,
     html: `
-      <p>Hi ${name},</p>
-      <p>Someone asked to reset the password on your ${config.shopName} account.
+      <p>Hi ${escapeHtml(name)},</p>
+      <p>Someone asked to reset the password on your ${escapeHtml(config.shopName)} account.
          If that was you, use the link below.</p>
       <p><a href="${url}">Choose a new password</a></p>
       <p>This link works once and expires in ${expiresInMins} minutes.</p>
       <p>If you did not ask for this, you can ignore this email — nothing has
          changed on your account.</p>
-      <p>— ${config.shopName}</p>
+      <p>— ${escapeHtml(config.shopName)}</p>
     `,
   });
 }
 
 /**
- * Notes typed by a groomer, going into an email body. Escaped rather than
+ * Anything typed by a person, going into an email body. Escaped rather than
  * trusted: staff are not attackers, but a `<` in "coat <1 inch" should reach
- * the owner as a `<` rather than swallowing the rest of the sentence.
+ * the owner as a `<` rather than swallowing the rest of the sentence, and a
+ * name or a shop detail is no more trustworthy than a note.
+ *
+ * Every slot in every body above goes through this. A subject line does not —
+ * it is plain text, and an escaped one reads `&amp;` to the customer.
  */
 function escapeHtml(text: string): string {
   return text
@@ -269,8 +273,8 @@ export async function sendReadyForPickup({
     to,
     subject: `${petName} is ready for pickup! 🐾`,
     html: `
-      <p>Hi ${ownerName},</p>
-      <p><strong>${petName}</strong> is all done and ready to be picked up!</p>
+      <p>Hi ${escapeHtml(ownerName)},</p>
+      <p><strong>${escapeHtml(petName)}</strong> is all done and ready to be picked up!</p>
       <p>Please come by at your earliest convenience.</p>
       ${
         findings.length
@@ -285,8 +289,8 @@ export async function sendReadyForPickup({
           ? `<p>We took a few photos of ${escapeHtml(petName)} today — they are on your visit in the customer portal.</p>`
           : ""
       }
-      ${config.shopPhone ? `<p>Questions? Call us at ${config.shopPhone}.</p>` : ""}
-      <p>— ${config.shopName}</p>
+      ${config.shopPhone ? `<p>Questions? Call us at ${escapeHtml(config.shopPhone)}.</p>` : ""}
+      <p>— ${escapeHtml(config.shopName)}</p>
     `,
   });
 }
@@ -326,16 +330,16 @@ export async function sendConsentRequest({
     to,
     subject: `We need your OK for ${petName}'s groom`,
     html: `
-      <p>Hi ${ownerName},</p>
-      <p>We have had to stop partway through <strong>${petName}</strong>'s groom
+      <p>Hi ${escapeHtml(ownerName)},</p>
+      <p>We have had to stop partway through <strong>${escapeHtml(petName)}</strong>'s groom
          and would like your say-so before we carry on:</p>
       <blockquote style="border-left:3px solid #ccc;margin:0;padding:0 0 0 12px">
         ${escapeHtml(note)}
       </blockquote>
       <p>Please call us and we will talk it through — nothing else happens until
          we hear from you.</p>
-      ${config.shopPhone ? `<p><strong>${config.shopPhone}</strong></p>` : ""}
-      <p>— ${config.shopName}</p>
+      ${config.shopPhone ? `<p><strong>${escapeHtml(config.shopPhone)}</strong></p>` : ""}
+      <p>— ${escapeHtml(config.shopName)}</p>
     `,
   });
 }

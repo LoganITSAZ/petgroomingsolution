@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AppointmentStatus } from "@prisma/client";
-import { type RemindableVisit, selectVisitsToRemind } from "./reminders";
+import { type RemindableVisit, reminderChannels, selectVisitsToRemind } from "./reminders";
 
 const NOW = new Date("2026-09-14T16:00:00Z");
 const WINDOW = { reminderHoursBefore: 24, bookingLeadHours: 2 };
@@ -70,5 +70,33 @@ describe("selectVisitsToRemind", () => {
   it("treats a zero reminder window as an hour rather than nothing", () => {
     const broken = { reminderHoursBefore: 0, bookingLeadHours: 0 };
     expect(ids([visit(0.5)], broken)).toEqual(["v0.5"]);
+  });
+});
+
+describe("reminderChannels", () => {
+  const both = { featureEmailNotify: true, featureSmsNotify: true };
+  const customer = { email: "owner@example.com", phone: "+15551234567", smsOptOut: false };
+
+  it("uses every channel the shop and the customer allow", () => {
+    expect(reminderChannels(both, customer)).toEqual(["EMAIL", "SMS"]);
+  });
+
+  it("drops a channel the shop has switched off", () => {
+    expect(reminderChannels({ ...both, featureSmsNotify: false }, customer)).toEqual(["EMAIL"]);
+    expect(reminderChannels({ ...both, featureEmailNotify: false }, customer)).toEqual(["SMS"]);
+  });
+
+  it("respects an opt-out and a missing address", () => {
+    expect(reminderChannels(both, { ...customer, smsOptOut: true })).toEqual(["EMAIL"]);
+    expect(reminderChannels(both, { ...customer, email: null })).toEqual(["SMS"]);
+  });
+
+  // The caller claims nothing when this is empty, so a reminder is not marked
+  // sent on a shop that has no way to send it.
+  it("returns nothing when there is no way to reach the customer", () => {
+    expect(reminderChannels(both, { email: null, phone: null, smsOptOut: false })).toEqual([]);
+    expect(
+      reminderChannels({ featureEmailNotify: false, featureSmsNotify: false }, customer)
+    ).toEqual([]);
   });
 });

@@ -707,7 +707,10 @@ model NotificationLog {
   appointmentId String
   customerId    String
   kind          NotificationKind
-  /// Which channels actually went out -- "EMAIL", "SMS".
+  /// Which channels it was sent down -- "EMAIL", "SMS". The row is claimed
+  /// before the messages go, so this is what was attempted rather than what a
+  /// carrier confirmed. An empty list is never written: a visit the shop has
+  /// no way to reach is left unclaimed for a later run.
   channels      String[]
   sentAt        DateTime         @default(now())
 
