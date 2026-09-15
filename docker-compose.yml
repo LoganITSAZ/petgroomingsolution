@@ -45,7 +45,9 @@ services:
       EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-}
       # Empty falls back to admin@<the shop's own domain> — see lib/branding.ts.
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme123}
+      # No default: a built-in initial password is one the whole internet
+      # knows. The seed refuses to create the first admin without it.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy
