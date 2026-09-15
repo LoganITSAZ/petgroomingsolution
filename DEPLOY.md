@@ -60,8 +60,9 @@ healthcheck.
 ## Scheduled jobs
 
 The `jobs` container is a second process beside the app. It wakes every minute
-and runs whatever is owed — today that is appointment reminders, sent
-`reminderHoursBefore` before a visit (Shop Settings, on by default). It serves
+and runs whatever is owed: appointment reminders, sent `reminderHoursBefore`
+before a visit, and the rebooking nudge for households past their own usual gap
+between grooms (both in Shop Settings, both on by default). It serves
 no requests, so it is not a second app instance and does not affect live
 station updates.
 

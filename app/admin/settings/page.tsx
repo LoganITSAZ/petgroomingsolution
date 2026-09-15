@@ -95,6 +95,13 @@ async function saveSettings(formData: FormData) {
     Math.max(1, parseInt((formData.get("reminderHoursBefore") as string) ?? "24", 10) || 24)
   );
 
+  // Grace past a household's own cadence. Zero is a fair answer -- chase the
+  // day they are late -- so only the top end is a guess worth clamping.
+  const rebookingGraceDays = Math.min(
+    120,
+    Math.max(0, parseInt((formData.get("rebookingGraceDays") as string) ?? "7", 10) || 0)
+  );
+
   // A zero-hour week would mark every shift overtime.
   const overtimeWeeklyHours = Math.min(
     168,
@@ -123,6 +130,7 @@ async function saveSettings(formData: FormData) {
       vaccinationGateBlocks,
       vaccinationGraceDays,
       reminderHoursBefore,
+      rebookingGraceDays,
       overtimeWeeklyHours,
       bookingLeadHours,
       bookingWindowDays,
@@ -425,6 +433,28 @@ export default async function SettingsPage(props: PageProps) {
           <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
             Reminders go out on whichever channels are live — email, text, or both. Switch the
             reminder itself off in Features above.
+          </p>
+        </Section>
+
+        <Section
+          title="Rebooking"
+          hint="Who has drifted, measured against their own history rather than a shop-wide interval."
+        >
+          <Field
+            name="rebookingGraceDays"
+            label="Chase this long after they are due (days)"
+            hint="A household that books every eight weeks is not overdue on day 57. Nothing is said about a customer with fewer than three visits on file — a cadence from two is noise."
+          >
+            <input type="number" id="rebookingGraceDays" name="rebookingGraceDays" defaultValue={config?.rebookingGraceDays ?? 7} min={0} max={120} className={FIELD} />
+          </Field>
+
+          <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
+            The call list is at{" "}
+            <Link href="/staff/rebooking" className="text-amber-700 hover:text-amber-900 underline">
+              Rebooking
+            </Link>
+            . A nudge goes out once per finished visit, between 9am and 5pm shop time, on whichever
+            channels are live — a shop with none still works the list by phone.
           </p>
         </Section>
 

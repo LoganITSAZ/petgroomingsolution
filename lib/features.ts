@@ -29,7 +29,8 @@ export type FeatureKey =
   | "featureRewards"
   | "featureVisitPhotos"
   | "featureVaccinationGate"
-  | "featureAppointmentReminders";
+  | "featureAppointmentReminders"
+  | "featureRebookingPrompts";
 
 export type FeatureGroup = "Customers" | "Visits" | "Notifications" | "Compliance";
 
@@ -55,6 +56,7 @@ export interface FeatureConfig {
   featureVisitPhotos: boolean;
   featureVaccinationGate: boolean;
   featureAppointmentReminders: boolean;
+  featureRebookingPrompts: boolean;
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
   twilioFromNumber: string | null;
@@ -162,6 +164,16 @@ export const FEATURES: Feature[] = [
       isEnabled(config, "featureEmailNotify") || isEnabled(config, "featureSmsNotify")
         ? null
         : "Neither email nor SMS is live, so there is no way to send a reminder.",
+  },
+  {
+    key: "featureRebookingPrompts",
+    label: "Rebooking Prompts",
+    blurb:
+      "The call list of households past their own usual gap between grooms, and a nudge to the ones nobody has chased. Off, the list goes with it and nothing is sent.",
+    group: "Customers",
+    offMeans: "silent",
+    // No `needs`: a shop with no email and no texts still works the call list
+    // by phone, which is the older half of this feature and the better one.
   },
   {
     key: "featureWaiverRequired",

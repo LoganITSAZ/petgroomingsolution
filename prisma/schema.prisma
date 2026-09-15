@@ -41,6 +41,10 @@ model SystemConfig {
   /// The day-before reminder. On by default: a shop with email switched off
   /// sends nothing anyway, so this decides intent rather than capability.
   featureAppointmentReminders Boolean @default(true)
+  /// The nudge for a household that is past its own usual gap between
+  /// grooms. Measured from their history, so it says nothing about a
+  /// customer with fewer than three visits on file.
+  featureRebookingPrompts Boolean @default(true)
 
   // Liability waiver
   waiverText    String? @db.Text // full waiver body; null = feature off even if flag is true
@@ -107,6 +111,11 @@ model SystemConfig {
   /// How far ahead of a visit the reminder goes out. A visit closer than
   /// `bookingLeadHours` is skipped -- an hour's notice is noise.
   reminderHoursBefore Int @default(24)
+
+  // Rebooking
+  /// Days past a household's own cadence before the shop says anything. A
+  /// customer who books every eight weeks is not overdue on day 57.
+  rebookingGraceDays Int @default(7)
 
   // Payroll
   defaultCommissionPercent Float @default(40) // percent of ticket paid to the groomer
@@ -712,6 +721,10 @@ model NotificationLog {
 
 enum NotificationKind {
   APPOINTMENT_REMINDER
+  /// Anchored on the visit it is chasing -- the customer's last finished one --
+  /// so the unique constraint reads "one prompt per completed visit" and there
+  /// is no cooldown column to keep correct.
+  REBOOKING_PROMPT
 }
 
 // Services booked on one visit. `Appointment.serviceType` stays the primary

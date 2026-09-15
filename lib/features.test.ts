@@ -21,6 +21,7 @@ function configured(overrides: Partial<FeatureConfig> = {}): FeatureConfig {
     featureVisitPhotos: true,
     featureVaccinationGate: true,
     featureAppointmentReminders: true,
+    featureRebookingPrompts: true,
     twilioAccountSid: "AC_test",
     twilioAuthToken: "token",
     twilioFromNumber: "+15550000000",
@@ -33,7 +34,7 @@ describe("registry integrity", () => {
   it("declares every key exactly once", () => {
     const keys = FEATURES.map((feature) => feature.key);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(keys).toHaveLength(9);
+    expect(keys).toHaveLength(10);
   });
 
   it("only names declared keys in requires", () => {

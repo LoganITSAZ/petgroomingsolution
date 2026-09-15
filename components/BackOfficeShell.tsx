@@ -47,6 +47,7 @@ const NAV: NavItem[] = [
   { href: "/staff/team", label: "Team" },
   { href: "/staff/schedule", label: "Schedule" },
   { href: "/staff/services", label: "Services" },
+  { href: "/staff/rebooking", label: "Rebooking", feature: "featureRebookingPrompts" },
   { href: "/staff/resources", label: "Resources" },
 ];
 

@@ -127,6 +127,55 @@ export async function sendAppointmentReminder({
 }
 
 /**
+ * "It has been a while." The rebooking nudge, sent by the job runner.
+ *
+ * It says how long it has been and how to book, and nothing about what the pet
+ * needs -- the shop grooms, it does not prescribe. Behind `featureEmailNotify`
+ * like the rest of the customer mail.
+ */
+export async function sendRebookingPrompt({
+  to,
+  ownerName,
+  petNames,
+  daysSince,
+}: {
+  to: string;
+  ownerName: string;
+  petNames: string[];
+  daysSince: number;
+}) {
+  const config = await getConfig();
+  if (!config.featureEmailNotify) return;
+
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY is not set — skipping rebooking email");
+    return;
+  }
+
+  const from = await getFrom();
+  const pets = petNames.length > 0 ? petNames.join(" and ") : "your pet";
+
+  await resend.emails.send({
+    from,
+    to,
+    subject: `Time to book ${pets} in again?`,
+    html: `
+      <p>Hi ${escapeHtml(ownerName)},</p>
+      <p>It has been about ${daysSince} days since we last saw
+         <strong>${escapeHtml(pets)}</strong>, and there is nothing on our books
+         yet. If you would like the usual slot, it is worth booking soon.</p>
+      ${
+        config.shopPhone
+          ? `<p>Call us on ${escapeHtml(config.shopPhone)} and we will find a time.</p>`
+          : `<p>Reply to this email and we will find a time.</p>`
+      }
+      <p>— ${escapeHtml(config.shopName)}</p>
+    `,
+  });
+}
+
+/**
  * The "forgot my password" link.
  *
  * Deliberately *not* behind `featureEmailNotify`. That flag governs whether the

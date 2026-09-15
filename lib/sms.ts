@@ -138,6 +138,32 @@ export async function smsAppointmentReminder({
 }
 
 /**
+ * The rebooking text. One segment, and it asks rather than tells: a shop that
+ * texts "your dog is due" is claiming something only a vet can.
+ */
+export async function smsRebookingPrompt({
+  to,
+  petNames,
+  shopName,
+  daysSince,
+  phone,
+}: {
+  to: string | null | undefined;
+  petNames: string[];
+  shopName: string;
+  daysSince: number;
+  phone?: string | null;
+}): Promise<boolean> {
+  const pets = petNames.length > 0 ? petNames.join(" and ") : "your pet";
+  return sendSms(
+    to,
+    `${shopName}: it has been about ${daysSince} days since ${pets} was in. Book again?` +
+      (phone ? ` ${phone}` : "") +
+      ` Reply STOP to opt out.`
+  );
+}
+
+/**
  * The text that goes with the consent email. Deliberately does not carry the
  * detail: what is being asked needs a conversation, and a fee quoted in a text
  * message is the kind of thing a shop ends up arguing about at the counter.
