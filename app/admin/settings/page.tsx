@@ -88,6 +88,13 @@ async function saveSettings(formData: FormData) {
     Math.max(0, parseInt((formData.get("vaccinationGraceDays") as string) ?? "0", 10) || 0)
   );
 
+  // A reminder the same hour as the visit is not a reminder; a month out is
+  // not either. Both ends are clamped rather than trusted.
+  const reminderHoursBefore = Math.min(
+    336,
+    Math.max(1, parseInt((formData.get("reminderHoursBefore") as string) ?? "24", 10) || 24)
+  );
+
   // A zero-hour week would mark every shift overtime.
   const overtimeWeeklyHours = Math.min(
     168,
@@ -115,6 +122,7 @@ async function saveSettings(formData: FormData) {
       rewardValueCents,
       vaccinationGateBlocks,
       vaccinationGraceDays,
+      reminderHoursBefore,
       overtimeWeeklyHours,
       bookingLeadHours,
       bookingWindowDays,
@@ -399,6 +407,24 @@ export default async function SettingsPage(props: PageProps) {
               Vaccinations
             </Link>
             .
+          </p>
+        </Section>
+
+        <Section
+          title="Reminders"
+          hint="The day-before reminder, sent by the shop's job runner rather than by anyone at the counter."
+        >
+          <Field
+            name="reminderHoursBefore"
+            label="Remind this far ahead (hours)"
+            hint="A visit closer than the booking lead time above is skipped — an hour's notice is noise. A reminder is sent once per visit, so a runner that restarts never says it twice."
+          >
+            <input type="number" id="reminderHoursBefore" name="reminderHoursBefore" defaultValue={config?.reminderHoursBefore ?? 24} min={1} max={336} className={FIELD} />
+          </Field>
+
+          <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
+            Reminders go out on whichever channels are live — email, text, or both. Switch the
+            reminder itself off in Features above.
           </p>
         </Section>
 

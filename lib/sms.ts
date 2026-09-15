@@ -114,6 +114,30 @@ export async function smsBookingConfirmation({
 }
 
 /**
+ * The reminder text. One segment: the pet, when, and how to reach the shop.
+ */
+export async function smsAppointmentReminder({
+  to,
+  petName,
+  shopName,
+  when,
+  phone,
+}: {
+  to: string | null | undefined;
+  petName: string;
+  shopName: string;
+  when: string;
+  phone?: string | null;
+}): Promise<boolean> {
+  return sendSms(
+    to,
+    `${shopName}: reminder, ${petName} is booked for ${when}.` +
+      (phone ? ` Changes? ${phone}` : "") +
+      ` Reply STOP to opt out.`
+  );
+}
+
+/**
  * The text that goes with the consent email. Deliberately does not carry the
  * detail: what is being asked needs a conversation, and a fee quoted in a text
  * message is the kind of thing a shop ends up arguing about at the counter.

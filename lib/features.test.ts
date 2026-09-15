@@ -20,6 +20,7 @@ function configured(overrides: Partial<FeatureConfig> = {}): FeatureConfig {
     featureRewards: true,
     featureVisitPhotos: true,
     featureVaccinationGate: true,
+    featureAppointmentReminders: true,
     twilioAccountSid: "AC_test",
     twilioAuthToken: "token",
     twilioFromNumber: "+15550000000",
@@ -32,7 +33,7 @@ describe("registry integrity", () => {
   it("declares every key exactly once", () => {
     const keys = FEATURES.map((feature) => feature.key);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(keys).toHaveLength(8);
+    expect(keys).toHaveLength(9);
   });
 
   it("only names declared keys in requires", () => {
@@ -100,6 +101,26 @@ describe("featureBlockers", () => {
   it("says nothing about a feature whose own switch is off", () => {
     // Off by choice is not a blocker — the screen shows the switch position.
     expect(featureBlockers(configured({ featureSmsNotify: false }), "featureSmsNotify")).toEqual([]);
+  });
+});
+
+describe("appointment reminders", () => {
+  it("is not live with no channel to send down", () => {
+    const config = configured({ featureEmailNotify: false, featureSmsNotify: false });
+    expect(isEnabled(config, "featureAppointmentReminders")).toBe(false);
+    expect(featureBlockers(config, "featureAppointmentReminders")).toHaveLength(1);
+  });
+
+  it("is live on SMS alone", () => {
+    const config = configured({ featureEmailNotify: false });
+    expect(isEnabled(config, "featureAppointmentReminders")).toBe(true);
+  });
+
+  // SMS switched on without credentials is not a channel. The reminder has to
+  // read the *resolved* state of its siblings, not their columns.
+  it("is not live behind a half-configured channel", () => {
+    const config = configured({ featureEmailNotify: false, twilioAuthToken: null });
+    expect(isEnabled(config, "featureAppointmentReminders")).toBe(false);
   });
 });
 

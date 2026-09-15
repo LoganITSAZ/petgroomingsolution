@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { getConfig } from "@/lib/config";
 import { DEFAULT_SHOP_NAME, SHOP_MAIL_DOMAIN } from "@/lib/branding";
+import { formatShopDate, formatShopTime } from "@/lib/utils";
 
 /**
  * Lazily constructed Resend client.
@@ -72,6 +73,54 @@ export async function sendBookingConfirmation({
         <li><strong>Service:</strong> ${serviceType.replace(/_/g, " ")}</li>
       </ul>
       <p>You can check in online when you arrive at the shop.</p>
+      <p>— ${config.shopName}</p>
+    `,
+  });
+}
+
+/**
+ * The day-before reminder, sent by the job runner rather than a request.
+ *
+ * Behind `featureEmailNotify` like the other visit mail: a shop that has
+ * switched customer email off has said what it wants.
+ */
+export async function sendAppointmentReminder({
+  to,
+  ownerName,
+  petName,
+  scheduledAt,
+}: {
+  to: string;
+  ownerName: string;
+  petName: string;
+  scheduledAt: Date;
+}) {
+  const config = await getConfig();
+  if (!config.featureEmailNotify) return;
+
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY is not set — skipping appointment reminder email");
+    return;
+  }
+
+  const from = await getFrom();
+  // Shop time, never the server's: production runs in UTC.
+  const when = `${formatShopDate(scheduledAt)} at ${formatShopTime(scheduledAt)}`;
+
+  await resend.emails.send({
+    from,
+    to,
+    subject: `Reminder: ${petName} is booked for ${formatShopDate(scheduledAt)}`,
+    html: `
+      <p>Hi ${ownerName},</p>
+      <p>Just a reminder that <strong>${petName}</strong> is booked in with us on
+         <strong>${when}</strong>.</p>
+      ${
+        config.shopPhone
+          ? `<p>If anything has changed, call us on ${escapeHtml(config.shopPhone)}.</p>`
+          : `<p>If anything has changed, let us know.</p>`
+      }
       <p>— ${config.shopName}</p>
     `,
   });

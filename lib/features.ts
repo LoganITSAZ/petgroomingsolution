@@ -28,7 +28,8 @@ export type FeatureKey =
   | "featureWaiverRequired"
   | "featureRewards"
   | "featureVisitPhotos"
-  | "featureVaccinationGate";
+  | "featureVaccinationGate"
+  | "featureAppointmentReminders";
 
 export type FeatureGroup = "Customers" | "Visits" | "Notifications" | "Compliance";
 
@@ -53,6 +54,7 @@ export interface FeatureConfig {
   featureRewards: boolean;
   featureVisitPhotos: boolean;
   featureVaccinationGate: boolean;
+  featureAppointmentReminders: boolean;
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
   twilioFromNumber: string | null;
@@ -146,6 +148,20 @@ export const FEATURES: Feature[] = [
       filled(config.twilioFromNumber)
         ? null
         : "Twilio credentials are missing — add them on the Notifications page.",
+  },
+  {
+    key: "featureAppointmentReminders",
+    label: "Appointment Reminders",
+    blurb:
+      "A reminder the day before a visit, sent by the shop's job runner. Off, nothing goes out and no reminder is recorded.",
+    group: "Notifications",
+    offMeans: "silent",
+    // A reminder with nothing to send it down is a switch that does nothing.
+    // Naming that beats a dead toggle the shop turns on and waits for.
+    needs: (config) =>
+      isEnabled(config, "featureEmailNotify") || isEnabled(config, "featureSmsNotify")
+        ? null
+        : "Neither email nor SMS is live, so there is no way to send a reminder.",
   },
   {
     key: "featureWaiverRequired",

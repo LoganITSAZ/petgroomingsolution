@@ -31,6 +31,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json tsconfig.json ./
 COPY prisma ./prisma
 COPY lib ./lib
+# The job runner ships in this image too — see the `jobs` service.
+COPY scripts ./scripts
 COPY docker-entrypoint.sh ./
 RUN npx prisma generate
 RUN chmod +x docker-entrypoint.sh

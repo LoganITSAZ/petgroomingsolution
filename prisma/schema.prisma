@@ -38,6 +38,9 @@ model SystemConfig {
   /// On by default, but it gates nothing until the shop adds a requirement
   /// row -- no rows means no gate.
   featureVaccinationGate Boolean @default(true)
+  /// The day-before reminder. On by default: a shop with email switched off
+  /// sends nothing anyway, so this decides intent rather than capability.
+  featureAppointmentReminders Boolean @default(true)
 
   // Liability waiver
   waiverText    String? @db.Text // full waiver body; null = feature off even if flag is true
@@ -99,6 +102,11 @@ model SystemConfig {
   /// Days past an expiry the shop will still take a booking, for an owner
   /// who is on their way to the vet. Moves what blocks, not what is shown.
   vaccinationGraceDays  Int     @default(0)
+
+  // Reminders
+  /// How far ahead of a visit the reminder goes out. A visit closer than
+  /// `bookingLeadHours` is skipped -- an hour's notice is noise.
+  reminderHoursBefore Int @default(24)
 
   // Payroll
   defaultCommissionPercent Float @default(40) // percent of ticket paid to the groomer
@@ -297,6 +305,7 @@ model Customer {
   waiverAcceptances WaiverAcceptance[]
   rewardEarnings    RewardEarning[]
   rewardRedemptions RewardRedemption[]
+  notifications     NotificationLog[]
 
   @@map("customers")
 }
@@ -669,10 +678,40 @@ model Appointment {
   pricingTier   PricingTier?   @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
   rewardEarning RewardEarning?
   rewardRedemptions RewardRedemption[]
+  notifications NotificationLog[]
 
   @@index([scheduledAt, status])
   @@index([stationId, status])
   @@map("appointments")
+}
+
+/// What the shop has already told a customer about one visit, so a runner that
+/// restarts does not say it twice. One row per kind per visit: the question is
+/// "have we reminded them", and the channels are a record of what happened
+/// rather than part of the key.
+model NotificationLog {
+  id            String           @id @default(cuid())
+  /// Required, never nullable: Postgres does not treat two NULLs as equal in a
+  /// unique index, so a nullable column would give a constraint that silently
+  /// stops working. A kind that is not about one visit needs its own
+  /// uniqueness decision rather than an inherited one that does not hold.
+  appointmentId String
+  customerId    String
+  kind          NotificationKind
+  /// Which channels actually went out -- "EMAIL", "SMS".
+  channels      String[]
+  sentAt        DateTime         @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([appointmentId, kind])
+  @@index([customerId, sentAt])
+  @@map("notification_logs")
+}
+
+enum NotificationKind {
+  APPOINTMENT_REMINDER
 }
 
 // Services booked on one visit. `Appointment.serviceType` stays the primary
