@@ -149,7 +149,7 @@ const OSRM = "https://router.project-osrm.org/route/v1/driving";
  *
  * ponytail: in-process cache, move it to a table if OSRM ever rate-limits us.
  */
-const routes = new Map<string, Drive | null>();
+const routes = new Map<string, Drive>();
 
 /**
  * How long it takes to drive from an address to the shop.
@@ -171,10 +171,17 @@ export const driveToShop = cache(async function driveToShop(
   const [from, to] = await Promise.all([geocode(address), geocode(config.shopAddress)]);
   if (!from || !to) return null;
 
+  // Only an answer is cached. Caching the miss too meant one OSRM timeout hid
+  // that customer's drive time until the process restarted; `cache()` above
+  // already collapses a failed lookup to one call per request, and the next
+  // render simply asks again.
   const key = `${from.lat},${from.lon};${to.lat},${to.lon}`;
-  if (!routes.has(key)) routes.set(key, await route(from, to));
+  let drive = routes.get(key) ?? null;
+  if (!drive) {
+    drive = await route(from, to);
+    if (drive) routes.set(key, drive);
+  }
 
-  const drive = routes.get(key) ?? null;
   return drive && { ...drive, from, to };
 });
 
