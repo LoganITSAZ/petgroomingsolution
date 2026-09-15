@@ -39,6 +39,9 @@ import { photoUrl } from "@/lib/photos";
 import { consentState, groomRecordSummary, lastGroomRecordForPet } from "@/lib/visit-record";
 import VisitPhotoStrip from "@/components/VisitPhotoStrip";
 import { getConfig } from "@/lib/config";
+import { isEnabled } from "@/lib/features";
+import { ticketFromRow } from "@/lib/ticket";
+import { TicketPanel } from "@/components/Ticket";
 import { checksForPet } from "@/lib/vaccinations";
 import { VaccinationWarning } from "@/components/Vaccinations";
 import { BLADE_TERMS } from "@/lib/resources";
@@ -79,6 +82,10 @@ const NOTICES: Record<string, string> = {
   redeemed: "Reward applied to this bill.",
   photo: "Visit photos updated.",
   photoRemoved: "Photo removed from this visit.",
+  surcharged: "Fee added to the ticket.",
+  unsurcharged: "Fee taken off the ticket.",
+  paid: "Payment recorded.",
+  unpaid: "Payment removed.",
 };
 
 /** A visit past these is closed: its bill is no longer open to a discount. */
@@ -111,6 +118,10 @@ const ERRORS: Record<string, string> = {
   station_full: "That station is already at its maximum number of pets.",
   role_not_allowed:
     "That station is limited to specific roles, and the selected staff member does not hold one.",
+  bad_amount: "An amount has to be above zero.",
+  bad_surcharge: "Say what the fee is for.",
+  bad_method: "Pick how the money was taken.",
+  bad_tip: "The tip cannot be more than the payment it came in.",
 };
 
 const inputClass =
@@ -151,11 +162,19 @@ export default async function AppointmentDetailPage(props: PageProps) {
         include: { takenBy: { select: { name: true } } },
         orderBy: { createdAt: "asc" },
       },
+      appointmentSurcharges: {
+        include: { addedBy: { select: { id: true, name: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      payments: {
+        include: { takenBy: { select: { id: true, name: true } } },
+        orderBy: { takenAt: "asc" },
+      },
     },
   });
   if (!appointment) notFound();
 
-  const [stations, groomers, serviceOptions, allKennels] = await Promise.all([
+  const [stations, groomers, serviceOptions, allKennels, surchargeOptions] = await Promise.all([
     prisma.station.findMany({
       where: { isActive: true, role: { not: StationRole.KENNEL } },
       orderBy: [{ role: "asc" }, { name: "asc" }],
@@ -178,6 +197,12 @@ export default async function AppointmentDetailPage(props: PageProps) {
         },
       },
       orderBy: [{ station: { name: "asc" } }, { row: "asc" }, { column: "asc" }],
+    }),
+    // The published fee list, so the counter charges what the shop advertises.
+    prisma.surcharge.findMany({
+      where: { isActive: true },
+      select: { id: true, label: true, minCents: true, maxCents: true, note: true },
+      orderBy: { label: "asc" },
     }),
   ]);
 
@@ -227,6 +252,10 @@ export default async function AppointmentDetailPage(props: PageProps) {
   const vaccinationChecks = await checksForPet(appointment.petId, config);
 
   const card = await rewardCard(appointment.customerId);
+
+  // The ticket is the counter's arithmetic, not this page's.
+  const ticket = ticketFromRow(appointment);
+  const counterPayments = isEnabled(config, "featureCounterPayments");
 
   const priced = appointment.services.filter((line) => line.priceCents != null);
   const total = priced.reduce((sum, line) => sum + (line.priceCents ?? 0), 0);
@@ -702,6 +731,20 @@ export default async function AppointmentDetailPage(props: PageProps) {
           </details>
         </section>
       </PageSection>
+
+      {counterPayments && (
+        <PageSection>
+          <TicketPanel
+            appointmentId={appointment.id}
+            ticket={ticket}
+            surcharges={appointment.appointmentSurcharges}
+            payments={appointment.payments}
+            surchargeOptions={surchargeOptions}
+            tierName={appointment.pricingTier?.name ?? null}
+            returnTo={`/staff/appointments/${appointment.id}`}
+          />
+        </PageSection>
+      )}
 
       <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* What the pet was groomed with, for whoever has it next */}

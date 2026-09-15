@@ -8,7 +8,7 @@ vi.mock("@/components/ui", () => ({ PageSection: ({ children }: { children: Reac
 const snapshot: ShopAnalytics = {
   rangeDays: 7, booked: 3, finished: 3, cancelled: 0, noShows: 0,
   walkIns: 0, scheduledAppointments: 3, noShowRate: 0, avgTurnaroundMins: null,
-  estimatedRevenueCents: 15000, rateDiscountCents: 0, pricedShare: 1,
+  estimatedRevenueCents: 15000, rateDiscountCents: 0, takenCents: 0, tipsCents: 0, pricedShare: 1,
   perDay: [{ dayKey: "2026-09-12", finished: 3 }], serviceMix: [], newCustomers: 0, returningShare: 0,
 };
 describe("DashboardTrend", () => {

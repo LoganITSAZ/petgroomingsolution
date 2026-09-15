@@ -6,6 +6,8 @@ import InsightList from "@/components/InsightList";
 import Link from "next/link";
 import { Meter, PageShell, PageSection } from "@/components/ui";
 import { currentStaffCanManage } from "@/lib/staff-roles";
+import { getConfig } from "@/lib/config";
+import { isEnabled } from "@/lib/features";
 import { redirect } from "next/navigation";
 
 // Screen readers announce the title first; without one every page in the
@@ -47,11 +49,15 @@ export default async function AnalyticsPage(props: PageProps) {
   const requested = Number(searchParams.range);
   const rangeDays = (RANGES as readonly number[]).includes(requested) ? requested : 30;
 
-  const [shop, leaderboard, insights] = await Promise.all([
+  const [shop, leaderboard, insights, config] = await Promise.all([
     getShopAnalytics(rangeDays),
     getLeaderboard(),
     shopInsights(),
+    getConfig(),
   ]);
+  // Off, and the taken column is a row of zeroes describing a feature the shop
+  // does not use.
+  const counterPayments = isEnabled(config, "featureCounterPayments");
 
   const ranked = leaderboard.filter((row) => row.isActive && row.lifetime > 0);
   const idle = leaderboard.filter((row) => row.isActive && row.lifetime === 0);
@@ -232,6 +238,18 @@ export default async function AnalyticsPage(props: PageProps) {
               <span className="font-bold">{formatCents(shop.estimatedRevenueCents)}</span> at list
               price
             </p>
+            {/* Taken is a fact; everything above it is a floor. */}
+            {counterPayments && (
+              <p className="text-stone-700">
+                <span className="font-bold">{formatCents(shop.takenCents)}</span> taken
+                {shop.tipsCents > 0 && (
+                  <span className="text-xs text-stone-500">
+                    {" "}
+                    · {formatCents(shop.tipsCents)} of it tips, which are the groomers&apos;
+                  </span>
+                )}
+              </p>
+            )}
             {shop.rateDiscountCents > 0 && (
               <p className="text-xs text-stone-500">
                 After {formatCents(shop.rateDiscountCents)} off for agreed rates. Groomer commission
@@ -335,6 +353,9 @@ export default async function AnalyticsPage(props: PageProps) {
                     <th scope="col" className="px-3 py-2 text-right">Rate</th>
                     <th scope="col" className="px-3 py-2 text-right">Pay today</th>
                     <th scope="col" className="px-3 py-2 text-right">Pay 7d</th>
+                    {counterPayments && (
+                      <th scope="col" className="px-3 py-2 text-right">Tips 7d</th>
+                    )}
                     <th scope="col" className="px-3 py-2 text-left">Badges</th>
                   </tr>
                 </thead>
@@ -377,6 +398,13 @@ export default async function AnalyticsPage(props: PageProps) {
                       <td className="px-3 py-2 text-right font-semibold text-stone-900">
                         {formatCents(row.payWeekCents)}
                       </td>
+                      {/* Beside the commission estimate, never inside it: a tip
+                          is the customer's, and commission is the shop's. */}
+                      {counterPayments && (
+                        <td className="px-3 py-2 text-right text-emerald-800">
+                          {row.tipWeekCents > 0 ? formatCents(row.tipWeekCents) : "—"}
+                        </td>
+                      )}
                       <td className="px-3 py-2">
                         <span className="flex flex-wrap gap-1">
                           {row.badges.map((badge) => (

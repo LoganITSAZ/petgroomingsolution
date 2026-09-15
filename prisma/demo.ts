@@ -130,10 +130,11 @@ async function demoPhoto(hue: number): Promise<string> {
 }
 
 async function main() {
-  const [config, services, stations] = await Promise.all([
+  const [config, services, stations, surcharges] = await Promise.all([
     prisma.systemConfig.findUnique({ where: { id: "global" } }),
     prisma.service.findMany({ where: { isActive: true } }),
     prisma.station.findMany({ where: { isActive: true } }),
+    prisma.surcharge.findMany({ where: { isActive: true } }),
   ]);
   if (!config || services.length === 0 || stations.length === 0) {
     throw new Error("Run `npm run db:seed` first — demo data builds on the catalog and stations.");
@@ -510,6 +511,55 @@ async function main() {
                 ]),
                 takenById: groomer.id,
                 createdAt: scheduledAt,
+              },
+            });
+          }
+        }
+
+        /*
+         * The counter. A fee on the coats that needed one, then what the
+         * terminal took -- mostly the lot, now and then a part payment so the
+         * "still owing" list on /staff/takings is not empty on a demo.
+         */
+        if (finished(status) && surcharges.length > 0) {
+          const listCents = lines.reduce((sum, line) => sum + (line.priceCents ?? 0), 0);
+          let extraCents = 0;
+          if (chance(0.22)) {
+            const surcharge = pick(surcharges);
+            // In the shop's own $10 steps, inside the published range.
+            const steps = int(1, Math.max(1, Math.floor(((surcharge.maxCents ?? 4000) - (surcharge.minCents ?? 1500)) / 1000)));
+            extraCents = (surcharge.minCents ?? 1500) + steps * 1000;
+            await prisma.appointmentSurcharge.create({
+              data: {
+                appointmentId: appointment.id,
+                surchargeId: surcharge.id,
+                label: surcharge.label,
+                amountCents: extraCents,
+                note: chance(0.6) ? "Found on the table, owner told before it came off." : null,
+                addedById: groomer.id,
+                createdAt: scheduledAt,
+              },
+            });
+          }
+
+          const dueCents = Math.max(
+            0,
+            listCents + extraCents - (appointment.pricingDiscountCents ?? 0)
+          );
+          if (dueCents > 0 && chance(0.92)) {
+            // A part payment on a few, so a balance exists to chase.
+            const part = chance(0.08);
+            const method = pick(["CARD", "CARD", "CARD", "CASH", "CHECK"] as const);
+            const tipCents = method === "CHECK" || !chance(0.55) ? 0 : int(1, 8) * 500;
+            await prisma.payment.create({
+              data: {
+                appointmentId: appointment.id,
+                method,
+                amountCents: (part ? Math.round(dueCents / 2) : dueCents) + tipCents,
+                tipCents,
+                reference: method === "CARD" ? `CLV${int(100000, 999999)}` : null,
+                takenById: groomer.id,
+                takenAt: appointment.completedAt ?? scheduledAt,
               },
             });
           }

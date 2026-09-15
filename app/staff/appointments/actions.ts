@@ -18,11 +18,23 @@ import { smsConsentRequest } from "@/lib/sms";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-function back(appointmentId: string, params = ""): never {
+function back(appointmentId: string, params = "", returnTo?: string | null): never {
   revalidatePath(`/staff/appointments/${appointmentId}`);
   revalidatePath("/staff/appointments");
   revalidatePath("/staff");
+  // A groomer who logged this from the station job aid goes back to the table,
+  // not to the counter's screen. Only our own paths: an open redirect through
+  // a form field is not worth the convenience.
+  if (returnTo?.startsWith("/staff/")) {
+    revalidatePath(returnTo);
+    redirect(`${returnTo}${params}`);
+  }
   redirect(`/staff/appointments/${appointmentId}${params}`);
+}
+
+/** Where a form wants to land again, if it said. */
+function returnTo(formData: FormData): string | null {
+  return (formData.get("returnTo") as string | null) ?? null;
 }
 
 /** Advance one step along the groom flow, or set an explicit status. */
@@ -422,7 +434,7 @@ export async function logVisitEvent(formData: FormData): Promise<void> {
   const note = ((formData.get("note") as string | null) ?? "").trim() || null;
 
   if (!Object.values(VisitEventType).includes(eventTypeRaw as VisitEventType)) {
-    back(appointmentId, "?error=bad_event");
+    back(appointmentId, "?error=bad_event", returnTo(formData));
   }
   const eventType = eventTypeRaw as VisitEventType;
 
@@ -453,7 +465,7 @@ export async function logVisitEvent(formData: FormData): Promise<void> {
     revalidatePath(`/staff/pets/${appointment.petId}`);
   }
 
-  back(appointmentId, "?event=1");
+  back(appointmentId, "?event=1", returnTo(formData));
 }
 
 /**
@@ -496,7 +508,7 @@ export async function requestConsent(formData: FormData): Promise<void> {
 
   const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
   const consentNote = ((formData.get("consentNote") as string | null) ?? "").trim();
-  if (!consentNote) back(appointmentId, "?error=no_consent_note");
+  if (!consentNote) back(appointmentId, "?error=no_consent_note", returnTo(formData));
 
   const appointment = await prisma.appointment.update({
     where: { id: appointmentId },
@@ -536,7 +548,7 @@ export async function requestConsent(formData: FormData): Promise<void> {
     }).catch(console.error);
   }
 
-  back(appointmentId, "?consent=1");
+  back(appointmentId, "?consent=1", returnTo(formData));
 }
 
 /** Record the answer the owner gave. */

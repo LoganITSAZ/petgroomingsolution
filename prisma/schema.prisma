@@ -45,6 +45,10 @@ model SystemConfig {
   /// grooms. Measured from their history, so it says nothing about a
   /// customer with fewer than three visits on file.
   featureRebookingPrompts Boolean @default(true)
+  /// The ticket at the counter: surcharges found on the table, what was paid,
+  /// the tip, and the day's takings. The shop's own Clover terminal takes the
+  /// money -- these rows record it.
+  featureCounterPayments Boolean @default(true)
 
   // Liability waiver
   waiverText    String? @db.Text // full waiver body; null = feature off even if flag is true
@@ -173,6 +177,8 @@ model Staff {
 
   rewardRedemptions RewardRedemption[]
   vaccinationsVerified PetVaccination[]
+  surchargesAdded AppointmentSurcharge[]
+  paymentsTaken   Payment[]
 
   @@map("staff")
 }
@@ -599,7 +605,75 @@ model Surcharge {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  charged AppointmentSurcharge[]
+
   @@map("surcharges")
+}
+
+/// An extra fee actually charged on one visit.
+///
+/// `Surcharge` has been a published range since it was written -- a matted coat
+/// is $10-$30 depending on what is found on the table -- and nothing ever
+/// attached one to a visit. The range is advisory: a genuinely awful coat is
+/// charged above it and the row says so, because the counter has to explain the
+/// number to an owner who was quoted something smaller.
+model AppointmentSurcharge {
+  id            String  @id @default(cuid())
+  appointmentId String
+  /// The catalog row this came from, kept for reporting. Null once the shop
+  /// deletes the published fee; `label` is what the counter reads out.
+  surchargeId   String?
+  label         String
+  amountCents   Int
+  /// Charged above the published range. A fact on the row rather than something
+  /// inferred later from a price list that has since changed.
+  aboveRange    Boolean @default(false)
+  note          String?
+  /// Who found it. Same reason.
+  addedById     String
+  createdAt     DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  surcharge   Surcharge?  @relation(fields: [surchargeId], references: [id], onDelete: SetNull)
+  addedBy     Staff       @relation(fields: [addedById], references: [id])
+
+  @@index([appointmentId])
+  @@map("appointment_surcharges")
+}
+
+/// Money that changed hands somewhere else.
+///
+/// The shop takes payment on a Clover terminal this app does not integrate
+/// with: staff read the amount off the screen, key it in, and record the result
+/// here. No processor, no card data, no PCI surface. `reference` holds Clover's
+/// transaction id, which is what a dispute is traced by and the only seam a
+/// future integration would need.
+model Payment {
+  id            String        @id @default(cuid())
+  appointmentId String
+  method        PaymentMethod
+  /// What was handed over, tip included -- the terminal's own total, so it
+  /// reconciles against Clover's batch without arithmetic.
+  amountCents   Int
+  tipCents      Int           @default(0)
+  reference     String?
+  note          String?
+  takenById     String
+  takenAt       DateTime      @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  takenBy     Staff       @relation(fields: [takenById], references: [id])
+
+  @@index([appointmentId])
+  @@index([takenAt])
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CARD
+  CASH
+  CHECK
+  OTHER
 }
 
 // ─────────────────────────────────────────────
@@ -688,6 +762,8 @@ model Appointment {
   rewardEarning RewardEarning?
   rewardRedemptions RewardRedemption[]
   notifications NotificationLog[]
+  appointmentSurcharges AppointmentSurcharge[]
+  payments      Payment[]
 
   @@index([scheduledAt, status])
   @@index([stationId, status])

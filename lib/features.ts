@@ -30,14 +30,16 @@ export type FeatureKey =
   | "featureVisitPhotos"
   | "featureVaccinationGate"
   | "featureAppointmentReminders"
-  | "featureRebookingPrompts";
+  | "featureRebookingPrompts"
+  | "featureCounterPayments";
 
-export type FeatureGroup = "Customers" | "Visits" | "Notifications" | "Compliance";
+export type FeatureGroup = "Customers" | "Visits" | "Money" | "Notifications" | "Compliance";
 
 /** Group order on the settings screen. */
 export const FEATURE_GROUPS: FeatureGroup[] = [
   "Customers",
   "Visits",
+  "Money",
   "Notifications",
   "Compliance",
 ];
@@ -57,6 +59,7 @@ export interface FeatureConfig {
   featureVaccinationGate: boolean;
   featureAppointmentReminders: boolean;
   featureRebookingPrompts: boolean;
+  featureCounterPayments: boolean;
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
   twilioFromNumber: string | null;
@@ -174,6 +177,14 @@ export const FEATURES: Feature[] = [
     offMeans: "silent",
     // No `needs`: a shop with no email and no texts still works the call list
     // by phone, which is the older half of this feature and the better one.
+  },
+  {
+    key: "featureCounterPayments",
+    label: "Counter Payments",
+    blurb:
+      "The ticket at the counter: the fees a groomer finds on the table, what was paid, and the tip. The shop's own terminal takes the money — this records it. Off, the books already written stay readable and nothing new is taken.",
+    group: "Money",
+    offMeans: "frozen",
   },
   {
     key: "featureWaiverRequired",
