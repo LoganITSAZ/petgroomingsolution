@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth-guards";
 import { CoatType, Species } from "@prisma/client";
+import { stockPhotoForBreed } from "@/lib/breeds";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -51,6 +52,12 @@ export async function saveBreedGuide(formData: FormData): Promise<void> {
 
   const clash = await prisma.breedGuide.findUnique({ where: { breed } });
   if (clash && clash.id !== id) done("?error=duplicate");
+
+  // Nobody goes looking for a picture of a Havanese while writing down what its
+  // coat does, so an empty box is filled in once from Wikipedia. Clearing the
+  // box on a guide that has one is a deliberate removal, not a request to go
+  // and find another.
+  if (!photoRaw && !id) data.photoUrl = await stockPhotoForBreed(breed, data.species);
 
   if (id) {
     await prisma.breedGuide.update({ where: { id }, data });

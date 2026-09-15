@@ -589,6 +589,18 @@ export default async function StaffStationDetailPage(props: PageProps) {
                           <span className="text-sky-800"> — {guide.summary}</span>
                         </summary>
                         <div className="px-2 pb-2">
+                          {/* What the coat is meant to look like. Inside the
+                              disclosure, so the pet's own photo above is never
+                              competing with a stock one. */}
+                          {guide.photoUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={guide.photoUrl}
+                              alt={`A ${guide.breed}`}
+                              loading="lazy"
+                              className="float-right ml-2 mb-1 h-24 w-32 rounded object-cover"
+                            />
+                          )}
                           <ul className="list-disc list-inside text-sm text-stone-700 space-y-0.5">
                             {tipLines(guide).map((tip) => (
                               <li key={tip}>{tip}</li>
