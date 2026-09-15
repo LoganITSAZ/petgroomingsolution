@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { formatCoatType, formatSpecies } from "@/lib/utils";
 import { currentStaffCanManage } from "@/lib/staff-roles";
 import { PageShell, PageSection } from "@/components/ui";
-import { tipLines } from "@/lib/breeds";
+import BreedCards from "@/components/BreedCards";
 
 export const metadata = { title: "Breed Guide" };
 
@@ -102,39 +101,7 @@ export default async function StaffBreedGuidePage(props: {
             )}
           </p>
         ) : (
-          <ul className="divide-y divide-stone-100">
-            {guides.map((guide) => {
-              const tips = tipLines(guide);
-              return (
-                <li key={guide.id} className="px-3 py-3">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <h2 className="font-bold text-stone-900">{guide.breed}</h2>
-                    <span className="text-xs text-stone-500">{formatSpecies(guide.species)}</span>
-                    {guide.coat && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-stone-100 text-stone-700">
-                        {formatCoatType(guide.coat)}
-                      </span>
-                    )}
-                    {guide.typicalMins != null && (
-                      <span className="text-xs text-stone-500 tabular-nums">
-                        ~{guide.typicalMins} min
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-stone-600 mt-1">{guide.summary}</p>
-                  {tips.length > 0 && (
-                    <ul className="mt-1.5 space-y-0.5">
-                      {tips.map((tip) => (
-                        <li key={tip} className="text-sm text-stone-600 pl-3 -indent-3">
-                          <span className="text-stone-400">·</span> {tip}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <BreedCards guides={guides} />
         )}
       </PageSection>
     </PageShell>

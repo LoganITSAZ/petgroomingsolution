@@ -27,6 +27,11 @@ export async function saveBreedGuide(formData: FormData): Promise<void> {
   const speciesRaw = ((formData.get("species") as string | null) ?? "").trim();
   const coatRaw = ((formData.get("coat") as string | null) ?? "").trim();
   const minsRaw = ((formData.get("typicalMins") as string | null) ?? "").trim();
+  // A stock photo is a link the shop pastes, so the scheme is checked here:
+  // anything else reaching an `<img src>` is a `javascript:` URL waiting to be
+  // clicked, and a broken link is better caught while it is being typed.
+  const photoRaw = ((formData.get("photoUrl") as string | null) ?? "").trim();
+  if (photoRaw && !/^https?:\/\//i.test(photoRaw)) done("?error=bad_photo");
   const typicalMins = minsRaw ? Number(minsRaw) : null;
   if (typicalMins != null && (!Number.isInteger(typicalMins) || typicalMins <= 0)) {
     done("?error=bad_minutes");
@@ -41,6 +46,7 @@ export async function saveBreedGuide(formData: FormData): Promise<void> {
       : Species.DOG,
     coat: Object.values(CoatType).includes(coatRaw as CoatType) ? (coatRaw as CoatType) : null,
     typicalMins,
+    photoUrl: photoRaw || null,
   };
 
   const clash = await prisma.breedGuide.findUnique({ where: { breed } });

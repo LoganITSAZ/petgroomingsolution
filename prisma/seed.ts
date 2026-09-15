@@ -205,6 +205,8 @@ async function main() {
   const breedGuides = [
     {
       breed: "Poodle",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Full_attention_%288067543690%29.jpg/960px-Full_attention_%288067543690%29.jpg",
       coat: "CURLY" as const,
       summary: "Dense curly coat that keeps growing and mats close to the skin.",
       tips: [
@@ -216,6 +218,8 @@ async function main() {
     },
     {
       breed: "Goldendoodle",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Golden_Doodle_Standing_%28HD%29.jpg/960px-Golden_Doodle_Standing_%28HD%29.jpg",
       coat: "CURLY" as const,
       summary: "Coat varies from wavy to tight curl; often matted between grooms.",
       tips: [
@@ -227,6 +231,8 @@ async function main() {
     },
     {
       breed: "Golden Retriever",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/b/bd/Golden_Retriever_Dukedestiny01_drvd.jpg",
       coat: "DOUBLE" as const,
       summary: "Heavy double coat that sheds seasonally. Never shaved.",
       tips: [
@@ -238,6 +244,8 @@ async function main() {
     },
     {
       breed: "German Shepherd",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/d/d0/German_Shepherd_-_DSC_0346_%2810096362833%29.jpg",
       coat: "DOUBLE" as const,
       summary: "Dense double coat with heavy seasonal shedding.",
       tips: [
@@ -249,6 +257,8 @@ async function main() {
     },
     {
       breed: "Shih Tzu",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/d/df/Shihtzu_%28cropped%29.jpg",
       coat: "LONG" as const,
       summary: "Continuously growing single coat; face and eyes need care.",
       tips: [
@@ -260,6 +270,8 @@ async function main() {
     },
     {
       breed: "Yorkshire Terrier",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/4/41/%282_version%29_Grupp_3%2C_YORKSHIRETERRIER%2C_NO_UCH_SE_UCH_Oxzar_Amazing_Bel%E2%80%99s_Toffy_%2824310212305%29.jpg",
       coat: "LONG" as const,
       summary: "Fine, silky, fast-growing coat that tangles easily.",
       tips: [
@@ -271,6 +283,8 @@ async function main() {
     },
     {
       breed: "Labrador Retriever",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Labrador_on_Quantock_%282175262184%29.jpg/960px-Labrador_on_Quantock_%282175262184%29.jpg",
       coat: "SHORT" as const,
       summary: "Short dense double coat; sheds heavily, little cutting needed.",
       tips: [
@@ -282,6 +296,8 @@ async function main() {
     },
     {
       breed: "Australian Shepherd",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Australian_Shepherd_red_bi.JPG/960px-Australian_Shepherd_red_bi.JPG",
       coat: "DOUBLE" as const,
       summary: "Medium double coat with feathering; mats behind ears and legs.",
       tips: [
@@ -293,6 +309,8 @@ async function main() {
     },
     {
       breed: "Schnauzer",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/Standard_Grey_Schnauzer_%28cropped%29.JPG/960px-Standard_Grey_Schnauzer_%28cropped%29.JPG",
       coat: "WIRE" as const,
       summary: "Wiry topcoat with soft undercoat; classic pattern clip.",
       tips: [
@@ -304,6 +322,8 @@ async function main() {
     },
     {
       breed: "Maltese",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/9/94/Maltese_600.jpg",
       coat: "LONG" as const,
       summary: "Single, silky white coat; tear staining is common.",
       tips: [
@@ -315,6 +335,8 @@ async function main() {
     },
     {
       breed: "Persian",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/8/81/Persialainen.jpg",
       species: "CAT" as const,
       coat: "LONG" as const,
       summary: "Long dense cat coat that mats quickly, especially the belly.",
@@ -327,6 +349,8 @@ async function main() {
     },
     {
       breed: "Domestic Shorthair",
+      photoUrl:
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Cat_November_2010-1a.jpg/960px-Cat_November_2010-1a.jpg",
       species: "CAT" as const,
       coat: "SHORT" as const,
       summary: "Short cat coat; usually a bath, nails and ears.",
@@ -342,7 +366,9 @@ async function main() {
   for (const guide of breedGuides) {
     await prisma.breedGuide.upsert({
       where: { breed: guide.breed },
-      update: {},
+      // The guide text is the shop's once it exists; the stock photo is ours to
+      // fill in, so a shop that seeded before this column existed still gets one.
+      update: { photoUrl: guide.photoUrl },
       create: guide,
     });
   }
