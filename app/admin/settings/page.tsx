@@ -80,6 +80,14 @@ async function saveSettings(formData: FormData) {
   const pickupLateMins = Math.max(pickupWatchMins + 1, parseInt((formData.get("pickupLateMins") as string) ?? "120", 10) || 120);
   const pickupCriticalMins = Math.max(pickupLateMins + 1, parseInt((formData.get("pickupCriticalMins") as string) ?? "240", 10) || 240);
 
+  // Grace forgives a lapse, so a negative one is meaningless; a year of it is
+  // no gate at all.
+  const vaccinationGateBlocks = formData.get("vaccinationGateBlocks") === "on";
+  const vaccinationGraceDays = Math.min(
+    365,
+    Math.max(0, parseInt((formData.get("vaccinationGraceDays") as string) ?? "0", 10) || 0)
+  );
+
   // A zero-hour week would mark every shift overtime.
   const overtimeWeeklyHours = Math.min(
     168,
@@ -105,6 +113,8 @@ async function saveSettings(formData: FormData) {
       rewardVisitsPerReward,
       rewardLabel,
       rewardValueCents,
+      vaccinationGateBlocks,
+      vaccinationGraceDays,
       overtimeWeeklyHours,
       bookingLeadHours,
       bookingWindowDays,
@@ -360,6 +370,35 @@ export default async function SettingsPage(props: PageProps) {
             Punches are counted from finished visits whether or not this is switched on, so turning
             it on does not start your regulars back at zero. A visit cancelled or marked a no-show
             after it was finished gives its punch back.
+          </p>
+        </Section>
+
+        <Section
+          title="Vaccinations"
+          hint="What the shop checks is a list of requirements, edited on Vaccinations. These two decide what happens to a pet that is not current."
+        >
+          <FeatureToggle
+            name="vaccinationGateBlocks"
+            label="Refuse a booking for a lapsed pet"
+            description="Off, an online booking goes through and the shop is warned on the visit. On, the portal refuses it and tells the owner to bring proof. Staff at the counter are never refused either way — somebody standing in front of you with a certificate in their hand is not an exception to code for."
+            checked={config?.vaccinationGateBlocks ?? false}
+          />
+
+          <Field
+            name="vaccinationGraceDays"
+            label="Grace after expiry (days)"
+            hint="How far past an expiry the shop will still take a booking, for an owner who is on their way to the vet. It moves what is refused, not what is shown: a lapsed pet still reads as lapsed on every screen."
+          >
+            <input type="number" id="vaccinationGraceDays" name="vaccinationGraceDays" defaultValue={config?.vaccinationGraceDays ?? 0} min={0} max={365} className={FIELD} />
+          </Field>
+
+          <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
+            A pet with nothing on file is refused outright when the switch above is on — there is no
+            lapse to forgive. Add or retire what the shop checks on{" "}
+            <Link href="/admin/vaccinations" className="text-amber-700 hover:text-amber-900 underline">
+              Vaccinations
+            </Link>
+            .
           </p>
         </Section>
 

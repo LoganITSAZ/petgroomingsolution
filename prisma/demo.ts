@@ -12,7 +12,14 @@
  * Deterministic: same seed, same shop, so a screenshot from yesterday still
  * matches. Pass a different seed as the first argument for a different shop.
  */
-import { PrismaClient, Prisma, AppointmentStatus, StaffRole } from "@prisma/client";
+import {
+  PrismaClient,
+  Prisma,
+  AppointmentStatus,
+  StaffRole,
+  type Staff,
+  type VaccineRequirement,
+} from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { DEFAULT_ADMIN_EMAIL } from "../lib/branding";
 
@@ -202,7 +209,7 @@ async function main() {
     { name: "Alice Moreau", roles: ["GROOMER", "BATHER"] },
     { name: "Theo Banks", roles: ["BATHER"] },
   ];
-  const groomers = [];
+  const groomers: Staff[] = [];
   for (const [i, spec] of groomerSpecs.entries()) {
     const email = `${spec.name.split(" ")[0].toLowerCase()}@demo.test`;
     groomers.push(
@@ -243,6 +250,55 @@ async function main() {
       note: "Customers from before the 2015 price rise.",
     },
   });
+
+  // ── what the shop checks ───────────────────────────────────────────────────
+  // Three rows, so the gate has something to read. A shop that checks nothing
+  // has no rows and no gate -- which is why this is data rather than a flag.
+  const requirements: VaccineRequirement[] = [];
+  for (const spec of [
+    { name: "Rabies", species: "DOG" as const, sortOrder: 0 },
+    { name: "Bordetella", species: "DOG" as const, sortOrder: 1 },
+    { name: "Rabies", species: "CAT" as const, sortOrder: 0 },
+  ]) {
+    requirements.push(
+      await prisma.vaccineRequirement.upsert({
+        where: { name_species: { name: spec.name, species: spec.species } },
+        update: {},
+        create: spec,
+      })
+    );
+  }
+
+  /**
+   * A spread of vaccination records for one pet, so every level on the badge
+   * appears somewhere on the demo floor: current, expiring inside the month,
+   * lapsed, a record with no expiry, and nothing on file at all.
+   */
+  const vaccinationsFor = (petId: string, species: "DOG" | "CAT") =>
+    requirements
+      .filter((requirement) => requirement.species === species)
+      .flatMap((requirement) => {
+        const roll = Math.random();
+        if (roll < 0.1) return []; // nothing on file
+        return [
+          {
+            petId,
+            requirementId: requirement.id,
+            // Rabies runs three years, bordetella one -- an expiry per record
+            // is the reason these are rows rather than one date on the pet.
+            expiresOn:
+              roll < 0.16
+                ? null
+                : roll < 0.28
+                  ? shopTime(-int(1, 200), 12)
+                  : roll < 0.4
+                    ? shopTime(int(1, 30), 12)
+                    : shopTime(int(60, requirement.name === "Rabies" ? 1095 : 365), 12),
+            note: roll < 0.16 ? "Proof seen at the counter, no date recorded." : null,
+            verifiedById: pick(groomers).id,
+          },
+        ];
+      });
 
   /**
    * Stand the pet at a station that matches the stage it is at. A pet waiting
@@ -336,6 +392,10 @@ async function main() {
         },
       });
       petCount++;
+
+      await prisma.petVaccination.createMany({
+        data: vaccinationsFor(pet.id, isCat ? "CAT" : "DOG"),
+      });
 
       // Visit history: roughly every 6-10 weeks back through the last nine
       // months, plus bookings on the books ahead. Every pet spans well over 90

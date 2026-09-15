@@ -27,7 +27,8 @@ export type FeatureKey =
   | "featureSmsNotify"
   | "featureWaiverRequired"
   | "featureRewards"
-  | "featureVisitPhotos";
+  | "featureVisitPhotos"
+  | "featureVaccinationGate";
 
 export type FeatureGroup = "Customers" | "Visits" | "Notifications" | "Compliance";
 
@@ -51,6 +52,7 @@ export interface FeatureConfig {
   featureWaiverRequired: boolean;
   featureRewards: boolean;
   featureVisitPhotos: boolean;
+  featureVaccinationGate: boolean;
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
   twilioFromNumber: string | null;
@@ -116,6 +118,14 @@ export const FEATURES: Feature[] = [
       "Before, after and issue photos on a visit, taken by staff. Off, no new photos are added; the ones already taken stay on the visits they belong to.",
     group: "Visits",
     offMeans: "frozen",
+  },
+  {
+    key: "featureVaccinationGate",
+    label: "Vaccination Records",
+    blurb:
+      "Per-vaccine records with expiry dates, and the check that reads them. It gates nothing until the shop adds a requirement, and records keep being written while it is off.",
+    group: "Compliance",
+    offMeans: "accrues",
   },
   {
     key: "featureEmailNotify",

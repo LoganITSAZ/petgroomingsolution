@@ -63,6 +63,7 @@ const MANAGE_NAV: NavItem[] = [
   { href: "/admin/schedule", label: "Schedule" },
   { href: "/admin/stations", label: "Stations" },
   { href: "/admin/marketing", label: "Marketing" },
+  { href: "/admin/vaccinations", label: "Vaccinations", feature: "featureVaccinationGate" },
 ];
 
 /** What the shop reads about itself. Nothing here is editable. */

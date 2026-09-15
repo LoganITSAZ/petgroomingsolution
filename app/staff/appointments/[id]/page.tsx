@@ -39,6 +39,8 @@ import { photoUrl } from "@/lib/photos";
 import { consentState, groomRecordSummary, lastGroomRecordForPet } from "@/lib/visit-record";
 import VisitPhotoStrip from "@/components/VisitPhotoStrip";
 import { getConfig } from "@/lib/config";
+import { checksForPet } from "@/lib/vaccinations";
+import { VaccinationWarning } from "@/components/Vaccinations";
 import { BLADE_TERMS } from "@/lib/resources";
 import { redeemCustomerReward } from "@/app/staff/customers/actions";
 import {
@@ -221,6 +223,9 @@ export default async function AppointmentDetailPage(props: PageProps) {
   const notice = Object.keys(NOTICES).find((key) => searchParams[key] === "1");
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
 
+  // Stated on the visit, not enforced here: the pet is already in the shop.
+  const vaccinationChecks = await checksForPet(appointment.petId, config);
+
   const card = await rewardCard(appointment.customerId);
 
   const priced = appointment.services.filter((line) => line.priceCents != null);
@@ -264,6 +269,12 @@ export default async function AppointmentDetailPage(props: PageProps) {
       {errorMessage && (
         <div className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
+        </div>
+      )}
+
+      {vaccinationChecks.some((check) => check.level !== "current") && (
+        <div className="border-t border-stone-100 px-3 py-2">
+          <VaccinationWarning checks={vaccinationChecks} petName={appointment.pet.name} />
         </div>
       )}
 

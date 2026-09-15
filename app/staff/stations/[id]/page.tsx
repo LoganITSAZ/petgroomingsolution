@@ -16,6 +16,8 @@ import { photoUrl } from "@/lib/photos";
 import { guidesForBreeds, tipLines } from "@/lib/breeds";
 import { groomRecordSummary, lastGroomRecordsForPets } from "@/lib/visit-record";
 import { lastAfterPhotoForPets } from "@/lib/visit-photos";
+import { getConfig } from "@/lib/config";
+import { VACCINE_LEVEL_LABEL, checksForPets } from "@/lib/vaccinations";
 import {
   formatCoatType,
   formatRole,
@@ -122,6 +124,12 @@ export default async function StaffStationDetailPage(props: PageProps) {
   // The cut, not a description of it. Shown beside the written record so the
   // next groomer repeats it instead of reading a blade number and guessing.
   const lastAfterPhotos = await lastAfterPhotoForPets(occupants.map((appt) => appt.pet.id));
+  // Shots, one pair of queries for the whole station. Stated, never enforced:
+  // the pet is on the table.
+  const vaccinationChecks = await checksForPets(
+    occupants.map((appt) => appt.pet.id),
+    await getConfig()
+  );
   // One instant for every row, rather than a fresh clock read per pet.
   const nowMs = new Date().getTime();
 
@@ -481,6 +489,16 @@ export default async function StaffStationDetailPage(props: PageProps) {
                             ))}
                           </p>
                         )}
+                        {/* Only what is wrong: a line saying every shot is
+                            current is one more thing to read past. */}
+                        {(vaccinationChecks.get(appt.pet.id) ?? [])
+                          .filter((check) => check.level !== "current")
+                          .map((check) => (
+                            <p key={check.requirementId} className="text-sm text-red-700">
+                              <span className="font-semibold">{check.name}: </span>
+                              {VACCINE_LEVEL_LABEL[check.level].toLowerCase()}
+                            </p>
+                          ))}
                         {appt.pet.groomingNotes && (
                           <p className="text-sm text-stone-700 whitespace-pre-wrap">
                             {appt.pet.groomingNotes}

@@ -34,6 +34,10 @@ model SystemConfig {
   /// never uploads sees an empty strip, and photos already taken stay
   /// readable when it is switched off.
   featureVisitPhotos    Boolean @default(true)
+  /// Per-vaccine records with expiry dates, and the check that reads them.
+  /// On by default, but it gates nothing until the shop adds a requirement
+  /// row -- no rows means no gate.
+  featureVaccinationGate Boolean @default(true)
 
   // Liability waiver
   waiverText    String? @db.Text // full waiver body; null = feature off even if flag is true
@@ -86,6 +90,15 @@ model SystemConfig {
   // but they are paid out in money: a cash amount is the only thing that
   // applies cleanly to a visit carrying several services.
   rewardValueCents      Int    @default(1000)
+
+  // Vaccinations. The gate warns by default: a shop that upgrades with no
+  // records on file must not find its diary refusing every booking.
+  /// True refuses a customer-facing booking for a pet whose shots have
+  /// lapsed. Staff at the counter are never refused either way.
+  vaccinationGateBlocks Boolean @default(false)
+  /// Days past an expiry the shop will still take a booking, for an owner
+  /// who is on their way to the vet. Moves what blocks, not what is shown.
+  vaccinationGraceDays  Int     @default(0)
 
   // Payroll
   defaultCommissionPercent Float @default(40) // percent of ticket paid to the groomer
@@ -142,6 +155,7 @@ model Staff {
   StaffShift           StaffShift[]
 
   rewardRedemptions RewardRedemption[]
+  vaccinationsVerified PetVaccination[]
 
   @@map("staff")
 }
@@ -349,6 +363,7 @@ model Pet {
   customer     Customer      @relation(fields: [customerId], references: [id])
   photo        Photo?        @relation(fields: [photoId], references: [id], onDelete: SetNull)
   appointments Appointment[]
+  vaccinations PetVaccination[]
 
   @@map("pets")
 }
@@ -363,6 +378,53 @@ enum Species {
   DOG
   CAT
   OTHER
+}
+
+// ─────────────────────────────────────────────
+// VACCINATIONS (what the shop checks, and what it has seen)
+// ─────────────────────────────────────────────
+
+/// What this shop requires, per species. No rows means no gate: a shop that
+/// checks nothing is never asked to switch anything off, and a shop that
+/// checks only rabies has one row.
+model VaccineRequirement {
+  id        String   @id @default(cuid())
+  /// What the shop calls it on the certificate: "Rabies", "Bordetella".
+  name      String
+  species   Species  @default(DOG)
+  /// Retiring a requirement leaves the records behind it readable.
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  records PetVaccination[]
+
+  @@unique([name, species])
+  @@map("vaccine_requirements")
+}
+
+/// One row per pet per requirement. A renewal updates the row rather than
+/// stacking history: the shop's question is always "is this pet current",
+/// and a pile of expired rows is a document archive this app is not.
+model PetVaccination {
+  id            String    @id @default(cuid())
+  petId         String
+  requirementId String
+  /// The date on the certificate. Null means proof was seen with no date on
+  /// it, which counts as current but never expires -- so it is flagged.
+  expiresOn     DateTime?
+  verifiedAt    DateTime  @default(now())
+  verifiedById  String?
+  note          String?
+
+  pet         Pet                @relation(fields: [petId], references: [id], onDelete: Cascade)
+  requirement VaccineRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  verifiedBy  Staff?             @relation(fields: [verifiedById], references: [id])
+
+  @@unique([petId, requirementId])
+  @@index([expiresOn])
+  @@map("pet_vaccinations")
 }
 
 enum CoatType {

@@ -19,6 +19,10 @@ import { photoUrl } from "@/lib/photos";
 import ModalButton from "@/components/ModalButton";
 import { PetForm, healthFlagOptions } from "@/app/staff/customers/PetForm";
 import { notFound } from "next/navigation";
+import { checksForPet } from "@/lib/vaccinations";
+import { VaccinationRows } from "@/components/Vaccinations";
+import { recordVaccination } from "@/app/staff/pets/actions";
+import { shopDayKey } from "@/lib/utils";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -47,7 +51,7 @@ const visitEventColor: Record<string, string> = {
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ photo?: string; updated?: string; error?: string }>;
+  searchParams: Promise<{ photo?: string; updated?: string; error?: string; vaccination?: string }>;
 }
 
 export default async function PetDetailPage(props: PageProps) {
@@ -93,6 +97,10 @@ export default async function PetDetailPage(props: PageProps) {
   });
   const config = await getConfig();
 
+  // Empty when the shop checks nothing or the feature is off, and the whole
+  // block below disappears with it.
+  const vaccinationChecks = await checksForPet(params.id, config);
+
   const insights = await petInsights(params.id);
   const flagOptions = await healthFlagOptions();
 
@@ -114,6 +122,11 @@ export default async function PetDetailPage(props: PageProps) {
       {searchParams.updated === "1" && <p role="status" className="px-3 py-2 text-green-800 text-sm">Profile updated.</p>}
       {searchParams.error === "pet_name" && <p role="alert" className="px-3 py-2 text-red-800 text-sm">A pet needs a name.</p>}
       {searchParams.error === "bad_weight" && <p role="alert" className="px-3 py-2 text-red-800 text-sm">Enter a valid weight greater than zero.</p>}
+      {searchParams.vaccination === "1" && (
+        <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
+          Vaccination recorded.
+        </p>
+      )}
       {searchParams.photo === "1" && (
         <p className="border-t border-stone-100 bg-green-50 px-3 py-2 text-green-800 text-sm font-medium">
           Photo updated.
@@ -263,6 +276,47 @@ export default async function PetDetailPage(props: PageProps) {
               </span>
             )}
           </p>
+          {vaccinationChecks.length > 0 && (
+            <div className="mb-3 rounded-lg bg-well border border-well-line px-2.5 py-1.5">
+              <VaccinationRows checks={vaccinationChecks} />
+              <details className="disclosure mt-1 border-t border-stone-100 pt-1">
+                <summary className="py-1 text-xs font-semibold text-stone-700">
+                  Record a certificate
+                </summary>
+                <div className="space-y-2 pt-1">
+                  {vaccinationChecks.map((check) => (
+                    <form
+                      key={check.requirementId}
+                      action={recordVaccination}
+                      className="flex flex-wrap items-end gap-2"
+                    >
+                      <input type="hidden" name="petId" value={pet.id} />
+                      <input type="hidden" name="requirementId" value={check.requirementId} />
+                      <label className="text-xs text-stone-600">
+                        <span className="block mb-0.5">{check.name} expires</span>
+                        <input
+                          type="date"
+                          name="expiresOn"
+                          defaultValue={check.expiresOn ? shopDayKey(check.expiresOn) : ""}
+                          className="border border-stone-200 rounded-lg px-2 py-1 text-sm"
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        className="rounded-lg bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-3 py-1.5 text-xs font-semibold"
+                      >
+                        Save
+                      </button>
+                    </form>
+                  ))}
+                  <p className="text-xs text-stone-400">
+                    Leave the date empty to record that proof was seen without one. An undated
+                    record never refuses a booking, but it stays flagged until a date is added.
+                  </p>
+                </div>
+              </details>
+            </div>
+          )}
           {/* The vet sits with the health flags for the same reason the
               vaccination date does: it is what the shop needs when a groom
               stops being routine. */}
