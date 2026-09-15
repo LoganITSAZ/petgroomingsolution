@@ -12,13 +12,6 @@ import {
 const STORAGE_KEY = "gentlegroomer.resource-bookmarks";
 const button =
   "rounded-lg border border-well-line px-3 py-2 text-sm font-bold transition-colors hover:bg-band focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600";
-const labels: Record<string, string> = {
-  safety: "01 / KEEP THEM SAFE",
-  blades: "02 / AT THE TABLE",
-  handling: "03 / BUILD TRUST",
-  coat: "04 / COAT CARE",
-  owner: "05 / THE HANDOVER",
-};
 
 export default function ResourceLibrary({
   sections,
@@ -269,8 +262,12 @@ export default function ResourceLibrary({
                   className="flex flex-col overflow-hidden rounded-xl border border-well-line bg-surface shadow-card"
                 >
                   <div className="border-b border-well-line bg-band p-5">
-                    <p className="text-[10px] font-bold tracking-[0.13em] text-brand-text">
-                      {labels[section.slug] ?? "REFERENCE"}
+                    {/* The count, not a number in a sequence: these cards are
+                        a set of topics, not steps, and "how much is in here"
+                        is the thing worth knowing before opening one. */}
+                    <p className="text-xs font-bold text-brand-text">
+                      {section.entries.length} reference
+                      {section.entries.length === 1 ? "" : "s"}
                     </p>
                     <button
                       type="button"

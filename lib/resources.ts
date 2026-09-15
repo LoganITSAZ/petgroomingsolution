@@ -157,12 +157,206 @@ const owner: ResourceSection = {
 };
 
 /**
+ * The tool is half the groom, and the two things that go wrong with it — a hot
+ * blade and a dull one — both show up on the pet before they show up on the
+ * bench.
+ */
+const tools: ResourceSection = {
+  slug: "tools",
+  title: "Clippers and shears",
+  blurb:
+    "What to check before a pass, and what a blade is telling you when it drags, pulls or runs hot.",
+  caution:
+    "Test a blade against the back of your own hand every few minutes. A blade that is uncomfortable there will burn a pet, and clipper burn looks like a rash hours later — long after the groom is paid for.",
+  entries: [
+    {
+      term: "A blade running hot",
+      note: "check every 5-10 minutes",
+      detail:
+        "Swap to a second blade of the same length and let the first one cool on its own. Coolant spray brings the surface down and leaves the body of the blade hot, so it is a top-up between swaps, not a substitute for one.",
+    },
+    {
+      term: "Oiling",
+      note: "a line across the teeth, every 10 minutes",
+      detail:
+        "Run the clipper, lay a line of oil across the cutting teeth, wipe the excess. Most blades that are called dull are dry: friction is what heats them and what drags the coat.",
+    },
+    {
+      term: "A blade that drags or pulls",
+      detail:
+        "Stop and change it. Working a dull blade through a coat is how ears get nicked and how a pet learns that clippers hurt. Put it aside for sharpening rather than back in the drawer.",
+    },
+    {
+      term: "Blade drive and tension",
+      detail:
+        "A clipper that rattles or loses power mid-pass usually needs a drive or a hinge looked at, not more effort. Take it out of service and tell a manager — a clipper nobody reported is the one someone picks up next.",
+    },
+    {
+      term: "Shears",
+      detail:
+        "Straights for bulk, curves for the head and feet, thinners to blend a line rather than to cut one. Shears are dropped once and never cut the same again, so they live closed, on the table, tips away from the edge.",
+    },
+    {
+      term: "A wet or dirty coat",
+      detail:
+        "Clippers are for a clean, dry, brushed coat. Dirt blunts a blade in one groom and a damp coat clogs it, which is where the heat and the tracking come from.",
+    },
+  ],
+};
+
+/**
+ * Cats are not small dogs, and the difference is mostly about time: a cat that
+ * has had enough gives very little warning and does not settle back down.
+ */
+const cats: ResourceSection = {
+  slug: "cats",
+  title: "Cats",
+  blurb:
+    "A different animal on the table, with a shorter fuse and skin that tears more easily than it looks.",
+  caution:
+    "A cat that has stopped tolerating the groom is finished for the day. There is no talking one round, and pushing on is how people and cats both get hurt.",
+  entries: [
+    {
+      term: "Keep it short",
+      note: "aim well under an hour",
+      detail:
+        "Plan the order so the parts that matter most happen first. A cat has a budget of handling in it, and spending it on a perfect finish leaves nothing for the nails.",
+    },
+    {
+      term: "Skin tears",
+      detail:
+        "Feline skin is thin and moves loosely over the body. Keep it flat and taut with your free hand ahead of the blade, and never lift a mat away from the skin to cut underneath it.",
+    },
+    {
+      term: "Matting and pelting",
+      detail:
+        "A matted cat is shaved, not brushed out. Explain the length to the owner before the clipper starts, and warn them the skin underneath may look pink, scurfy or thin for a week.",
+    },
+    {
+      term: "Quiet room, quiet hands",
+      detail:
+        "No dryer noise if it can be avoided, no dogs in the room, and no restraint that pins. Scruffing is not handling — support the body and work with the cat facing away from the busy part of the shop.",
+    },
+    {
+      term: "Nails and the quick",
+      detail:
+        "Cat nails sheathe, so press the toe gently to extend one and take only the clear hook. The pink quick sits close behind it, and a cat remembers the one you catch.",
+    },
+    {
+      term: "Lion cut",
+      detail:
+        "Body shaved, head, feet and tail tip left. Leave enough coat for warmth, tell the owner it takes months to come back, and check the record for whether this cat goes outside.",
+    },
+  ],
+};
+
+/**
+ * The dryer is where most of the time goes and where most of the heat injuries
+ * come from, so it gets its own card rather than a line inside coat care.
+ */
+const drying: ResourceSection = {
+  slug: "drying",
+  title: "Drying",
+  blurb:
+    "Getting the water out without cooking anybody. Most of the finish is decided here, before a blade touches the coat.",
+  caution:
+    "No pet is left alone in front of a heated dryer, and no pet is dried in a closed box. If the room is warm, the air is enough.",
+  entries: [
+    {
+      term: "Towel first",
+      detail:
+        "Every minute of towelling is three off the dryer. Squeeze rather than rub — rubbing a long coat is how you make the mats you are about to brush out.",
+    },
+    {
+      term: "High velocity",
+      detail:
+        "Air, not heat, does the work. Start low and away, let the pet hear it before it reaches them, and keep the nozzle moving. Never point it at the face, the ears or the back end.",
+    },
+    {
+      term: "Ambient air only",
+      note: "flat faces, seniors, heavy, already panting",
+      detail:
+        "Brachycephalic breeds, older pets, anything overweight and anything that arrived stressed dry on room-temperature air, with breaks. They cannot shed heat the way a young dog can.",
+    },
+    {
+      term: "Fluff drying",
+      detail:
+        "Brush against the lie of the coat with warm air on the same spot. It is the difference between a coat that scissors cleanly and one that shows every line, and it cannot be rushed at the end.",
+    },
+    {
+      term: "Ears and between the pads",
+      detail:
+        "Water left behind an ear or between the toes is what the owner rings about two days later. Dry those last and check them with your hand, not by eye.",
+    },
+    {
+      term: "Damp to the skin",
+      detail:
+        "A double coat can read dry on top and be wet underneath. Part it down to the skin in three places before the pet goes anywhere near a clipper.",
+    },
+  ],
+};
+
+/**
+ * The part of the day nobody is booked for. It is here because a shop that
+ * skips it finds out weeks later, from several owners at once.
+ */
+const between: ResourceSection = {
+  slug: "between",
+  title: "Between pets",
+  blurb:
+    "The reset after every groom, and what to do when something arrives that should not be in the building.",
+  entries: [
+    {
+      term: "The table and the tub",
+      detail:
+        "Hair off, then wiped down with the shop's disinfectant and left the full contact time on the label. Wiping it straight off again is the same as not using it.",
+    },
+    {
+      term: "Blades and tools",
+      detail:
+        "Brush the hair out, clean, then disinfect the blade itself — it touches skin on every pet in the shop. Oil it again afterwards, because most cleaners strip the oil straight off.",
+    },
+    {
+      term: "Fleas found mid-groom",
+      detail:
+        "Contain it: finish that pet in one spot, bathe with the shop's flea shampoo if the owner agrees, and clean the table, tub and drain before the next one. Tell the owner plainly and tell a manager — the next family through the door has no idea.",
+    },
+    {
+      term: "A rash or a raw patch",
+      note: "stop and ask",
+      detail:
+        "Anything scaly, circular, weeping, or bald enough to look wrong gets a manager before the groom continues. Do not name it to the owner; say what you can see and that it is worth a vet's look.",
+    },
+    {
+      term: "Kennels",
+      detail:
+        "Stripped, cleaned and dried between pets, not just between days. A damp kennel is where a shop's smell comes from.",
+    },
+    {
+      term: "Hands",
+      detail:
+        "Between every pet, and before you touch a face or an ear. It is the cheapest thing on this page and the one most often skipped when the day is running late.",
+    },
+  ],
+};
+
+/**
  * Safety leads. Everything else here is a lookup — a blade number, a dilution
  * ratio — and a lookup is what the search box is for. The safety card is the
  * one somebody opens with a hurt pet in their arms, and that person is
  * scanning, not typing.
  */
-export const RESOURCE_SECTIONS: ResourceSection[] = [safety, blades, handling, coatCare, owner];
+export const RESOURCE_SECTIONS: ResourceSection[] = [
+  safety,
+  blades,
+  tools,
+  handling,
+  cats,
+  coatCare,
+  drying,
+  between,
+  owner,
+];
 
 /**
  * Blade names on their own, for the groom-record box on a visit. Suggestions,
