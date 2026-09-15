@@ -37,14 +37,36 @@ it("shows the assigned customer's contacts and pet instructions, then replaces t
   expect(screen.getByText("No pet assigned")).toBeInTheDocument();
   expect(screen.queryByText("Jamie Rivera")).not.toBeInTheDocument();
 });
-it("marks stale data offline, disables advancing and closes the stream on unmount", async () => {
+it("rides out the reconnect, then marks stale data offline and closes the stream on unmount", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
   const { unmount } = render(<StationDisplay />);
   send({ station: { id: "station-1", name: "Table 1", role: "GROOMER", isActive: true }, appointments: [visit] });
+
+  // The server closes the stream once a minute on purpose. A groomer must not
+  // lose the advance button for the second it takes EventSource to come back.
   await act(async () => stream.onerror?.());
+  expect(screen.getByRole("status")).toHaveTextContent("Live updates");
+  expect(screen.getByRole("button", { name: /→/ })).toBeEnabled();
+
+  await act(async () => { vi.advanceTimersByTime(7_000); });
   expect(screen.getByRole("status")).toHaveTextContent("Reconnecting");
   expect(screen.getByRole("button", { name: /→/ })).toBeDisabled();
+
   unmount();
   expect(stream.close).toHaveBeenCalledOnce();
+  vi.useRealTimers();
+});
+
+it("clears the offline countdown when the stream comes back", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  render(<StationDisplay />);
+  const board = { station: { id: "station-1", name: "Table 1", role: "GROOMER", isActive: true }, appointments: [visit] };
+  send(board);
+  await act(async () => stream.onerror?.());
+  send(board);
+  await act(async () => { vi.advanceTimersByTime(7_000); });
+  expect(screen.getByRole("status")).toHaveTextContent("Live updates");
+  vi.useRealTimers();
 });
 it("shows the selected kennel pet's full record", () => {
   render(<StationDisplay />);

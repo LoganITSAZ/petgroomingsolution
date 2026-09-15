@@ -10,6 +10,9 @@ import type { StationAppointment } from "@/lib/station-events";
 type Station = { id: string; name: string; role: string; isActive: boolean; kennelColumns: number | null };
 type Kennel = { id: string; label: string; isActive: boolean; appointments: StationAppointment[] };
 type Snapshot = { station: Station; appointments?: StationAppointment[]; kennels?: Kennel[] };
+// EventSource retries a dropped stream after about 3s; give it double that
+// before telling the room the screen is offline.
+const RECONNECT_GRACE_MS = 6_000;
 const control = "station-control inline-flex min-h-11 items-center justify-center rounded-xl border border-stone-600 px-4 py-2 text-sm font-semibold hover:bg-stone-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white";
 
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
@@ -130,12 +133,31 @@ function StationWorkspace({ id }: { id: string }) {
 
   useEffect(() => {
     let disposed = false;
+    // The server closes the stream every minute on purpose, to re-check the
+    // session and pick up edits. EventSource reconnects on its own a moment
+    // later, so treating that `onerror` as "offline" straight away greyed the
+    // advance button out once a minute in front of a groomer holding a wet
+    // dog. Only a gap that outlasts the reconnect is a real outage.
+    let offlineTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearOffline = () => {
+      if (offlineTimer) clearTimeout(offlineTimer);
+      offlineTimer = null;
+    };
+    const goOfflineSoon = () => {
+      if (offlineTimer) return;
+      offlineTimer = setTimeout(() => {
+        offlineTimer = null;
+        if (!disposed) setConnected(false);
+      }, RECONNECT_GRACE_MS);
+    };
+
     const es = new EventSource(`/api/station/${id}/events`);
     es.onmessage = event => {
       if (disposed) return;
       try {
         const data: Snapshot = JSON.parse(event.data);
         if (!data.station) return;
+        clearOffline();
         setSnapshot(data);
         setConnected(true);
       } catch {
@@ -144,7 +166,7 @@ function StationWorkspace({ id }: { id: string }) {
     };
     es.onerror = async () => {
       if (disposed) return;
-      setConnected(false);
+      goOfflineSoon();
       // EventSource reconnects automatically. Check whether a new sign-in is needed.
       try {
         const response = await fetch("/api/auth/session", { cache: "no-store" });
@@ -157,7 +179,7 @@ function StationWorkspace({ id }: { id: string }) {
         }
       } catch { /* Keep the last snapshot visibly offline while wifi reconnects. */ }
     };
-    return () => { disposed = true; es.close(); };
+    return () => { disposed = true; clearOffline(); es.close(); };
   }, [id, router]);
 
   const station = snapshot?.station;
