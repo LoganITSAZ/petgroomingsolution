@@ -5,7 +5,7 @@ import { VisitEventType } from "@prisma/client";
 
 // POST /api/appointments/[id]/events
 // Auth: staff only
-// Body: { eventType: VisitEventType, note?: string }
+// Body: { eventType: VisitEventType, note?: string, ownerVisible?: boolean }
 // If eventType === "BITE", also flags pet.hasBiteHistory = true
 export async function POST(
   req: Request,
@@ -37,7 +37,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { eventType, note } = body as Record<string, unknown>;
+  const { eventType, note, ownerVisible } = body as Record<string, unknown>;
 
   if (!eventType) {
     return NextResponse.json({ error: "eventType is required" }, { status: 400 });
@@ -59,6 +59,9 @@ export async function POST(
         appointmentId: id,
         eventType: eventType as VisitEventType,
         note: (note as string | undefined) ?? null,
+        // Opt-in, and only a real boolean counts: this decides whether the
+        // owner is told, which is not something a stray truthy value should do.
+        ownerVisible: ownerVisible === true,
         loggedById: session.user.id,
       },
       include: {

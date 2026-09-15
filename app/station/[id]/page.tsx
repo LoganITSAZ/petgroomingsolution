@@ -47,6 +47,7 @@ function VisitDetails({ visit }: { visit: StationAppointment }) {
           <Detail label="Vaccination proof confirmed">{pet.vaccinationsConfirmedAt ? formatShopDate(new Date(pet.vaccinationsConfirmedAt)) : "Not confirmed"}</Detail>
           <Detail label="Profile">{pet.isActive ? "Active" : "Inactive"}</Detail>
           <Detail label="Bite history">{pet.hasBiteHistory ? "Yes — use caution" : "None recorded"}</Detail>
+          <Detail label="Vet">{[pet.vetName, pet.vetPhone].filter(Boolean).join(" · ") || null}</Detail>
         </dl>
         <div>
           <h3 className="font-bold mb-2">Health alerts</h3>

@@ -399,6 +399,8 @@ export async function savePet(formData: FormData): Promise<void> {
     coatType: Object.values(CoatType).includes(coatRaw as CoatType) ? (coatRaw as CoatType) : null,
     groomingNotes: field("groomingNotes") || null,
     temperamentNotes: field("temperamentNotes") || null,
+    vetName: field("vetName") || null,
+    vetPhone: field("vetPhone") || null,
     vaccinationsConfirmedAt,
     // One chip per value, posted under the same name by TagPicker.
     healthFlags: [

@@ -329,6 +329,11 @@ model Pet {
   vaccinationsConfirmedAt DateTime?
   groomingNotes    String? // standing instructions for every visit
   hasBiteHistory   Boolean   @default(false) // true if pet has ever bitten a groomer
+  /// Who to ring when something is wrong with the pet rather than the groom.
+  /// Free text like every other contact here: a shop writes down whatever the
+  /// owner says, which is often a practice rather than a named vet.
+  vetName          String?
+  vetPhone         String?
   photoUrl         String? // external image, if the shop uses one
   photoId          String? // uploaded photo held in the database
   isActive         Boolean   @default(true)
@@ -553,6 +558,21 @@ model Appointment {
   needsKennel     Boolean           @default(true) // holds a kennel for the visit
   checkedInAt     DateTime?
   completedAt     DateTime?
+
+  // What this pet was actually groomed with, written down so the next groomer
+  // repeats the cut instead of guessing at it. Per visit, never on the pet: a
+  // coat taken short in June is not an instruction for September.
+  groomBlade       String?
+  groomShampoo     String?
+  groomRecordNotes String?
+
+  // What the owner agreed to when the groom could not be done as booked —
+  // matting found on the table, a coat that has to come off. Snapshotted on
+  // the visit, because agreeing once is not agreeing to the next one.
+  consentRequestedAt DateTime?
+  consentNote        String? @db.Text // what was put to the owner, and the fee quoted
+  consentGrantedAt   DateTime?
+  consentDeclinedAt  DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -681,6 +701,10 @@ model VisitEvent {
   occurredAt    DateTime       @default(now())
   loggedById    String? // staff who logged it
   note          String? // free-text details
+  /// Tell the owner about this one. Off by default — an equipment fault is the
+  /// shop's business — and what is ticked goes out with the ready-for-pickup
+  /// message, which is the moment the owner is actually reading.
+  ownerVisible  Boolean @default(false)
 
   appointment Appointment @relation(fields: [appointmentId], references: [id])
   loggedBy    Staff?      @relation(fields: [loggedById], references: [id])
@@ -689,6 +713,7 @@ model VisitEvent {
 }
 
 enum VisitEventType {
+  HEALTH_FINDING // something noticed on the pet: ears, skin, lumps, fleas, teeth
   REWASH // pet defecated / urinated during groom, required re-wash
   BITE // pet bit a groomer — triggers hasBiteHistory flag on Pet
   BEHAVIORAL // growling, snapping, excessive stress (non-bite)

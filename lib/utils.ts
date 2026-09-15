@@ -33,6 +33,28 @@ export function formatCoatType(coat: string): string {
 }
 
 /**
+ * What a mid-groom event is called on screen and in the owner's email.
+ *
+ * One map, because four screens once each kept their own copy of the station
+ * role map and disagreed about the third entry. A health finding reads as
+ * something noticed rather than something done — it is the one event here that
+ * the owner is meant to see.
+ */
+export function formatVisitEvent(eventType: string): string {
+  const map: Record<string, string> = {
+    HEALTH_FINDING: "Health finding",
+    REWASH: "Re-wash",
+    BITE: "Bite",
+    BEHAVIORAL: "Behaviour",
+    INJURY: "Injury",
+    MATTING_FOUND: "Matting found",
+    EQUIPMENT_ISSUE: "Equipment issue",
+    OTHER: "Other",
+  };
+  return map[eventType] ?? formatStatus(eventType);
+}
+
+/**
  * IANA timezone the shop operates in. Every business-hours / walk-in-window
  * comparison must resolve through this so that the server (which may run in
  * UTC) and the browser (which runs in the viewer's zone) agree.
