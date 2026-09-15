@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth-guards";
 import {
+  formatCents,
   parseDollarsToCents,
   roundToStep,
   tiersFromBase,
@@ -188,24 +189,43 @@ export async function deleteSurcharge(formData: FormData): Promise<void> {
   done("?deleted=1");
 }
 
+/** A flat move bigger than this in one go is almost certainly a typo. */
+const MAX_ADJUST_DOLLARS = 100;
+
 /**
- * Move every base-priced service by a percentage. This is the whole point of
- * base pricing: one number reprices the shop, and the size ladders follow.
+ * Move every base-priced service, by a percentage or by a flat dollar amount.
+ * This is the whole point of base pricing: one number reprices the shop, and
+ * the size ladders follow.
  */
 export async function adjustBasePrices(formData: FormData): Promise<void> {
   await requireManager();
 
-  const raw = ((formData.get("percent") as string | null) ?? "").trim().replace(/%$/, "");
-  const percent = Number(raw);
-  if (!raw || !Number.isFinite(percent) || percent === 0) done("?error=bad_percent");
-  if (Math.abs(percent) > 50) done("?error=percent_too_big");
+  const byAmount = formData.get("mode") === "amount";
+  const raw = ((formData.get("amount") as string | null) ?? "")
+    .trim()
+    .replace(/%$/, "")
+    .replace(/^\$/, "");
+  const value = Number(raw);
+  if (!raw || !Number.isFinite(value) || value === 0) {
+    done(byAmount ? "?error=bad_amount" : "?error=bad_percent");
+  }
+  if (byAmount) {
+    if (Math.abs(value) > MAX_ADJUST_DOLLARS) done("?error=amount_too_big");
+  } else if (Math.abs(value) > 50) {
+    done("?error=percent_too_big");
+  }
+
+  const deltaCents = byAmount ? Math.round(value * 100) : 0;
 
   const services = await prisma.service.findMany({
     where: { pricingMode: PricingMode.BASE, basePriceCents: { not: null } },
   });
 
   for (const service of services) {
-    const basePriceCents = roundToStep((service.basePriceCents ?? 0) * (1 + percent / 100));
+    const current = service.basePriceCents ?? 0;
+    // A flat cut must not take a price below zero.
+    const moved = byAmount ? Math.max(0, current + deltaCents) : current * (1 + value / 100);
+    const basePriceCents = roundToStep(moved);
     await prisma.service.update({
       where: { id: service.id },
       data: {
@@ -220,5 +240,8 @@ export async function adjustBasePrices(formData: FormData): Promise<void> {
     });
   }
 
-  done(`?adjusted=${services.length}&percent=${encodeURIComponent(raw)}`);
+  const by = byAmount
+    ? `${deltaCents < 0 ? "-" : "+"}${formatCents(Math.abs(deltaCents))}`
+    : `${value > 0 ? "+" : ""}${value}%`;
+  done(`?adjusted=${services.length}&by=${encodeURIComponent(by)}`);
 }
