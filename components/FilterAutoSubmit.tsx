@@ -101,7 +101,10 @@ export default function FilterAutoSubmit({
       { signal }
     );
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      submitDebounced.cancel();
+    };
   }, [debounceMs, scope]);
 
   return (

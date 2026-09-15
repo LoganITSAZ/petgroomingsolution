@@ -247,6 +247,7 @@ export default async function AdminServicesPage(props: PageProps) {
 
   return (
     <PageShell
+      columns={false}
       title="Services & Pricing"
       subtitle="Edited here, shown on the public pricing page, offered in booking forms, and used for revenue estimates in analytics."
       actions={

@@ -79,7 +79,7 @@ export default async function ResetPasswordPage(props: {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
         <h1 className="text-2xl font-black text-stone-900 mb-1">Choose a new password</h1>
         <p className="text-sm text-stone-500 mb-6">
-          At least {MIN_PASSWORD_LENGTH} characters. You&apos;ll be signed in with it straight away.
+          At least {MIN_PASSWORD_LENGTH} characters. We&apos;ll take you to sign in with it.
         </p>
 
         <form action={setNewPassword} className="space-y-3">

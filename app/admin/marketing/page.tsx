@@ -195,25 +195,7 @@ export default async function AdminMarketingPage(props: PageProps) {
           public site and on the staff dashboard.
         </>
       }
-    >
-
-      {searchParams.saved && (
-        <SaveToast>
-          Saved {searchParams.saved}.
-        </SaveToast>
-      )}
-      {searchParams.deleted === "1" && (
-        <SaveToast>
-          Promotion removed.
-        </SaveToast>
-      )}
-      {errorMessage && (
-        <SaveToast tone="error">
-          {errorMessage}
-        </SaveToast>
-      )}
-
-      <PageSection tone="muted" bodyClassName="flex justify-end">
+      actions={
         <ModalButton
           label="New promotion"
           title="New promotion"
@@ -231,7 +213,24 @@ export default async function AdminMarketingPage(props: PageProps) {
             </div>
           </form>
         </ModalButton>
-      </PageSection>
+      }
+    >
+
+      {searchParams.saved && (
+        <SaveToast>
+          Saved {searchParams.saved}.
+        </SaveToast>
+      )}
+      {searchParams.deleted === "1" && (
+        <SaveToast>
+          Promotion removed.
+        </SaveToast>
+      )}
+      {errorMessage && (
+        <SaveToast tone="error">
+          {errorMessage}
+        </SaveToast>
+      )}
 
       {services.length === 0 ? (
         <PageSection grow className="text-center text-stone-400 text-sm">

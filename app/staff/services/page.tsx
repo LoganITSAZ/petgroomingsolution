@@ -61,6 +61,7 @@ export default async function StaffServicesPage() {
 
   return (
     <PageShell
+      columns={false}
       title="Services"
       subtitle={
         <>
@@ -73,9 +74,9 @@ export default async function StaffServicesPage() {
         isAdmin ? (
           <Link
             href="/admin/services"
-            className="text-sm text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
+            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-3 py-1.5 rounded-lg text-sm font-semibold shadow-sm transition-colors whitespace-nowrap"
           >
-            Edit pricing →
+            Edit pricing
           </Link>
         ) : null
       }

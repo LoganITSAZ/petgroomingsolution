@@ -20,6 +20,7 @@ export function PageShell({
   back,
   children,
   className,
+  columns = true,
 }: {
   title: string;
   subtitle?: React.ReactNode;
@@ -30,6 +31,8 @@ export function PageShell({
   back?: { href: string; label: string };
   children: React.ReactNode;
   className?: string;
+  /** Pages whose tables are read as one thing opt out of the column chooser. */
+  columns?: boolean;
 }) {
   return (
     <div className="flex-1 min-h-0 min-w-0 flex flex-col gap-3">
@@ -59,7 +62,7 @@ export function PageShell({
           )}
           <div className="ml-auto flex items-center justify-end gap-2 flex-wrap">
             {actions}
-            <PageColumnsButton />
+            {columns && <PageColumnsButton />}
           </div>
         </header>
         {children}
