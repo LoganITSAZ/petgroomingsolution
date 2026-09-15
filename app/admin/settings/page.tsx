@@ -1,5 +1,6 @@
 import { resolveTheme, shopColorsFromForm } from "@/lib/themes";
 import { getConfig } from "@/lib/config";
+import { FEATURES, featureBlockers, featuresByGroup, type FeatureKey } from "@/lib/features";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -43,11 +44,18 @@ async function saveSettings(formData: FormData) {
   const shopAddress = formData.get("shopAddress") as string;
   const shopWebsite = formData.get("shopWebsite") as string;
 
-  const featureOnlineBooking = formData.get("featureOnlineBooking") === "on";
-  const featureWalkInPortal = formData.get("featureWalkInPortal") === "on";
-  const featureEmailNotify = formData.get("featureEmailNotify") === "on";
-  const featureSmsNotify = formData.get("featureSmsNotify") === "on";
-  const featureRewards = formData.get("featureRewards") === "on";
+  /*
+   * The switches this form owns, read from the registry rather than named
+   * five times. The waiver flag is declared in the registry too but lives on
+   * the waiver section with its text, so it is not posted here and must not
+   * be written from an absent checkbox.
+   */
+  const postedFlags = Object.fromEntries(
+    FEATURES.filter((feature) => feature.key !== "featureWaiverRequired").map((feature) => [
+      feature.key,
+      formData.get(feature.key) === "on",
+    ])
+  ) as Record<Exclude<FeatureKey, "featureWaiverRequired">, boolean>;
 
   // A punch card that needs zero visits would hand out a reward every visit.
   const rewardVisitsPerReward = Math.max(
@@ -93,11 +101,7 @@ async function saveSettings(formData: FormData) {
       shopEmail,
       shopAddress,
       shopWebsite,
-      featureOnlineBooking,
-      featureWalkInPortal,
-      featureEmailNotify,
-      featureSmsNotify,
-      featureRewards,
+      ...postedFlags,
       rewardVisitsPerReward,
       rewardLabel,
       rewardValueCents,
@@ -164,11 +168,13 @@ function FeatureToggle({
   label,
   description,
   checked,
+  blockers = [],
 }: {
   name: string;
   label: string;
   description: string;
   checked: boolean;
+  blockers?: string[];
 }) {
   return (
     /* The <label> has to hold the name, not sit empty beside it: wrapping only
@@ -193,6 +199,11 @@ function FeatureToggle({
       <p id={`${name}-description`} className="text-sm text-stone-500 mt-0.5">
         {description}
       </p>
+      {blockers.length > 0 && (
+        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-1.5">
+          Not live: {blockers.join(" ")}
+        </p>
+      )}
     </div>
   );
 }
@@ -272,36 +283,29 @@ export default async function SettingsPage(props: PageProps) {
 
         <Section title="Features" hint="What the shop offers. Each one can be switched off without losing the data behind it.">
           <div className="-mt-2">
-            <FeatureToggle
-              name="featureOnlineBooking"
-              label="Online Booking"
-              description="Allow customers to book appointments through the online booking portal."
-              checked={config?.featureOnlineBooking ?? false}
-            />
-            <FeatureToggle
-              name="featureWalkInPortal"
-              label="Walk-In Check-In Portal"
-              description="Display a self-service kiosk screen for walk-in customers to register their arrival."
-              checked={config?.featureWalkInPortal ?? false}
-            />
-            <FeatureToggle
-              name="featureEmailNotify"
-              label="Email Notifications"
-              description="Send automated email reminders and confirmations to customers."
-              checked={config?.featureEmailNotify ?? false}
-            />
-            <FeatureToggle
-              name="featureSmsNotify"
-              label="SMS Notifications"
-              description="Send automated SMS reminders to customers. Twilio credentials are entered on the Notifications page."
-              checked={config?.featureSmsNotify ?? false}
-            />
-            <FeatureToggle
-              name="featureRewards"
-              label="Customer Rewards"
-              description="A punch card: every finished visit is a punch, and a set number of them earns a reward staff hand over at the counter."
-              checked={config?.featureRewards ?? false}
-            />
+            {featuresByGroup()
+              // The waiver is declared in the registry but owned by the waiver
+              // section below, so its group renders nothing and must not leave
+              // an empty div behind.
+              .map(({ group, features }) => ({
+                group,
+                features: features.filter((feature) => feature.key !== "featureWaiverRequired"),
+              }))
+              .filter(({ features }) => features.length > 0)
+              .map(({ group, features }) => (
+                <div key={group}>
+                  {features.map((feature) => (
+                    <FeatureToggle
+                      key={feature.key}
+                      name={feature.key}
+                      label={feature.label}
+                      description={feature.blurb}
+                      checked={config?.[feature.key] ?? false}
+                      blockers={config ? featureBlockers(config, feature.key) : []}
+                    />
+                  ))}
+                </div>
+              ))}
           </div>
           <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
             The liability waiver is switched on and off in the{" "}
