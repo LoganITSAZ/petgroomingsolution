@@ -3,8 +3,7 @@ import { StationRole } from "@prisma/client";
 import Link from "next/link";
 import { formatRole, formatStationRole, stationRoleBadgeClass } from "@/lib/utils";
 import { KENNELABLE_STATUSES } from "@/lib/kennels";
-import { getConfig } from "@/lib/config";
-import { saveCapacityRules } from "./actions";
+import { OCCUPYING_STATUSES } from "@/lib/stations";
 import { PageShell, PageSection } from "@/components/ui";
 import SaveToast from "@/components/SaveToast";
 
@@ -18,18 +17,21 @@ interface PageProps {
     created?: string;
     saved?: string;
     kept?: string;
-    capacity?: string;
     error?: string;
   }>;
 }
 
 export default async function StationsPage(props: PageProps) {
   const searchParams = await props.searchParams;
-  const config = await getConfig();
   const stations = await prisma.station.findMany({
     orderBy: [{ role: "asc" }, { name: "asc" }],
     include: {
-      _count: { select: { kennels: true } },
+      _count: {
+        select: {
+          kennels: true,
+          appointments: { where: { status: { in: OCCUPYING_STATUSES } } },
+        },
+      },
       kennels: {
         select: {
           id: true,
@@ -39,23 +41,29 @@ export default async function StationsPage(props: PageProps) {
     },
   });
 
-  const activeCount = stations.filter((s) => s.isActive).length;
+  const inServiceCount = stations.filter((s) => s.isActive).length;
   const kennelStations = stations.filter((s) => s.role === StationRole.KENNEL);
+  // Doors, not slots: a compartment's second space only exists for a pet that
+  // can share with whoever is already inside, so the free-slot count is not
+  // space the shop can promise.
   const kennelTotal = kennelStations.reduce((n, s) => n + s._count.kennels, 0);
   const kennelOccupied = kennelStations.reduce(
-    (n, s) => n + s.kennels.reduce((inside, kennel) => inside + kennel._count.appointments, 0),
+    (n, s) => n + s.kennels.filter((kennel) => kennel._count.appointments > 0).length,
     0
   );
+  // In service is a setting; in use is what the floor is doing right now. A
+  // kennel unit is in use when any of its doors holds a pet, a work station
+  // when a visit is standing at it.
+  const inUseCount = stations.filter((s) =>
+    s.role === StationRole.KENNEL
+      ? s.kennels.some((kennel) => kennel._count.appointments > 0)
+      : s._count.appointments > 0
+  ).length;
 
   return (
     <PageShell
       title="Manage Stations"
-      subtitle={
-        <>
-          {activeCount} of {stations.length} station{stations.length !== 1 ? "s" : ""} active.
-          Each station carries a role that decides how it is used in the storefront.
-        </>
-      }
+      columns={false}
       actions={
         <Link
           href="/admin/stations/new"
@@ -88,66 +96,6 @@ export default async function StationsPage(props: PageProps) {
         </SaveToast>
       )}
 
-      {searchParams.capacity === "1" && (
-        <SaveToast>
-          Capacity rules saved.
-        </SaveToast>
-      )}
-      {searchParams.error === "invalid_household" && (
-        <SaveToast tone="error">
-          One household may share between the general rule and 8 pets per compartment.
-        </SaveToast>
-      )}
-      {searchParams.error === "invalid_capacity" && (
-        <SaveToast tone="error">
-          A compartment holds between 1 and 4 pets.
-        </SaveToast>
-      )}
-
-      {/* Capacity rules, shop-wide */}
-      <form
-        action={saveCapacityRules}
-        className="border-t border-stone-100 bg-stone-50 px-3 py-2 flex flex-wrap items-center gap-3"
-      >
-        <span className="text-sm font-semibold text-stone-800">Capacity</span>
-        <span className="text-sm text-stone-500">
-          Groom tables and bathing stations hold one pet each.
-        </span>
-        <span className="flex items-center gap-2 ml-auto">
-          <label htmlFor="kennelCapacityPerCompartment" className="text-sm text-stone-600">
-            Unrelated pets per compartment
-          </label>
-          <input
-            id="kennelCapacityPerCompartment"
-            name="kennelCapacityPerCompartment"
-            type="number"
-            min={1}
-            max={4}
-            defaultValue={config.kennelCapacityPerCompartment}
-            className="w-16 border border-stone-200 rounded-lg px-2 py-1.5 text-sm"
-          />
-          {/* Dogs from one home are kennelled together on purpose. */}
-          <label htmlFor="kennelHouseholdMaxPerCompartment" className="text-sm text-stone-600">
-            From one household
-          </label>
-          <input
-            id="kennelHouseholdMaxPerCompartment"
-            name="kennelHouseholdMaxPerCompartment"
-            type="number"
-            min={config.kennelCapacityPerCompartment}
-            max={8}
-            defaultValue={config.kennelHouseholdMaxPerCompartment}
-            className="w-16 border border-stone-200 rounded-lg px-2 py-1.5 text-sm"
-          />
-          <button
-            type="submit"
-            className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-1.5 rounded-lg text-sm font-semibold"
-          >
-            Save
-          </button>
-        </span>
-      </form>
-
       {/* Summary cards */}
       <PageSection bodyClassName="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="border border-stone-200 rounded-lg bg-well p-4">
@@ -155,12 +103,15 @@ export default async function StationsPage(props: PageProps) {
           <p className="text-2xl font-bold text-stone-800 mt-1">{stations.length}</p>
         </div>
         <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <p className="text-xs font-semibold text-stone-400 tracking-tight">Active</p>
-          <p className="text-2xl font-bold text-green-700 mt-1">{activeCount}</p>
+          <p className="text-xs font-semibold text-stone-400 tracking-tight">In Use Now</p>
+          <p className="text-2xl font-bold text-green-700 mt-1">
+            {inUseCount}
+            <span className="text-base font-medium text-stone-400">/{inServiceCount}</span>
+          </p>
         </div>
         <div className="border border-stone-200 rounded-lg bg-well p-4">
-          <p className="text-xs font-semibold text-stone-400 tracking-tight">Inactive</p>
-          <p className="text-2xl font-bold text-stone-400 mt-1">{stations.length - activeCount}</p>
+          <p className="text-xs font-semibold text-stone-400 tracking-tight">Out Of Service</p>
+          <p className="text-2xl font-bold text-stone-400 mt-1">{stations.length - inServiceCount}</p>
         </div>
         <Link
           href="/staff/stations"
@@ -239,7 +190,9 @@ export default async function StationsPage(props: PageProps) {
                               (inside, kennel) => inside + kennel._count.appointments,
                               0
                             )}{" "}
-                            in {station._count.kennels} doors
+                            in {station._count.kennels} doors ·{" "}
+                            {station.kennelCapacityPerCompartment} per door,{" "}
+                            {station.kennelHouseholdMaxPerCompartment} from one household
                           </span>
                         </>
                       ) : (

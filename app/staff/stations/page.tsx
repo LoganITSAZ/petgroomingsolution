@@ -1,12 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { StationRole } from "@prisma/client";
-import { KENNELABLE_STATUSES, kennelDemand } from "@/lib/kennels";
+import { KENNELABLE_STATUSES } from "@/lib/kennels";
 import {
   formatRole,
   formatServiceType,
   formatStationRole,
   formatStatus,
-  shopDayRange,
 } from "@/lib/utils";
 import { stationCapacity } from "@/lib/stations";
 import Link from "next/link";
@@ -71,8 +70,7 @@ export default async function StaffStationsPage(props: {
   const searchParams = await props.searchParams;
   const canManageStations = await currentStaffCanManage();
 
-  const { start, end } = shopDayRange();
-  const [stations, occupying, demand] = await Promise.all([
+  const [stations, occupying] = await Promise.all([
     prisma.station.findMany({
       orderBy: [{ role: "asc" }, { name: "asc" }],
       include: {
@@ -107,7 +105,6 @@ export default async function StaffStationsPage(props: {
       },
       orderBy: { checkedInAt: "asc" },
     }),
-    kennelDemand(start, end),
   ]);
 
   // A station can hold more than one pet, so occupancy is a list.
@@ -134,12 +131,15 @@ export default async function StaffStationsPage(props: {
   const bathing = singleOccupancy(StationRole.BATHING);
   const drying = singleOccupancy(StationRole.DRYING);
   const kennelUnits = byRole(StationRole.KENNEL);
+  // Doors, not slots: a compartment's second space only exists for a pet that
+  // can share with whoever is already inside, so counting slots reads as free
+  // room the shop may not have.
   const kennelTotal = kennelUnits.reduce(
-    (n, s) => n + s.kennels.filter((k) => k.isActive).length * demand.perCompartment,
+    (n, s) => n + s.kennels.filter((k) => k.isActive).length,
     0
   );
   const kennelOccupied = kennelUnits.reduce(
-    (n, s) => n + s.kennels.reduce((inside, k) => inside + k.appointments.length, 0),
+    (n, s) => n + s.kennels.filter((k) => k.appointments.length > 0).length,
     0
   );
 
@@ -268,10 +268,7 @@ export default async function StaffStationsPage(props: {
           bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3"
         >
             {kennelUnits.map((station) => {
-              const occupied = station.kennels.reduce(
-                (inside, k) => inside + k.appointments.length,
-                0
-              );
+              const occupied = station.kennels.filter((k) => k.appointments.length > 0).length;
               const outOfService = station.kennels.filter((k) => !k.isActive).length;
               return (
                 <div key={station.id} className="relative">
@@ -285,7 +282,7 @@ export default async function StaffStationsPage(props: {
                     </span>
                     <span className="text-sm text-stone-500 whitespace-nowrap">
                       <span className="font-bold text-stone-900">{occupied}</span>/
-                      {station.kennels.filter((k) => k.isActive).length * demand.perCompartment}{" "}
+                      {station.kennels.filter((k) => k.isActive).length}{" "}
                       occupied
                     </span>
                   </div>

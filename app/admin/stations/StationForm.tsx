@@ -38,6 +38,9 @@ export interface StationFormValues {
   isActive: boolean;
   kennelRows: number;
   kennelColumns: number;
+  /** This unit's own kennel capacity rules — a crate bank and a run bank are not the same size. */
+  kennelCapacityPerCompartment: number;
+  kennelHouseholdMaxPerCompartment: number;
 }
 
 export default function StationForm({
@@ -58,6 +61,7 @@ export default function StationForm({
   const [role, setRole] = useState<StationRole>(initial.role);
   const [rows, setRows] = useState(initial.kennelRows);
   const [columns, setColumns] = useState(initial.kennelColumns);
+  const [perCompartment, setPerCompartment] = useState(initial.kennelCapacityPerCompartment);
 
   const isKennel = role === StationRole.KENNEL;
   const clampedRows = Math.min(Math.max(rows || 0, 0), MAX_KENNEL_ROWS);
@@ -237,6 +241,65 @@ export default function StationForm({
               and sit outside this layout. Those doors are kept until they are emptied.
             </p>
           )}
+        </PageSection>
+      )}
+
+      {/* How many pets fit behind one of this unit's doors. */}
+      {isKennel && (
+        <PageSection bodyClassName="space-y-5">
+          <div className="border-b border-stone-100 pb-3">
+            <h2 className="text-base font-semibold text-stone-800">Kennel Capacity</h2>
+            <p className="text-sm text-stone-500 mt-1">
+              How many pets share one of this unit&apos;s compartments. Each kennel bank carries
+              its own numbers — groom tables and bathing stations always hold one pet each.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 items-start">
+            <label
+              htmlFor="kennelCapacityPerCompartment"
+              className="text-sm font-medium text-stone-700 pt-2"
+            >
+              Unrelated pets per compartment
+            </label>
+            <div className="col-span-2">
+              <input
+                id="kennelCapacityPerCompartment"
+                name="kennelCapacityPerCompartment"
+                type="number"
+                min={1}
+                max={4}
+                value={perCompartment}
+                onChange={(e) => setPerCompartment(Number(e.target.value))}
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Dogs from one home are kennelled together on purpose. */}
+          <div className="grid grid-cols-3 gap-3 items-start">
+            <label
+              htmlFor="kennelHouseholdMaxPerCompartment"
+              className="text-sm font-medium text-stone-700 pt-2"
+            >
+              From one household
+            </label>
+            <div className="col-span-2">
+              <input
+                id="kennelHouseholdMaxPerCompartment"
+                name="kennelHouseholdMaxPerCompartment"
+                type="number"
+                min={perCompartment}
+                max={8}
+                defaultValue={initial.kennelHouseholdMaxPerCompartment}
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-stone-400 mt-1.5">
+                Dogs from one home share a door on purpose, so this never goes below the general
+                rule. One unrelated pet in the door drops it back.
+              </p>
+            </div>
+          </div>
         </PageSection>
       )}
 

@@ -21,6 +21,41 @@ interface ParsedStation {
   isActive: boolean;
   kennelRows: number | null;
   kennelColumns: number | null;
+  kennelCapacityPerCompartment: number;
+  kennelHouseholdMaxPerCompartment: number;
+}
+
+/**
+ * How many pets fit behind one of this unit's doors.
+ *
+ * Compartments within a bank are the same size as each other, but a bank of
+ * small crates and a bank of walk-in runs are not, so the numbers belong to
+ * the station. Groom tables and bathing stations hold exactly one pet, which
+ * is physical rather than a setting — only a kennel form carries these fields.
+ */
+function parseCapacity(
+  formData: FormData
+): { perCompartment: number; householdMax: number } | { error: string } {
+  const perCompartment = Number(
+    ((formData.get("kennelCapacityPerCompartment") as string | null) ?? "").trim()
+  );
+  if (!Number.isInteger(perCompartment) || perCompartment < 1 || perCompartment > 4) {
+    return { error: "invalid_capacity" };
+  }
+
+  /*
+   * The household allowance is what a family's dogs may share, so it is only
+   * ever equal to or larger than the general rule — a smaller number would be
+   * a setting that can never apply.
+   */
+  const householdMax = Number(
+    ((formData.get("kennelHouseholdMaxPerCompartment") as string | null) ?? "").trim()
+  );
+  if (!Number.isInteger(householdMax) || householdMax < perCompartment || householdMax > 8) {
+    return { error: "invalid_household" };
+  }
+
+  return { perCompartment, householdMax };
 }
 
 /**
@@ -49,6 +84,9 @@ async function parseStation(
 
   let kennelRows: number | null = null;
   let kennelColumns: number | null = null;
+  // Defaults matter only for the non-kennel roles that ignore them.
+  let perCompartment = 1;
+  let householdMax = 1;
   if (role === StationRole.KENNEL) {
     kennelRows = Number(formData.get("kennelRows"));
     kennelColumns = Number(formData.get("kennelColumns"));
@@ -60,6 +98,11 @@ async function parseStation(
       kennelRows <= MAX_KENNEL_ROWS &&
       kennelColumns <= MAX_KENNEL_COLUMNS;
     if (!valid) return { error: "invalid_grid" };
+
+    const capacity = parseCapacity(formData);
+    if ("error" in capacity) return capacity;
+    perCompartment = capacity.perCompartment;
+    householdMax = capacity.householdMax;
   }
 
   // Empty means anyone on staff may work here.
@@ -83,6 +126,8 @@ async function parseStation(
     isActive,
     kennelRows,
     kennelColumns,
+    kennelCapacityPerCompartment: perCompartment,
+    kennelHouseholdMaxPerCompartment: householdMax,
   };
 }
 
@@ -152,45 +197,3 @@ export async function updateStation(formData: FormData): Promise<void> {
   );
 }
 
-/**
- * Capacity is a rule for the whole shop, not a per-station field: groom tables
- * and bathing stations physically hold one pet, and every compartment in a
- * kennel bank is the same size as the others.
- */
-export async function saveCapacityRules(formData: FormData): Promise<void> {
-  await requireManager();
-
-  const raw = ((formData.get("kennelCapacityPerCompartment") as string | null) ?? "").trim();
-  const perCompartment = Number(raw);
-  if (!Number.isInteger(perCompartment) || perCompartment < 1 || perCompartment > 4) {
-    redirect("/admin/stations?error=invalid_capacity");
-  }
-
-  /*
-   * The household allowance is what a family's dogs may share, so it is only
-   * ever equal to or larger than the general rule — a smaller number would be
-   * a setting that can never apply.
-   */
-  const householdRaw = ((formData.get("kennelHouseholdMaxPerCompartment") as string | null) ?? "").trim();
-  const householdMax = Number(householdRaw);
-  if (
-    !Number.isInteger(householdMax) ||
-    householdMax < perCompartment ||
-    householdMax > 8
-  ) {
-    redirect("/admin/stations?error=invalid_household");
-  }
-
-  await prisma.systemConfig.update({
-    where: { id: "global" },
-    data: {
-      kennelCapacityPerCompartment: perCompartment,
-      kennelHouseholdMaxPerCompartment: householdMax,
-    },
-  });
-
-  revalidatePath("/admin/stations");
-  revalidatePath("/staff/stations");
-  revalidatePath("/staff");
-  redirect("/admin/stations?capacity=1");
-}

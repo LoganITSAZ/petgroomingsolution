@@ -7,7 +7,7 @@ import {
   KENNELABLE_STATUSES,
   compartmentRoom,
   getKennelBoard,
-  householdCompartmentLimit,
+  stationLimits,
   kennelDemand,
 } from "@/lib/kennels";
 import { OCCUPYING_STATUSES, stationCapacity } from "@/lib/stations";
@@ -67,7 +67,10 @@ export default async function StaffStationDetailPage(props: PageProps) {
   const isKennel = station.role === StationRole.KENNEL;
   const { start, end } = shopDayRange();
 
-  const [kennels, assignable, occupants, todayHere, householdMax] = await Promise.all([
+  // Capacity belongs to this unit, not the shop.
+  const { perCompartment, householdMax } = stationLimits(station);
+
+  const [kennels, assignable, occupants, todayHere] = await Promise.all([
     isKennel ? getKennelBoard(station.id) : Promise.resolve([]),
     isKennel
       ? prisma.appointment.findMany({
@@ -108,7 +111,6 @@ export default async function StaffStationDetailPage(props: PageProps) {
       },
       orderBy: { scheduledAt: "asc" },
     }),
-    householdCompartmentLimit(),
   ]);
 
   // Breed reference for whoever is standing at this station.
@@ -118,11 +120,12 @@ export default async function StaffStationDetailPage(props: PageProps) {
 
   const notice = Object.keys(NOTICES).find((key) => searchParams[key] === "1");
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
-  const occupiedCount = kennels.reduce((n, kennel) => n + kennel.appointments.length, 0);
-  const capacity = stationCapacity({ ...station, kennels });
+  // Doors, not slots: the per-door counts below carry the sharing.
+  const occupiedCount = kennels.filter((kennel) => kennel.appointments.length > 0).length;
+  const capacity = stationCapacity({ ...station, kennels }, perCompartment);
   const demand = isKennel
     ? await kennelDemand(start, end)
-    : { capacity: 0, occupied: 0, reserved: 0, free: 0, perCompartment: 1 };
+    : { capacity: 0, occupied: 0, reserved: 0, free: 0 };
 
   return (
     <PageShell
@@ -136,7 +139,7 @@ export default async function StaffStationDetailPage(props: PageProps) {
           {station.allowedRoles.length > 0 &&
             ` · ${station.allowedRoles.map(formatRole).join(" or ")} only`}
           {!station.isActive && " · inactive"}
-          {isKennel && ` · ${occupiedCount}/${kennels.length * demand.perCompartment} occupied`}
+          {isKennel && ` · ${occupiedCount}/${kennels.length} doors in use`}
           {isKennel && demand.reserved > 0 && ` · ${demand.reserved} still expected today`}
         </>
       }
@@ -197,14 +200,14 @@ export default async function StaffStationDetailPage(props: PageProps) {
                   compartmentRoom(
                     occupantCustomerIds,
                     appt.customerId,
-                    demand.perCompartment,
+                    perCompartment,
                     householdMax
                   ).ok
               );
               const household =
                 inside.length > 0 &&
                 occupantCustomerIds.every((id) => id === occupantCustomerIds[0]);
-              const shown = household ? householdMax : demand.perCompartment;
+              const shown = household ? householdMax : perCompartment;
               const full = inside.length >= shown;
 
               return (
@@ -227,7 +230,7 @@ export default async function StaffStationDetailPage(props: PageProps) {
                     ) : (
                       <span className="text-[10px] font-bold text-stone-400 ">
                         {inside.length}/{shown}
-                        {household && inside.length > demand.perCompartment && (
+                        {household && inside.length > perCompartment && (
                           <span className="ml-1 text-emerald-700">same home</span>
                         )}
                       </span>

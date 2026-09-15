@@ -16,6 +16,9 @@ export const metadata = { title: "Edit Station" };
 const ERRORS: Record<string, string> = {
   invalid_role: "Pick one of the listed roles.",
   invalid_grid: "Kennel units need at least one row and one kennel per row.",
+  invalid_capacity: "A compartment holds between 1 and 4 pets.",
+  invalid_household:
+    "One household may share between the general rule and 8 pets per compartment.",
   kennels_occupied:
     "This unit still has pets in it. Empty every kennel before changing the station's role.",
 };
@@ -109,6 +112,8 @@ export default async function EditStationPage(props: PageProps) {
           isActive: station.isActive,
           kennelRows: station.kennelRows ?? 2,
           kennelColumns: station.kennelColumns ?? 4,
+          kennelCapacityPerCompartment: station.kennelCapacityPerCompartment,
+          kennelHouseholdMaxPerCompartment: station.kennelHouseholdMaxPerCompartment,
         }}
       />
 

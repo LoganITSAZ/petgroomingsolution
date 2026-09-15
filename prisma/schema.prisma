@@ -71,15 +71,6 @@ model SystemConfig {
   pickupLateMins     Int @default(120)
   pickupCriticalMins Int @default(240)
 
-  // Capacity rules, set once for the whole shop rather than per station.
-  // Groom tables and bathing stations always hold exactly one pet; only a
-  // kennel compartment can be shared.
-  kennelCapacityPerCompartment Int @default(1)
-  // Pets from ONE household may share a door beyond the rule above: a family
-  // booking several small dogs is kennelled together on purpose. Unrelated
-  // pets never exceed kennelCapacityPerCompartment.
-  kennelHouseholdMaxPerCompartment Int @default(5)
-
   // Scheduling: the week past which scheduled hours read as overtime.
   overtimeWeeklyHours Int @default(40)
 
@@ -391,6 +382,17 @@ model Station {
   kennelRows    Int?
   kennelColumns Int?
 
+  // KENNEL stations only: how many pets fit behind one of this unit's doors.
+  // Groom tables and bathing stations always hold exactly one pet, which is
+  // physical rather than a setting, so these are ignored for them. A bank of
+  // small crates and a bank of walk-in runs are not the same size, which is
+  // why this lives on the unit rather than on SystemConfig.
+  kennelCapacityPerCompartment Int @default(1)
+  // Pets from ONE household may share a door beyond the rule above: a family
+  // booking several small dogs is kennelled together on purpose. Unrelated
+  // pets never exceed kennelCapacityPerCompartment.
+  kennelHouseholdMaxPerCompartment Int @default(5)
+
   appointments Appointment[]
   kennels      Kennel[]
   homeStaff    Staff[]       @relation("HomeStation")
@@ -419,8 +421,8 @@ model Kennel {
   updatedAt DateTime @updatedAt
 
   station      Station       @relation(fields: [stationId], references: [id], onDelete: Cascade)
-  // Who is inside. A compartment holds as many pets as the shop allows —
-  // see SystemConfig.kennelCapacityPerCompartment.
+  // Who is inside. A compartment holds as many pets as its unit allows —
+  // see Station.kennelCapacityPerCompartment.
   appointments Appointment[]
 
   @@unique([stationId, row, column])

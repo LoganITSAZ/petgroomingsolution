@@ -7,9 +7,9 @@ import { nextStatus } from "@/lib/appointment-flow";
 import { getServiceOptions } from "@/lib/appointment-services";
 import {
   KENNELABLE_STATUSES,
-  compartmentCapacity,
   compartmentRoom,
-  householdCompartmentLimit,
+  LIMIT_SELECT,
+  stationLimits,
 } from "@/lib/kennels";
 import { formatCents } from "@/lib/pricing";
 import { rewardCard } from "@/lib/rewards";
@@ -137,8 +137,7 @@ export default async function AppointmentDetailPage(props: PageProps) {
   });
   if (!appointment) notFound();
 
-  const [stations, groomers, serviceOptions, allKennels, perCompartment, householdMax] =
-    await Promise.all([
+  const [stations, groomers, serviceOptions, allKennels] = await Promise.all([
     prisma.station.findMany({
       where: { isActive: true, role: { not: StationRole.KENNEL } },
       orderBy: [{ role: "asc" }, { name: "asc" }],
@@ -153,7 +152,8 @@ export default async function AppointmentDetailPage(props: PageProps) {
     prisma.kennel.findMany({
       where: { isActive: true, station: { isActive: true } },
       include: {
-        station: { select: { name: true } },
+        // Each unit carries its own compartment size.
+        station: { select: { name: true, ...LIMIT_SELECT } },
         appointments: {
           where: { status: { in: KENNELABLE_STATUSES } },
           select: { id: true, customerId: true },
@@ -161,8 +161,6 @@ export default async function AppointmentDetailPage(props: PageProps) {
       },
       orderBy: [{ station: { name: "asc" } }, { row: "asc" }, { column: "asc" }],
     }),
-    compartmentCapacity(),
-    householdCompartmentLimit(),
   ]);
 
   /*
@@ -171,15 +169,18 @@ export default async function AppointmentDetailPage(props: PageProps) {
    * other dogs takes one more of theirs past the general rule.
    */
   const kennelRoom = new Map(
-    allKennels.map((kennel) => [
-      kennel.id,
-      compartmentRoom(
-        kennel.appointments.map((occupant) => occupant.customerId),
-        appointment.customerId,
-        perCompartment,
-        householdMax
-      ),
-    ])
+    allKennels.map((kennel) => {
+      const limits = stationLimits(kennel.station);
+      return [
+        kennel.id,
+        compartmentRoom(
+          kennel.appointments.map((occupant) => occupant.customerId),
+          appointment.customerId,
+          limits.perCompartment,
+          limits.householdMax
+        ),
+      ] as const;
+    })
   );
   const openKennels = allKennels.filter(
     (kennel) => kennel.id === appointment.kennelId || kennelRoom.get(kennel.id)?.ok

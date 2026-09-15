@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compartmentRoom } from "./kennels";
+import { compartmentRoom, stationLimits } from "./kennels";
 
 /**
  * The shop rule is one dog per door. The exception is a household: several
@@ -56,5 +56,29 @@ describe("compartmentRoom", () => {
 
   it("reports how many are already inside", () => {
     expect(compartmentRoom(["cust-a", "cust-a"], "cust-a", 1, 5).inside).toBe(2);
+  });
+});
+
+describe("stationLimits", () => {
+  it("floors the general rule at one pet", () => {
+    expect(stationLimits({
+      kennelCapacityPerCompartment: 0,
+      kennelHouseholdMaxPerCompartment: 0,
+    })).toEqual({ perCompartment: 1, householdMax: 1 });
+  });
+
+  it("never lets the household allowance fall below the general rule", () => {
+    // A household is a reason to fit more, never fewer.
+    expect(stationLimits({
+      kennelCapacityPerCompartment: 4,
+      kennelHouseholdMaxPerCompartment: 2,
+    })).toEqual({ perCompartment: 4, householdMax: 4 });
+  });
+
+  it("keeps each unit's own numbers", () => {
+    expect(stationLimits({
+      kennelCapacityPerCompartment: 2,
+      kennelHouseholdMaxPerCompartment: 5,
+    })).toEqual({ perCompartment: 2, householdMax: 5 });
   });
 });

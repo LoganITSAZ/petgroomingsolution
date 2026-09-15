@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { getConfig } from "@/lib/config";
 import { STATION_APPOINTMENT_SELECT, broadcastToStation } from "@/lib/station-events";
-import { AppointmentStatus } from "@prisma/client";
+import { AppointmentStatus, StationRole } from "@prisma/client";
 import { pickupThresholds } from "@/lib/pickups";
 
 /**
@@ -9,14 +8,15 @@ import { pickupThresholds } from "@/lib/pickups";
  * `Station.kennelColumns`. The individual `Kennel` rows are generated to fill
  * that grid so staff assign a dog to a door that matches the physical unit.
  *
- * How many pets fit behind one door is a shop-wide rule
- * (`SystemConfig.kennelCapacityPerCompartment`), not a per-unit setting:
- * compartments in a bank are the same size as each other.
+ * How many pets fit behind one door belongs to the unit
+ * (`Station.kennelCapacityPerCompartment`): compartments within a bank are the
+ * same size as each other, but a bank of small crates and a bank of walk-in
+ * runs are not.
  *
  * The one exception is a household. Dogs booked in together from the same home
  * are kennelled together on purpose — several small dogs behind one door — so
- * `SystemConfig.kennelHouseholdMaxPerCompartment` is a second, higher limit
- * that applies only while every pet inside belongs to the same customer.
+ * `Station.kennelHouseholdMaxPerCompartment` is a second, higher limit that
+ * applies only while every pet inside belongs to the same customer.
  */
 
 export const MAX_KENNEL_ROWS = 26; // one letter per row
@@ -37,27 +37,35 @@ export const KENNELABLE_STATUSES: AppointmentStatus[] = [
   AppointmentStatus.READY_PICKUP,
 ];
 
-/** How many pets fit in one compartment, per the shop's rule. */
-export async function compartmentCapacity(): Promise<number> {
-  const config = await getConfig();
-  return Math.max(1, config.kennelCapacityPerCompartment);
+/** The two capacity numbers a kennel unit carries. */
+export interface StationLimits {
+  kennelCapacityPerCompartment: number;
+  kennelHouseholdMaxPerCompartment: number;
 }
 
+/** Prisma select for the two columns `stationLimits()` needs. */
+export const LIMIT_SELECT = {
+  kennelCapacityPerCompartment: true,
+  kennelHouseholdMaxPerCompartment: true,
+} as const;
+
 /**
- * How many pets from ONE household may share a compartment.
+ * A unit's limits, ordered and floored.
  *
- * The shop-wide rule is written for unrelated dogs, which is why it is usually
+ * The general rule is written for unrelated dogs, which is why it is usually
  * one. A family that brings four small dogs in together is kennelled together
- * on purpose, so a door may hold more than the rule allows as long as every
- * pet behind it belongs to the same customer. Never below the general rule —
- * a household is not a reason to fit fewer.
+ * on purpose, so the household allowance is never below the general rule — a
+ * household is not a reason to fit fewer.
  */
-export async function householdCompartmentLimit(): Promise<number> {
-  const config = await getConfig();
-  return Math.max(
-    Math.max(1, config.kennelCapacityPerCompartment),
-    config.kennelHouseholdMaxPerCompartment
-  );
+export function stationLimits(station: StationLimits): {
+  perCompartment: number;
+  householdMax: number;
+} {
+  const perCompartment = Math.max(1, station.kennelCapacityPerCompartment);
+  return {
+    perCompartment,
+    householdMax: Math.max(perCompartment, station.kennelHouseholdMaxPerCompartment),
+  };
 }
 
 export interface CompartmentRoom {
@@ -173,9 +181,11 @@ async function kennelRoomFor(
   kennelId: string,
   appointmentId?: string
 ): Promise<CompartmentRoom> {
-  const [perCompartment, householdMax, occupants, moving] = await Promise.all([
-    compartmentCapacity(),
-    householdCompartmentLimit(),
+  const [kennel, occupants, moving] = await Promise.all([
+    prisma.kennel.findUnique({
+      where: { id: kennelId },
+      select: { station: { select: LIMIT_SELECT } },
+    }),
     prisma.appointment.findMany({
       where: {
         kennelId,
@@ -192,11 +202,14 @@ async function kennelRoomFor(
       : null,
   ]);
 
+  const limits = stationLimits(
+    kennel?.station ?? { kennelCapacityPerCompartment: 1, kennelHouseholdMaxPerCompartment: 1 }
+  );
   return compartmentRoom(
     occupants.map((occupant) => occupant.customerId),
     moving?.customerId ?? null,
-    perCompartment,
-    householdMax
+    limits.perCompartment,
+    limits.householdMax
   );
 }
 
@@ -243,7 +256,7 @@ export async function broadcastKennelBoard(stationId: string): Promise<void> {
  *
  * Every appointment is assumed to need a kennel, so a booking holds a space
  * without holding a specific door: the door is chosen at check-in. Capacity is
- * the doors in service multiplied by how many fit behind each one.
+ * each unit's doors in service multiplied by how many fit behind one of them.
  */
 export async function kennelDemand(
   start: Date,
@@ -253,11 +266,17 @@ export async function kennelDemand(
   occupied: number;
   reserved: number;
   free: number;
-  perCompartment: number;
 }> {
-  const [perCompartment, doors, occupied, reserved] = await Promise.all([
-    compartmentCapacity(),
-    prisma.kennel.count({ where: { isActive: true, station: { isActive: true } } }),
+  const [units, occupied, reserved] = await Promise.all([
+    // Each unit brings its own compartment size, so capacity is summed per
+    // bank rather than multiplied over one shop-wide number.
+    prisma.station.findMany({
+      where: { isActive: true, role: StationRole.KENNEL },
+      select: {
+        ...LIMIT_SELECT,
+        _count: { select: { kennels: { where: { isActive: true } } } },
+      },
+    }),
     prisma.appointment.count({
       where: { kennelId: { not: null }, status: { in: KENNELABLE_STATUSES } },
     }),
@@ -277,13 +296,15 @@ export async function kennelDemand(
    * sharing depends on who turns up together, so it is headroom on the day and
    * never a space the shop can promise in advance.
    */
-  const capacity = doors * perCompartment;
+  const capacity = units.reduce(
+    (total, unit) => total + unit._count.kennels * stationLimits(unit).perCompartment,
+    0
+  );
   return {
     capacity,
     occupied,
     reserved,
     free: Math.max(0, capacity - occupied - reserved),
-    perCompartment,
   };
 }
 

@@ -14,9 +14,9 @@ import CheckInDialog from "@/components/CheckInDialog";
 import StageRail from "@/components/StageRail";
 import {
   KENNELABLE_STATUSES,
-  compartmentCapacity,
   compartmentRoom,
-  householdCompartmentLimit,
+  LIMIT_SELECT,
+  stationLimits,
 } from "@/lib/kennels";
 import {
   ARRIVAL_CLASS,
@@ -168,8 +168,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     groomers,
     stations,
     kennels,
-    perCompartment,
-    householdMax,
     arrivals,
     counts,
   ] = await Promise.all([
@@ -201,7 +199,8 @@ export default async function StaffAppointmentsPage(props: PageProps) {
       select: {
         id: true,
         label: true,
-        station: { select: { name: true } },
+        // Each unit carries its own compartment size.
+        station: { select: { name: true, ...LIMIT_SELECT } },
         // Who is inside decides whether a household may share this door.
         appointments: {
           where: { status: { in: KENNELABLE_STATUSES } },
@@ -210,8 +209,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
       },
       orderBy: [{ station: { name: "asc" } }, { row: "asc" }, { column: "asc" }],
     }),
-    compartmentCapacity(),
-    householdCompartmentLimit(),
     arrivalThresholds(),
     prisma.appointment.groupBy({
       by: ["status"],
@@ -252,8 +249,8 @@ export default async function StaffAppointmentsPage(props: PageProps) {
         room: compartmentRoom(
           kennel.appointments.map((occupant) => occupant.customerId),
           customerId,
-          perCompartment,
-          householdMax
+          stationLimits(kennel.station).perCompartment,
+          stationLimits(kennel.station).householdMax
         ),
       }))
       .filter(({ room }) => room.ok)

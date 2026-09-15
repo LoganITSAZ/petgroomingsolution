@@ -10,6 +10,9 @@ export const metadata = { title: "Add Station" };
 const ERRORS: Record<string, string> = {
   invalid_role: "Pick one of the listed roles.",
   invalid_grid: "Kennel units need at least one row and one kennel per row.",
+  invalid_capacity: "A compartment holds between 1 and 4 pets.",
+  invalid_household:
+    "One household may share between the general rule and 8 pets per compartment.",
 };
 
 interface PageProps {
@@ -42,6 +45,8 @@ export default async function NewStationPage(props: PageProps) {
           isActive: true,
           kennelRows: 2,
           kennelColumns: 4,
+          kennelCapacityPerCompartment: 1,
+          kennelHouseholdMaxPerCompartment: 5,
         }}
       />
     </PageShell>
