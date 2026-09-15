@@ -3,13 +3,8 @@ import { shopDayKey } from "@/lib/utils";
 import { shopMoment } from "@/lib/shop-time";
 import ServicePicker from "@/components/ServicePicker";
 import { PageShell, PageSection, Well } from "@/components/ui";
-import {
-  getServiceOptions,
-  resolveSelectedServices,
-  sendBookingNotifications,
-  setAppointmentServices,
-} from "@/lib/appointment-services";
-import { bookingRateSnapshot } from "@/lib/pricing-tiers";
+import { getServiceOptions } from "@/lib/appointment-services";
+import { createAppointment } from "@/lib/create-appointment";
 import { auth } from "@/lib/auth";
 import { getConfig } from "@/lib/config";
 import { redirect } from "next/navigation";
@@ -22,7 +17,10 @@ import Link from "next/link";
 // app reads as the same document (WCAG 2.4.2).
 export const metadata = { title: "Book an appointment" };
 
-export default async function PortalNewAppointmentPage() {
+export default async function PortalNewAppointmentPage(props: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await props.searchParams;
   const session = await auth();
   if (!session || session.user.userType !== "customer") {
     redirect("/login");
@@ -129,49 +127,24 @@ now.getTime() + (config.bookingWindowDays ?? 30) * 24 * 60 * 60 * 1000
       throw new Error("Missing required fields");
     }
 
-    // Customers can book several services on one visit.
-    const services = await resolveSelectedServices(
-      formData.getAll("serviceIds").map((value) => String(value))
-    );
-    if (!services) throw new Error("Select at least one service");
-
-    // Verify the pet belongs to this customer
-    const pet = await prisma.pet.findFirst({ where: { id: petId, customerId, isActive: true } });
-    if (!pet) throw new Error("Pet not found");
-
     // Shop wall clock, not the server's: in production this runs in UTC, and a
     // nine o'clock booking would otherwise be stored as two in the morning.
     const scheduledAt = shopMoment(preferredDate, preferredTime);
     if (Number.isNaN(scheduledAt.getTime())) throw new Error("Pick a valid date and time");
 
-    // Customers on a negotiated rate are quoted it from the moment they book.
-    const rate = await bookingRateSnapshot(customerId, services.lines);
-
-    const appointment = await prisma.appointment.create({
-      data: {
-        customerId,
-        petId,
-        scheduledAt,
-        serviceType: services.primaryType,
-        durationMins: services.totalDurationMins ?? undefined,
-        appointmentType: "APPOINTMENT",
-        status: "SCHEDULED",
-        visitNotes: visitNotes ?? undefined,
-        pricingTierId: rate.pricingTierId,
-        pricingDiscountCents: rate.pricingDiscountCents,
-      },
+    // One place creates an Appointment. This path used to build the row
+    // itself, which is how a customer could book a day the shop is shut, or a
+    // day with no kennel left, and land with no groomer attached.
+    const result = await createAppointment({
+      customerId,
+      petId,
+      scheduledAt,
+      serviceIds: formData.getAll("serviceIds").map((value) => String(value)),
+      visitNotes,
+      enforceCustomerRules: true,
+      note: "Booked online by customer",
     });
-
-    await setAppointmentServices(appointment.id, services);
-    await sendBookingNotifications(appointment.id);
-
-    await prisma.appointmentStatusHistory.create({
-      data: {
-        appointmentId: appointment.id,
-        status: "SCHEDULED",
-        note: "Booked online by customer",
-      },
-    });
+    if (!result.ok) redirect(`/portal/appointments/new?error=${encodeURIComponent(result.message)}`);
 
     redirect("/portal/appointments");
   }
@@ -184,6 +157,14 @@ now.getTime() + (config.bookingWindowDays ?? 30) * 24 * 60 * 60 * 1000
       className="max-w-lg"
     >
       <PageSection>
+      {/* A refused booking comes back here with the reason — a shut day, a
+          full kennel, a time inside the lead window. */}
+      {error && (
+        <div role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-800">
+          {error}
+        </div>
+      )}
+
       {/* No pets on file */}
       {pets.length === 0 ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">

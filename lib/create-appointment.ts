@@ -14,10 +14,10 @@ import { shopDayRange } from "@/lib/utils";
  * The one place an Appointment row is created.
  *
  * There were four: the staff form, the portal server action, the appointments
- * API and the walk-in route. Only the staff form validated anything, so the
- * portal would take a booking for a day the shop is shut and a walk-in arrived
- * attached to nobody. Guarding each caller separately is four diffs and four
- * future regressions; this is one.
+ * API and the walk-in route. Only the staff form checked anything at all — the
+ * kennel — so the portal would take a booking for a day the shop is shut and a
+ * walk-in arrived attached to nobody. Guarding each caller separately is four
+ * diffs and four future regressions; this is one. All four call it now.
  *
  * `enforceCustomerRules` is the only difference between the paths. Staff skip
  * the lead time and the booking window — those are promises made to customers
@@ -99,7 +99,7 @@ export async function createAppointment(
     prisma.customer.findUnique({ where: { id: input.customerId }, select: { id: true } }),
     prisma.pet.findUnique({
       where: { id: input.petId },
-      select: { id: true, customerId: true },
+      select: { id: true, customerId: true, isActive: true },
     }),
     input.stationId
       ? prisma.station.findUnique({ where: { id: input.stationId }, select: { id: true } })
@@ -109,7 +109,11 @@ export async function createAppointment(
       : null,
   ]);
   if (!customer) return { ok: false, code: "NOT_FOUND", message: "Customer not found." };
-  if (!pet) return { ok: false, code: "NOT_FOUND", message: "Pet not found." };
+  // A retired pet is not bookable. petId is client-controlled on every path,
+  // and the dropdowns that offer it only list active pets.
+  if (!pet || !pet.isActive) {
+    return { ok: false, code: "NOT_FOUND", message: "Pet not found." };
+  }
   // NOT_FOUND (the customer or the pet) is the thing being booked; a station
   // or groomer the caller named is part of the request body, so it stays a 400
   // like it was before this path was shared.

@@ -4,20 +4,14 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
 import CustomerPetFields from "../CustomerPetFields";
-import { CoatType, PetSex, Species } from "@prisma/client";
+import { AppointmentType, CoatType, PetSex, Species } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
-import { defaultAssignment } from "@/lib/stations";
 import { capacityConflicts, kennelAvailableFor } from "@/lib/kennels";
 import { formatShopTime24, shopDayKey, shopDayRange } from "@/lib/utils";
 import { shopDateTimeLocal } from "@/lib/shop-time";
-import {
-  getServiceOptions,
-  resolveSelectedServices,
-  sendBookingNotifications,
-  setAppointmentServices,
-} from "@/lib/appointment-services";
-import { bookingRateSnapshot } from "@/lib/pricing-tiers";
+import { getServiceOptions } from "@/lib/appointment-services";
+import { createAppointment } from "@/lib/create-appointment";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -56,7 +50,7 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
   defaultDt.setMinutes(0, 0, 0);
   const defaultDtLocal = `${shopDayKey(defaultDt)}T${formatShopTime24(defaultDt)}`;
 
-  async function createAppointment(formData: FormData) {
+  async function createStaffAppointment(formData: FormData) {
     "use server";
 
     const session = await auth();
@@ -159,14 +153,10 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
       if (!owned) throw new Error("That pet belongs to a different customer");
     }
 
-    // One visit, one or more services. The first pick is the primary service.
-    const services = await resolveSelectedServices(
-      formData.getAll("serviceIds").map((value) => String(value))
-    );
-    if (!services) throw new Error("Select at least one service");
-
-    // Duration is the sum of the services booked, never typed in.
-    const durationMins = services.totalDurationMins;
+    // One visit, one or more services. The first pick is the primary service,
+    // and the duration is their sum — both resolved by `createAppointment`.
+    const serviceIds = formData.getAll("serviceIds").map((value) => String(value));
+    if (serviceIds.length === 0) throw new Error("Select at least one service");
 
     // Every visit needs a kennel, so the day cannot promise more kennels than
     // the shop has.
@@ -183,41 +173,24 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
       );
     }
 
-    // Customers are attached to a groomer, and groomers to a station, so
-    // neither is chosen here.
-    const assignment = await defaultAssignment(customerId);
-    // Customers on a negotiated rate are quoted it from the moment they book.
-    const rate = await bookingRateSnapshot(customerId, services.lines);
-
-    const appointment = await prisma.appointment.create({
-      data: {
-        customerId,
-        petId,
-        scheduledAt: scheduledFor,
-        serviceType: services.primaryType,
-        appointmentType: appointmentType as never,
-        status: "SCHEDULED",
-        stationId: assignment.stationId ?? undefined,
-        staffId: assignment.staffId ?? undefined,
-        durationMins: durationMins ?? undefined,
-        needsKennel: true,
-        visitNotes: visitNotes ?? undefined,
-        pricingTierId: rate.pricingTierId,
-        pricingDiscountCents: rate.pricingDiscountCents,
-      },
+    // One place creates an Appointment. The groomer and station are derived
+    // there (a customer's preferred groomer, and that groomer's own table), as
+    // is the rate snapshot. `enforceCustomerRules: false` is what makes this
+    // the staff path: no lead time, no booking window — those are promises
+    // made to customers, not rules about the shop's own diary. The kennel is
+    // checked above instead, with a message that names the pets holding one.
+    const result = await createAppointment({
+      customerId,
+      petId,
+      scheduledAt: scheduledFor,
+      serviceIds,
+      appointmentType: appointmentType as AppointmentType,
+      visitNotes,
+      enforceCustomerRules: false,
+      changedById: session.user.id,
+      note: "Appointment created by staff",
     });
-
-    await setAppointmentServices(appointment.id, services);
-    await sendBookingNotifications(appointment.id);
-
-    await prisma.appointmentStatusHistory.create({
-      data: {
-        appointmentId: appointment.id,
-        status: "SCHEDULED",
-        changedById: session.user.id,
-        note: "Appointment created by staff",
-      },
-    });
+    if (!result.ok) throw new Error(result.message);
 
     redirect("/staff/appointments");
   }
@@ -229,7 +202,7 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
       className="max-w-2xl mx-auto w-full flex-none"
     >
       <PageSection>
-        <form action={createAppointment} className="space-y-3">
+        <form action={createStaffAppointment} className="space-y-3">
           <CustomerPetFields
             customers={customers.map((customer) => ({
               id: customer.id,

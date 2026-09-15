@@ -24,6 +24,8 @@ export type BookingRefusalCode =
 
 export type BookingRefusal = { code: BookingRefusalCode; message: string };
 
+const PAST_GRACE_MS = 60_000;
+
 /** Minutes since shop-local midnight for a moment. */
 function shopMinutes(at: Date): number {
   const [h, m] = currentShopTime(at).split(":").map(Number);
@@ -55,7 +57,11 @@ export function validateBookingTime(input: {
   const { scheduledAt, hours, leadHours, windowDays, enforceWindow } = input;
   const now = input.now ?? new Date();
 
-  if (scheduledAt.getTime() < now.getTime()) {
+  // A minute of slack, because "now" is a real booking: staff leaving the time
+  // field blank stamp the row with `new Date()`, which is already a few
+  // milliseconds old by the time it gets here. Without this, booking the pet
+  // standing at the counter refuses itself.
+  if (scheduledAt.getTime() < now.getTime() - PAST_GRACE_MS) {
     return { code: "PAST", message: "That time has already passed." };
   }
 
