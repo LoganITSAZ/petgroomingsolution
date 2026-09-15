@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  *
  * The sections are static text, so the page is a count and a shell over
  * [ResourceLibrary](../../../components/ResourceLibrary.tsx), which owns the
- * search box and the cards.
+ * interactive library, saved references, and quick tools.
  */
 export default async function ResourcesPage() {
   const breedCount = await prisma.breedGuide.count();
@@ -26,7 +26,8 @@ export default async function ResourcesPage() {
   return (
     <PageShell
       title="Resources"
-      subtitle="Guidance, not instruction — the pet's own notes always come first"
+      subtitle="Your grooming knowledge hub"
+      columns={false}
     >
       <ResourceLibrary sections={RESOURCE_SECTIONS} breedCount={breedCount} />
     </PageShell>

@@ -12,14 +12,18 @@ beforeEach(() => {
 });
 
 describe("PageShell", () => {
-  it("places column controls after page actions and toggles table columns", () => {
+  // The control sits in the head of the table it acts on, not in the page
+  // header: one screen can carry several tables, and a single chooser up in
+  // the chrome could not say which one it was about.
+  it("puts the column control in the table head and toggles table columns", () => {
     render(<PageShell title="Records" actions={<button type="button">Add record</button>}>
       <table><thead><tr><th>Name</th><th>Email</th></tr></thead>
         <tbody><tr><td>Sam</td><td>sam@example.com</td></tr></tbody>
       </table>
     </PageShell>);
     const trigger = screen.getByRole("button", { name: "Choose columns" });
-    expect(trigger.closest("header")).toContainElement(screen.getByRole("button", { name: "Add record" }));
+    expect(trigger.closest("thead")).toContainElement(screen.getByText("Email"));
+    expect(screen.getByRole("button", { name: "Add record" }).closest("header")).toBeInTheDocument();
     fireEvent.click(trigger);
     fireEvent.click(screen.getByRole("checkbox", { name: "Email" }));
     expect(screen.getByText("sam@example.com")).toHaveAttribute("data-column-hidden");
@@ -122,16 +126,16 @@ describe("PageShell", () => {
     ).toHaveNoViolations();
   });
 
-  it("renders muted sections as a recessed toolbar band", () => {
+  it("renders muted sections with a single divider and a bordered heading", () => {
     render(
       <PageSection title="Filters" tone="muted">
         <div>Filter rows</div>
       </PageSection>
     );
 
-    expect(screen.getByText("Filters").closest("div")?.parentElement).toHaveClass(
-      "bg-band",
-        "shadow-[inset_0_1px_0_rgb(var(--well-line))]"
-    );
+    const heading = screen.getByText("Filters").closest("div");
+    expect(heading).toHaveClass("border-b", "border-well-line");
+    expect(heading?.parentElement).toHaveClass("bg-band", "border-t", "border-well-line");
+    expect(heading?.parentElement?.className).not.toContain("shadow-");
   });
 });

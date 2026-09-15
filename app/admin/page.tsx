@@ -143,6 +143,10 @@ export default async function AdminOverview() {
   // ── Record counts + config ────────────────────────────────────
   let config = null;
   let counts: { label: string; value: number }[] = [];
+  // The job runner is a separate process, so the only evidence the app has
+  // that it is alive is what it last wrote. Enough for "is the thing running";
+  // a jobs screen is deferred until there is more than one job to look at.
+  let lastReminder: Date | null = null;
   if (dbOnline) {
     const [
       loadedConfig,
@@ -165,6 +169,14 @@ export default async function AdminOverview() {
       prisma.visitEvent.count(),
       prisma.waiverAcceptance.count(),
     ]);
+    lastReminder =
+      (
+        await prisma.notificationLog.findFirst({
+          where: { kind: "APPOINTMENT_REMINDER" },
+          orderBy: { sentAt: "desc" },
+          select: { sentAt: true },
+        })
+      )?.sentAt ?? null;
     config = loadedConfig;
     counts = [
       { label: "Customers", value: customers },
@@ -306,6 +318,18 @@ export default async function AdminOverview() {
             warn={nodeEnv !== "production"}
           />
           <Row label="Shop timezone" value={SHOP_TIMEZONE} />
+          <Row
+            label="Last reminder sent"
+            value={
+              lastReminder
+                ? `${formatShopDate(lastReminder)} ${formatShopTime(lastReminder)}`
+                : config?.featureAppointmentReminders
+                  ? "None yet — is the jobs service running?"
+                  : "Reminders are off"
+            }
+            ok={lastReminder != null || !config?.featureAppointmentReminders}
+            warn={lastReminder == null && Boolean(config?.featureAppointmentReminders)}
+          />
           <Row
             label="Config last edited"
             value={

@@ -57,6 +57,31 @@ docker compose down               # stop everything; data survives in a volume
 `GET /api/health` returns `{ ok, dbLatencyMs }` and backs the container
 healthcheck.
 
+## Scheduled jobs
+
+The `jobs` container is a second process beside the app. It wakes every minute
+and runs whatever is owed: appointment reminders, sent `reminderHoursBefore`
+before a visit, and the rebooking nudge for households past their own usual gap
+between grooms (both in Shop Settings, both on by default). It serves
+no requests, so it is not a second app instance and does not affect live
+station updates.
+
+```bash
+docker compose logs -f jobs                            # a line per job per wake
+docker compose exec jobs npx tsx scripts/jobs.ts once   # run everything now
+docker compose exec jobs npx tsx scripts/jobs.ts once reminders  # one job
+```
+
+Nothing is lost if the container is down for a while: last-run times live in
+memory, so every job is due again on start and the reminder window is hours
+wide. Sending twice is what is guarded against — a `notification_logs` row is
+claimed before the messages go.
+
+Reminders go out over whatever the shop has live: email needs
+`RESEND_API_KEY`, SMS reads its Twilio credentials from the database like the
+app does. A shop that prefers host cron to the container can drop the service
+and run `npm run jobs:once` on a schedule instead.
+
 ## Backups
 
 Everything lives in the `postgres_data` volume.

@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageShell, PageSection, Well } from "@/components/ui";
+import { getConfig } from "@/lib/config";
+import { checksForPets } from "@/lib/vaccinations";
+import { VaccinationRows } from "@/components/Vaccinations";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -34,6 +37,17 @@ export default async function PortalPetsPage() {
     where: { customerId, isActive: true },
     orderBy: { name: "asc" },
   });
+
+  /*
+   * What the shop checks, shown to the owner rather than only to the counter.
+   * Nothing is editable here: a record is the shop reading a certificate, so an
+   * owner brings or emails proof and the shop writes it down.
+   */
+  const config = await getConfig();
+  const vaccinationChecks = await checksForPets(
+    pets.map((pet) => pet.id),
+    config
+  );
 
   return (
     <PageShell
@@ -118,6 +132,20 @@ export default async function PortalPetsPage() {
                     </div>
                   )}
                 </dl>
+
+                {(vaccinationChecks.get(pet.id) ?? []).length > 0 && (
+                  <div className="rounded-lg bg-white border border-well-line px-3 py-2">
+                    <p className="text-xs font-semibold text-stone-500 tracking-tight">
+                      Vaccinations
+                    </p>
+                    <VaccinationRows checks={vaccinationChecks.get(pet.id) ?? []} />
+                    <p className="mt-1 text-xs text-stone-400">
+                      {config.vaccinationGateBlocks
+                        ? "A booking needs these current. Email or bring the certificate and we will update it."
+                        : "Bring or email the certificate and we will update it."}
+                    </p>
+                  </div>
+                )}
 
                 {pet.groomingNotes && (
                   <div className="rounded-lg bg-white border border-well-line px-3 py-2 text-xs text-stone-600">

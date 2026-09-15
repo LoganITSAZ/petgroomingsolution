@@ -3,12 +3,17 @@ import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 /**
- * Serves a stored profile photo.
+ * Serves a stored photo: a profile picture, or a photo of one visit.
  *
  * Photos are of real customers and their pets, so they are not public: staff
  * see any of them, a customer sees only their own and their pets'. The station
  * kiosk is unauthenticated, so it keeps using `Pet.photoUrl` for anything it
  * needs to display.
+ *
+ * A visit photo reaches an owner only when a groomer ticked `ownerVisible` on
+ * it. That clause is load-bearing in both directions: without it an owner
+ * cannot see photos of their own dog, and without the tick they would see the
+ * shop's own evidence -- a matted belly, an equipment fault.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -25,7 +30,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const owned = await prisma.customer.count({
       where: {
         id: session.user.id,
-        OR: [{ photoId: photo.id }, { pets: { some: { photoId: photo.id } } }],
+        OR: [
+          { photoId: photo.id },
+          { pets: { some: { photoId: photo.id } } },
+          {
+            appointments: {
+              some: { photos: { some: { photoId: photo.id, ownerVisible: true } } },
+            },
+          },
+        ],
       },
     });
     if (owned === 0) {

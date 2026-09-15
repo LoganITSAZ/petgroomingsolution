@@ -147,6 +147,9 @@ export interface LeaderboardRow {
   payTodayCents: number;
   payWeekCents: number;
   payMonthCents: number;
+  /** Tips on visits this person finished. Beside commission, never inside it. */
+  tipWeekCents: number;
+  tipMonthCents: number;
   staffId: string;
   name: string;
   isActive: boolean;
@@ -173,6 +176,9 @@ export interface ShopAnalytics {
   estimatedRevenueCents: number;
   /** What agreed rates took off, so the list-price figure is recoverable. */
   rateDiscountCents: number;
+  /** What the shop's terminal actually took in the range, tips included. */
+  takenCents: number;
+  tipsCents: number;
   pricedShare: number;
   perDay: { dayKey: string; finished: number }[];
   serviceMix: { serviceType: string; count: number }[];
@@ -184,7 +190,7 @@ export async function getShopAnalytics(rangeDays = 30): Promise<ShopAnalytics> {
   const { end: todayEnd } = shopDayRange();
   const rangeStart = new Date(todayEnd.getTime() - rangeDays * 24 * 60 * 60 * 1000);
 
-  const [appointments, completions, newCustomers, serviceMix] = await Promise.all([
+  const [appointments, completions, newCustomers, serviceMix, taken] = await Promise.all([
     prisma.appointment.findMany({
       where: { scheduledAt: { gte: rangeStart, lt: todayEnd } },
       select: { id: true, status: true, appointmentType: true, customerId: true },
@@ -197,6 +203,12 @@ export async function getShopAnalytics(rangeDays = 30): Promise<ShopAnalytics> {
       where: { appointment: { scheduledAt: { gte: rangeStart, lt: todayEnd } } },
       orderBy: { _count: { serviceType: "desc" } },
       take: 8,
+    }),
+    // Taken, not estimated: the only figure on this screen that is a fact
+    // rather than a floor derived from list prices.
+    prisma.payment.aggregate({
+      where: { takenAt: { gte: rangeStart, lt: todayEnd } },
+      _sum: { amountCents: true, tipCents: true },
     }),
   ]);
 
@@ -213,6 +225,8 @@ export async function getShopAnalytics(rangeDays = 30): Promise<ShopAnalytics> {
     0
   );
   const rateDiscountCents = priced.reduce((sum, c) => sum + c.discountCents, 0);
+  const takenCents = taken._sum.amountCents ?? 0;
+  const tipsCents = taken._sum.tipCents ?? 0;
 
   const perDayMap = new Map<string, number>();
   for (const completion of inRange) {
@@ -250,6 +264,8 @@ export async function getShopAnalytics(rangeDays = 30): Promise<ShopAnalytics> {
         : Math.round(turnarounds.reduce((a, b) => a + b, 0) / turnarounds.length),
     estimatedRevenueCents,
     rateDiscountCents,
+    takenCents,
+    tipsCents,
     pricedShare: inRange.length === 0 ? 0 : priced.length / inRange.length,
     perDay,
     serviceMix: serviceMix.map((row) => ({
@@ -276,7 +292,7 @@ export async function getLeaderboard(): Promise<LeaderboardRow[]> {
     todayEnd.getTime() - LEADERBOARD_WINDOW_DAYS * 24 * 60 * 60 * 1000
   );
 
-  const [staff, completions, config, lifetimeCounts] = await Promise.all([
+  const [staff, completions, config, lifetimeCounts, tipPayments] = await Promise.all([
     prisma.staff.findMany({
       select: { id: true, name: true, roles: true, isActive: true, commissionPercent: true },
       orderBy: { name: "asc" },
@@ -288,6 +304,13 @@ export async function getLeaderboard(): Promise<LeaderboardRow[]> {
       where: { status: { in: FINISHED_STATUSES }, staffId: { not: null } },
       _count: { _all: true },
     }),
+    // A tip belongs to whoever finished the pet, not to whoever stood at the
+    // counter, so it is grouped by the visit's groomer. Prisma cannot group by
+    // a relation's column, and a month of payments is a small list.
+    prisma.payment.findMany({
+      where: { takenAt: { gte: monthStart, lt: todayEnd }, tipCents: { gt: 0 } },
+      select: { tipCents: true, takenAt: true, appointment: { select: { staffId: true } } },
+    }),
   ]);
 
   const lifetimeByStaff = new Map(
@@ -295,6 +318,11 @@ export async function getLeaderboard(): Promise<LeaderboardRow[]> {
   );
 
   const defaultCommission = config?.defaultCommissionPercent ?? 40;
+
+  const tipsFor = (staffId: string, from: Date) =>
+    tipPayments
+      .filter((payment) => payment.appointment.staffId === staffId && payment.takenAt >= from)
+      .reduce((sum, payment) => sum + payment.tipCents, 0);
 
   return staff
     // Admin-only accounts never hold a pet, so they have nothing to rank.
@@ -337,6 +365,8 @@ export async function getLeaderboard(): Promise<LeaderboardRow[]> {
         payTodayCents: payFor(todayStart, todayEnd),
         payWeekCents: payFor(weekStart),
         payMonthCents: payFor(monthStart),
+        tipWeekCents: tipsFor(member.id, weekStart),
+        tipMonthCents: tipsFor(member.id, monthStart),
         today: mine.filter((c) => c.finishedAt >= todayStart && c.finishedAt < todayEnd).length,
         week: mine.filter((c) => c.finishedAt >= weekStart).length,
         month: mine.filter((c) => c.finishedAt >= monthStart).length,

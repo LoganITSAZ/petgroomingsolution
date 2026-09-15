@@ -14,7 +14,7 @@ import { PageShell, PageSection } from "@/components/ui";
 import { PRESENCE_CLASS, PRESENCE_LABEL, floorRoster } from "@/lib/presence";
 import { describeShifts, isOnShiftNow, scheduleGaps, todaysShifts, weekDays } from "@/lib/schedule";
 import { type StaffProfile } from "@/components/StaffProfileDialog";
-import StaffTable, { StaffColumnsButton } from "@/components/StaffTable";
+import StaffTable from "@/components/StaffTable";
 import { auth } from "@/lib/auth";
 import { currentStaffCanManage } from "@/lib/staff-roles";
 import { LEADERBOARD_WINDOW_DAYS, getLeaderboard } from "@/lib/analytics";
@@ -140,10 +140,6 @@ export default async function StaffTeamPage() {
   // separate class of account — the roles column already says so.
   const active = rows.filter((r) => r.isActive);
   const inactive = rows.filter((r) => !r.isActive);
-  const working = active.filter((r) => r.current).length;
-  const unassignedOnFloor = await prisma.appointment.count({
-    where: { status: { in: ON_FLOOR }, staffId: null },
-  });
 
   const profiles = active.map((member) => {
     const floor = presenceById.get(member.id);
@@ -222,13 +218,6 @@ export default async function StaffTeamPage() {
   return (
     <PageShell
       title="Team"
-      subtitle={
-        <>
-          {working} of {active.length} in the storefront working a pet
-          {unassignedOnFloor > 0 &&
-            ` · ${unassignedOnFloor} pet${unassignedOnFloor !== 1 ? "s" : ""} in the storefront with no groomer`}
-        </>
-      }
       actions={
         <>
         {canManage ? (
@@ -247,7 +236,6 @@ export default async function StaffTeamPage() {
             </Link>
           </>
         ) : null}
-        {active.length > 0 && <StaffColumnsButton viewerId={session?.user?.id ?? "guest"} />}
         </>
       }
     >

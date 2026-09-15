@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
-import { AppointmentStatus, StaffRole, StationRole, VisitEventType } from "@prisma/client";
+import { AppointmentStatus, StaffRole, StationRole, VisitEventType, VisitPhotoKind } from "@prisma/client";
 import { nextStatus } from "@/lib/appointment-flow";
 import { getServiceOptions } from "@/lib/appointment-services";
 import {
@@ -20,6 +20,7 @@ import {
   formatShopTime,
   formatSpecies,
   formatStatus,
+  formatVisitEvent,
   statusBadgeClass,
 } from "@/lib/utils";
 import {
@@ -35,10 +36,25 @@ import PhotoStack from "@/components/PhotoStack";
 import InsightList from "@/components/InsightList";
 import { customerInsights, petInsights } from "@/lib/insights";
 import { photoUrl } from "@/lib/photos";
+import { consentState, groomRecordSummary, lastGroomRecordForPet } from "@/lib/visit-record";
+import VisitPhotoStrip from "@/components/VisitPhotoStrip";
+import { getConfig } from "@/lib/config";
+import { isEnabled } from "@/lib/features";
+import { ticketFromRow } from "@/lib/ticket";
+import { TicketPanel } from "@/components/Ticket";
+import { checksForPet } from "@/lib/vaccinations";
+import { VaccinationWarning } from "@/components/Vaccinations";
+import { BLADE_TERMS } from "@/lib/resources";
 import { redeemCustomerReward } from "@/app/staff/customers/actions";
 import {
+  addVisitPhoto,
+  deleteVisitPhoto,
   logVisitEvent,
   moveStatus,
+  recordConsent,
+  requestConsent,
+  saveGroomRecord,
+  setVisitPhotoVisibility,
   moveToKennel,
   updateAssignment,
   updateServices,
@@ -55,22 +71,21 @@ export const metadata = { title: "Visit" };
  */
 
 
-const eventLabel: Record<VisitEventType, string> = {
-  REWASH: "Re-wash",
-  BITE: "Bite",
-  BEHAVIORAL: "Behavioural",
-  INJURY: "Injury",
-  MATTING_FOUND: "Matting found",
-  EQUIPMENT_ISSUE: "Equipment issue",
-  OTHER: "Other",
-};
-
 const NOTICES: Record<string, string> = {
   moved: "Status updated.",
   saved: "Appointment saved.",
   services: "Services updated.",
   event: "Visit event logged.",
+  record: "Groom record saved.",
+  consent: "Consent request sent to the owner.",
+  answered: "The owner's answer has been recorded.",
   redeemed: "Reward applied to this bill.",
+  photo: "Visit photos updated.",
+  photoRemoved: "Photo removed from this visit.",
+  surcharged: "Fee added to the ticket.",
+  unsurcharged: "Fee taken off the ticket.",
+  paid: "Payment recorded.",
+  unpaid: "Payment removed.",
 };
 
 /** A visit past these is closed: its bill is no longer open to a discount. */
@@ -82,6 +97,10 @@ const SETTLED_FOR_REWARD: AppointmentStatus[] = [
 
 const ERRORS: Record<string, string> = {
   redeem_failed: "That reward could not be applied to this bill.",
+  bad_photo_kind: "Say whether that photo is a before, an after, or something you noticed.",
+  no_photo: "Choose a photo to upload.",
+  photo_too_large: "That image is over 2 MB. Photograph it again at a smaller size.",
+  photo_bad_type: "Photos have to be JPEG, PNG or WebP.",
   no_next_status: "This visit is already at the end of the groom flow.",
   already_there: "That is already the current status.",
   bad_date: "That date and time could not be read.",
@@ -92,11 +111,17 @@ const ERRORS: Record<string, string> = {
   kennel_occupied: "That kennel already holds another pet.",
   kennel_out_of_service: "That kennel is out of service.",
   bad_event: "Pick a valid event type.",
+  no_consent_note: "Say what the owner is being asked to approve.",
+  bad_consent_answer: "Record the owner's answer as approved or declined.",
   not_floor_staff:
     "That account does not work the storefront — admin-only accounts cannot be assigned to a pet.",
   station_full: "That station is already at its maximum number of pets.",
   role_not_allowed:
     "That station is limited to specific roles, and the selected staff member does not hold one.",
+  bad_amount: "An amount has to be above zero.",
+  bad_surcharge: "Say what the fee is for.",
+  bad_method: "Pick how the money was taken.",
+  bad_tip: "The tip cannot be more than the payment it came in.",
 };
 
 const inputClass =
@@ -133,11 +158,23 @@ export default async function AppointmentDetailPage(props: PageProps) {
         include: { loggedBy: { select: { name: true } } },
         orderBy: { occurredAt: "desc" },
       },
+      photos: {
+        include: { takenBy: { select: { name: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      appointmentSurcharges: {
+        include: { addedBy: { select: { id: true, name: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      payments: {
+        include: { takenBy: { select: { id: true, name: true } } },
+        orderBy: { takenAt: "asc" },
+      },
     },
   });
   if (!appointment) notFound();
 
-  const [stations, groomers, serviceOptions, allKennels] = await Promise.all([
+  const [stations, groomers, serviceOptions, allKennels, surchargeOptions] = await Promise.all([
     prisma.station.findMany({
       where: { isActive: true, role: { not: StationRole.KENNEL } },
       orderBy: [{ role: "asc" }, { name: "asc" }],
@@ -160,6 +197,12 @@ export default async function AppointmentDetailPage(props: PageProps) {
         },
       },
       orderBy: [{ station: { name: "asc" } }, { row: "asc" }, { column: "asc" }],
+    }),
+    // The published fee list, so the counter charges what the shop advertises.
+    prisma.surcharge.findMany({
+      where: { isActive: true },
+      select: { id: true, label: true, minCents: true, maxCents: true, note: true },
+      orderBy: { label: "asc" },
     }),
   ]);
 
@@ -191,6 +234,12 @@ export default async function AppointmentDetailPage(props: PageProps) {
     ...(await customerInsights(appointment.customerId)),
   ];
 
+  // What this pet was last groomed with, so the blade is a decision made once
+  // rather than re-guessed every visit.
+  const previousGroom = await lastGroomRecordForPet(appointment.petId, appointment.id);
+  const consent = consentState(appointment);
+  const config = await getConfig();
+
   const next = nextStatus(appointment.status);
   const arrival =
     appointment.status === AppointmentStatus.SCHEDULED
@@ -199,7 +248,14 @@ export default async function AppointmentDetailPage(props: PageProps) {
   const notice = Object.keys(NOTICES).find((key) => searchParams[key] === "1");
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
 
+  // Stated on the visit, not enforced here: the pet is already in the shop.
+  const vaccinationChecks = await checksForPet(appointment.petId, config);
+
   const card = await rewardCard(appointment.customerId);
+
+  // The ticket is the counter's arithmetic, not this page's.
+  const ticket = ticketFromRow(appointment);
+  const counterPayments = isEnabled(config, "featureCounterPayments");
 
   const priced = appointment.services.filter((line) => line.priceCents != null);
   const total = priced.reduce((sum, line) => sum + (line.priceCents ?? 0), 0);
@@ -242,6 +298,12 @@ export default async function AppointmentDetailPage(props: PageProps) {
       {errorMessage && (
         <div className="border-t border-stone-100 bg-red-50 px-3 py-2 text-red-800 text-sm font-medium">
           {errorMessage}
+        </div>
+      )}
+
+      {vaccinationChecks.some((check) => check.level !== "current") && (
+        <div className="border-t border-stone-100 px-3 py-2">
+          <VaccinationWarning checks={vaccinationChecks} petName={appointment.pet.name} />
         </div>
       )}
 
@@ -670,6 +732,269 @@ export default async function AppointmentDetailPage(props: PageProps) {
         </section>
       </PageSection>
 
+      {counterPayments && (
+        <PageSection>
+          <TicketPanel
+            appointmentId={appointment.id}
+            ticket={ticket}
+            surcharges={appointment.appointmentSurcharges}
+            payments={appointment.payments}
+            surchargeOptions={surchargeOptions}
+            tierName={appointment.pricingTier?.name ?? null}
+            returnTo={`/staff/appointments/${appointment.id}`}
+          />
+        </PageSection>
+      )}
+
+      <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* What the pet was groomed with, for whoever has it next */}
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">Groom record</h2>
+          {previousGroom ? (
+            <p className="text-sm text-stone-600 mb-3 rounded-lg bg-white border border-stone-200 px-3 py-2">
+              <span className="block text-xs text-stone-400">
+                Last time ({formatShopDate(previousGroom.completedAt ?? previousGroom.scheduledAt)})
+              </span>
+              {groomRecordSummary(previousGroom)}
+            </p>
+          ) : (
+            <p className="text-sm text-stone-400 mb-3">
+              Nothing written down from a previous visit.
+            </p>
+          )}
+
+          <form action={saveGroomRecord} className="space-y-2">
+            <input type="hidden" name="appointmentId" value={appointment.id} />
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-sm">
+                <span className="block text-stone-500 mb-1 text-xs">Blade / comb</span>
+                <input
+                  name="groomBlade"
+                  list="blade-terms"
+                  defaultValue={appointment.groomBlade ?? ""}
+                  placeholder="#7F"
+                  className={`${inputClass} py-1.5`}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="block text-stone-500 mb-1 text-xs">Shampoo</span>
+                <input
+                  name="groomShampoo"
+                  defaultValue={appointment.groomShampoo ?? ""}
+                  placeholder="Oatmeal"
+                  className={`${inputClass} py-1.5`}
+                />
+              </label>
+            </div>
+            {/* The blade chart the shop already reads at /staff/resources, as
+                suggestions rather than a closed list — every shop keeps a tool
+                that is not on it. */}
+            <datalist id="blade-terms">
+              {BLADE_TERMS.map((term) => (
+                <option key={term} value={term} />
+              ))}
+            </datalist>
+            <label className="text-sm block">
+              <span className="block text-stone-500 mb-1 text-xs">
+                What the next groomer should know
+              </span>
+              <textarea
+                name="groomRecordNotes"
+                rows={2}
+                defaultValue={appointment.groomRecordNotes ?? ""}
+                placeholder="Left the head long, feet scissored, owner wants shorter next time"
+                className={`${inputClass} py-1.5 resize-y`}
+              />
+            </label>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-stone-400">
+                This visit only. Standing instructions live on {appointment.pet.name}&apos;s profile.
+              </p>
+              <button
+                type="submit"
+                className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap"
+              >
+                Save record
+              </button>
+            </div>
+          </form>
+        </section>
+
+        {/* Owner's say-so when the groom cannot be done as booked */}
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">Owner consent</h2>
+
+          {consent === "none" ? (
+            <p className="text-sm text-stone-400 mb-3">
+              Nothing has been put to the owner on this visit.
+            </p>
+          ) : (
+            <div
+              className={`text-sm rounded-lg border px-3 py-2 mb-3 ${
+                consent === "granted"
+                  ? "border-green-200 bg-green-50 text-green-800"
+                  : consent === "declined"
+                    ? "border-red-200 bg-red-50 text-red-800"
+                    : "border-amber-200 bg-amber-50 text-amber-800"
+              }`}
+            >
+              <p className="font-semibold">
+                {consent === "granted"
+                  ? "Owner approved"
+                  : consent === "declined"
+                    ? "Owner declined"
+                    : "Waiting on the owner"}
+              </p>
+              {appointment.consentNote && (
+                <p className="mt-1 whitespace-pre-wrap">{appointment.consentNote}</p>
+              )}
+              <p className="text-xs mt-1 opacity-80">
+                Asked{" "}
+                {appointment.consentRequestedAt
+                  ? formatShopTime(appointment.consentRequestedAt)
+                  : "in person"}
+                {consent !== "pending" &&
+                  ` · answered ${formatShopTime(
+                    (consent === "granted"
+                      ? appointment.consentGrantedAt
+                      : appointment.consentDeclinedAt)!
+                  )}`}
+              </p>
+            </div>
+          )}
+
+          {consent === "pending" && (
+            <form action={recordConsent} className="flex gap-2 mb-3">
+              <input type="hidden" name="appointmentId" value={appointment.id} />
+              <button
+                type="submit"
+                name="answer"
+                value="granted"
+                className="flex-1 bg-green-700 hover:bg-green-800 text-white px-3 py-2 rounded-lg text-xs font-semibold"
+              >
+                They approved it
+              </button>
+              <button
+                type="submit"
+                name="answer"
+                value="declined"
+                className="flex-1 bg-stone-700 hover:bg-stone-800 text-white px-3 py-2 rounded-lg text-xs font-semibold"
+              >
+                They said no
+              </button>
+            </form>
+          )}
+
+          <details className="disclosure" open={consent === "none"}>
+            <summary className="text-sm font-semibold text-amber-700 cursor-pointer">
+              {consent === "none" ? "Ask the owner" : "Ask about something else"}
+            </summary>
+            <form action={requestConsent} className="mt-3 space-y-2">
+              <input type="hidden" name="appointmentId" value={appointment.id} />
+              <textarea
+                name="consentNote"
+                rows={3}
+                required
+                aria-label="What the owner is being asked to approve"
+                placeholder="Matting is too tight to brush out safely. We would need to take the coat to a #7F, plus the matting fee."
+                className={`${inputClass} py-1.5 resize-y`}
+              />
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-stone-400">
+                  Emails and texts the owner, then wait for them to call back. Asking again clears
+                  any earlier answer.
+                </p>
+                <button
+                  type="submit"
+                  className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap"
+                >
+                  Send request
+                </button>
+              </div>
+            </form>
+          </details>
+        </section>
+      </PageSection>
+
+      {/* Photos of the day. Hidden with the feature, but the photos already
+          taken are still here when it comes back -- the strip renders whatever
+          is on the visit and the uploader is what goes away. */}
+      {(config.featureVisitPhotos || appointment.photos.length > 0) && (
+        <PageSection title={`Photos (${appointment.photos.length})`}>
+          <VisitPhotoStrip photos={appointment.photos} petName={appointment.pet.name} showVisibility>
+            {(photo) =>
+              config.featureVisitPhotos ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <form action={setVisitPhotoVisibility}>
+                    <input type="hidden" name="appointmentId" value={appointment.id} />
+                    <input type="hidden" name="photoRowId" value={photo.id} />
+                    {/* Absent means off, the same convention every checkbox in
+                        this app posts under. */}
+                    {!photo.ownerVisible && <input type="hidden" name="ownerVisible" value="on" />}
+                    <button type="submit" className="text-xs text-amber-700 hover:text-amber-900 underline">
+                      {photo.ownerVisible ? "Hide from owner" : "Show owner"}
+                    </button>
+                  </form>
+                  <form action={deleteVisitPhoto}>
+                    <input type="hidden" name="appointmentId" value={appointment.id} />
+                    <input type="hidden" name="photoRowId" value={photo.id} />
+                    <button type="submit" className="text-xs text-stone-400 hover:text-red-700 underline">
+                      Remove
+                    </button>
+                  </form>
+                </div>
+              ) : null
+            }
+          </VisitPhotoStrip>
+
+          {config.featureVisitPhotos && (
+            <form
+              action={addVisitPhoto}
+              encType="multipart/form-data"
+              className="mt-3 border-t border-stone-100 pt-3 space-y-2 max-w-md"
+            >
+              <input type="hidden" name="appointmentId" value={appointment.id} />
+              <div className="flex gap-2">
+                <select name="kind" aria-label="What the photo is of" defaultValue="" required className={`${inputClass} py-1.5`}>
+                  <option value="" disabled>
+                    What is it…
+                  </option>
+                  <option value={VisitPhotoKind.BEFORE}>Before — the coat as it arrived</option>
+                  <option value={VisitPhotoKind.AFTER}>After — the finished groom</option>
+                  <option value={VisitPhotoKind.ISSUE}>Something you noticed</option>
+                </select>
+                <button
+                  type="submit"
+                  className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap"
+                >
+                  Add
+                </button>
+              </div>
+              <input
+                type="file"
+                name="photo"
+                required
+                accept="image/jpeg,image/png,image/webp"
+                aria-label="Photo file"
+                className="w-full text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold hover:file:bg-stone-200"
+              />
+              <input name="caption" aria-label="Caption" placeholder="Caption (optional)" className={`${inputClass} py-1.5`} />
+              <label className="flex items-start gap-2 text-sm text-stone-600">
+                <input type="checkbox" name="ownerVisible" className="mt-0.5 h-4 w-4 accent-amber-600" />
+                <span>
+                  Show the owner
+                  <span className="block text-xs text-stone-400">
+                    Off by default. A matted belly is usually the shop&apos;s own record; the
+                    finished groom is what an owner wants.
+                  </span>
+                </span>
+              </label>
+              <p className="text-xs text-stone-400">JPEG, PNG or WebP, up to 2 MB.</p>
+            </form>
+          )}
+        </PageSection>
+      )}
+
       <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Visit events */}
         <section className="border border-stone-200 rounded-lg bg-well p-4">
@@ -689,8 +1014,13 @@ export default async function AppointmentDetailPage(props: PageProps) {
                         : "bg-stone-100 text-stone-600"
                     }`}
                   >
-                    {eventLabel[event.eventType]}
+                    {formatVisitEvent(event.eventType)}
                   </span>
+                  {event.ownerVisible && (
+                    <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                      Told the owner
+                    </span>
+                  )}
                   {event.note && <span className="ml-2 text-stone-700">{event.note}</span>}
                   <span className="block text-xs text-stone-400 mt-0.5">
                     {formatShopTime(event.occurredAt)} on {formatShopDate(event.occurredAt)}
@@ -710,7 +1040,7 @@ export default async function AppointmentDetailPage(props: PageProps) {
                 </option>
                 {Object.values(VisitEventType).map((type) => (
                   <option key={type} value={type}>
-                    {eventLabel[type]}
+                    {formatVisitEvent(type)}
                   </option>
                 ))}
               </select>
@@ -722,6 +1052,16 @@ export default async function AppointmentDetailPage(props: PageProps) {
               </button>
             </div>
             <input name="note" aria-label="Incident details" placeholder="Details (optional)" className={`${inputClass} py-1.5`} />
+            <label className="flex items-start gap-2 text-sm text-stone-600">
+              <input type="checkbox" name="ownerVisible" className="mt-0.5 h-4 w-4 accent-amber-600" />
+              <span>
+                Tell the owner
+                <span className="block text-xs text-stone-400">
+                  Goes out with the ready-for-pickup message. Tick it for anything you noticed on
+                  the pet — ears, skin, lumps, fleas.
+                </span>
+              </span>
+            </label>
             <p className="text-xs text-stone-400">
               Logging a bite permanently flags {appointment.pet.name} on every screen, including the
               station display.

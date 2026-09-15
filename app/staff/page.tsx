@@ -125,8 +125,7 @@ export default async function StaffDashboard(props: {
   return (
     <PageShell
       className={styles.dashboard}
-      subtitle={formatShopDate(now, { weekday: "long", month: "short", day: "numeric" })}
-      title="Shop overview"
+      title={formatShopDate(now, { weekday: "long", month: "long", day: "numeric" })}
       actions={<>
         <DashboardRefresh updatedAt={now.toISOString()} />
         <Link

@@ -8,6 +8,11 @@ import { bookingRateSnapshot } from "@/lib/pricing-tiers";
 import { prisma } from "@/lib/prisma";
 import type { BusinessHours } from "@/lib/shop-hours";
 import { defaultAssignment } from "@/lib/stations";
+import {
+  checksForPet,
+  vaccinationBlockers,
+  vaccinationRefusalMessage,
+} from "@/lib/vaccinations";
 import { shopDayRange } from "@/lib/utils";
 
 /**
@@ -66,7 +71,8 @@ export type CreateAppointmentFailure = {
     | "BAD_ASSIGNMENT"
     | "PET_MISMATCH"
     | "NO_SERVICES"
-    | "NO_KENNEL";
+    | "NO_KENNEL"
+    | "VACCINATION_REQUIRED";
   message: string;
 };
 
@@ -99,7 +105,7 @@ export async function createAppointment(
     prisma.customer.findUnique({ where: { id: input.customerId }, select: { id: true } }),
     prisma.pet.findUnique({
       where: { id: input.petId },
-      select: { id: true, customerId: true, isActive: true },
+      select: { id: true, name: true, customerId: true, isActive: true },
     }),
     input.stationId
       ? prisma.station.findUnique({ where: { id: input.stationId }, select: { id: true } })
@@ -125,6 +131,27 @@ export async function createAppointment(
   }
   if (pet.customerId !== input.customerId) {
     return { ok: false, code: "PET_MISMATCH", message: "That pet belongs to someone else." };
+  }
+
+  /*
+   * Shots. Only a customer-facing booking is refused, and only when the shop
+   * asked for refusal — `enforceCustomerRules` already draws that line for the
+   * booking window and the kennel. Staff at the counter see the same warning on
+   * the visit screen and book anyway, because the owner is standing there with
+   * the certificate in their hand.
+   *
+   * `checksForPet()` returns nothing when the feature is off or the shop has no
+   * requirements, so this is one query on a shop that checks nothing.
+   */
+  if (input.enforceCustomerRules && config.vaccinationGateBlocks) {
+    const blockers = vaccinationBlockers(await checksForPet(input.petId, config));
+    if (blockers.length > 0) {
+      return {
+        ok: false,
+        code: "VACCINATION_REQUIRED",
+        message: vaccinationRefusalMessage(blockers, pet.name),
+      };
+    }
   }
 
   const resolved = await resolveSelectedServices(input.serviceIds ?? []);

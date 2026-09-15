@@ -4,6 +4,7 @@ import { resolveTheme, themeCss } from "@/lib/themes";
 import { shopDayKey, isFloorStaff } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
+import { isEnabled, type FeatureKey } from "@/lib/features";
 import { headers } from "next/headers";
 import SystemThemeScript from "@/components/SystemThemeScript";
 import PresenceSwitcher from "@/components/PresenceSwitcher";
@@ -12,6 +13,7 @@ import { setMyPresence } from "@/app/staff/presence-actions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
+import OfficeIcon from "@/components/OfficeIcon";
 
 /**
  * One back office, one shell. Staff and admin screens are the same product to
@@ -30,7 +32,14 @@ import NavLink from "@/components/NavLink";
  * every mutation by `requireAdmin()`.
  */
 
-const NAV = [
+/** A sidebar entry. `feature` hides the row when the shop has that feature off. */
+interface NavItem {
+  href: string;
+  label: string;
+  feature?: FeatureKey;
+}
+
+const NAV: NavItem[] = [
   { href: "/staff", label: "Dashboard" },
   { href: "/staff/appointments", label: "Appointments" },
   { href: "/staff/customers", label: "Customers" },
@@ -38,6 +47,8 @@ const NAV = [
   { href: "/staff/team", label: "Team" },
   { href: "/staff/schedule", label: "Schedule" },
   { href: "/staff/services", label: "Services" },
+  { href: "/staff/rebooking", label: "Rebooking", feature: "featureRebookingPrompts" },
+  { href: "/staff/takings", label: "Takings", feature: "featureCounterPayments" },
   { href: "/staff/resources", label: "Resources" },
 ];
 
@@ -47,17 +58,18 @@ const NAV = [
  * these, which put "Loyalty Tiers" and "Appearance" — a rate a customer is on
  * and the colour of the website — in the same list with nothing between them.
  */
-const MANAGE_NAV = [
+const MANAGE_NAV: NavItem[] = [
   { href: "/admin/services", label: "Services & Pricing" },
   { href: "/admin/loyalty", label: "Loyalty Tiers" },
   { href: "/admin/staff", label: "Staff" },
-  { href: "/admin/schedule", label: "Schedule" },
+  { href: "/admin/schedule", label: "Scheduling" },
   { href: "/admin/stations", label: "Stations" },
   { href: "/admin/marketing", label: "Marketing" },
+  { href: "/admin/vaccinations", label: "Vaccinations", feature: "featureVaccinationGate" },
 ];
 
 /** What the shop reads about itself. Nothing here is editable. */
-const INSIGHTS_NAV = [
+const INSIGHTS_NAV: NavItem[] = [
   // Analytics keeps its /staff URL — a groomer's saved link should not
   // break — but it is a shop screen: it carries the leaderboard and every
   // groomer's estimated pay.
@@ -66,7 +78,7 @@ const INSIGHTS_NAV = [
 ];
 
 /** Set once and left alone. */
-const SETTINGS_NAV = [
+const SETTINGS_NAV: NavItem[] = [
   { href: "/admin/settings", label: "Shop Settings" },
   { href: "/admin/appearance", label: "Appearance" },
 ];
@@ -76,13 +88,13 @@ const SETTINGS_NAV = [
  * and the notification credentials stay with ADMIN, and both pages re-check
  * for themselves — hiding a link is presentation, never the gate.
  */
-const TECHNICAL_NAV = [
+const TECHNICAL_NAV: NavItem[] = [
   { href: "/admin", label: "System Status" },
   { href: "/admin/notifications", label: "Notifications" },
 ];
 
 /** A group header names a scope, never a page. */
-function NavGroup({ label, items, first = false }: { label: string; items: { href: string; label: string }[]; first?: boolean }) {
+function NavGroup({ label, items, first = false }: { label: string; items: NavItem[]; first?: boolean }) {
   return (
     <>
       <p
@@ -120,21 +132,29 @@ export default async function BackOfficeShell({ children }: { children: React.Re
   const onFloor = isFloorStaff(roles);
   const presence = me?.presence ?? "OFF_SHIFT";
 
+  /*
+   * A feature that is off takes its nav rows with it. Presentation only — the
+   * page behind each one redirects for itself, the same rule the admin links
+   * follow.
+   */
+  const live = (items: NavItem[]) =>
+    items.filter((item) => !item.feature || isEnabled(config, item.feature));
+
   const links = (
     <>
       <NavGroup
         first
         label="Storefront"
-        items={onFloor ? [...NAV.slice(0, 1), { href: "/staff/me", label: "My Shift" }, ...NAV.slice(1)] : NAV}
+        items={live(onFloor ? [...NAV.slice(0, 1), { href: "/staff/me", label: "My Shift" }, ...NAV.slice(1)] : NAV)}
       />
       {canManageShop && (
         <>
-          <NavGroup label="Management" items={MANAGE_NAV} />
-          <NavGroup label="Insights" items={INSIGHTS_NAV} />
-          <NavGroup label="Settings" items={SETTINGS_NAV} />
+          <NavGroup label="Management" items={live(MANAGE_NAV)} />
+          <NavGroup label="Insights" items={live(INSIGHTS_NAV)} />
+          <NavGroup label="Settings" items={live(SETTINGS_NAV)} />
         </>
       )}
-      {isAdmin && <NavGroup label="System" items={TECHNICAL_NAV} />}
+      {isAdmin && <NavGroup label="System" items={live(TECHNICAL_NAV)} />}
     </>
   );
 
@@ -151,12 +171,12 @@ export default async function BackOfficeShell({ children }: { children: React.Re
       </a>
 
       {/* Phone: presence first, navigation behind a tap */}
-      <header className="md:hidden sticky top-0 z-40 office-navigation border-b border-line px-3 py-2">
+      <header className="office-mobile-header md:hidden sticky top-0 z-40 office-navigation border-b border-line px-3 py-2">
         <div className="flex items-center gap-3">
           <MobileMenu summaryClassName="nav-menu-toggle" menuClassName="office-navigation border border-line max-h-[75dvh] overflow-y-auto">{links}</MobileMenu>
 
           <Link href="/staff" className="font-display font-extrabold tracking-tight text-ink truncate">
-            <span aria-hidden="true">🐾</span> {session.user.name}
+            <span className="office-mobile-brand"><OfficeIcon name="paw" /> {config.shopName}</span>
           </Link>
 
           {onFloor && (
@@ -168,28 +188,30 @@ export default async function BackOfficeShell({ children }: { children: React.Re
       </header>
 
       {/* Terminal: the familiar sidebar */}
-      <aside className="hidden md:flex w-52 office-navigation border-r border-line flex-col py-5 px-3 fixed h-full">
+      <aside className="office-sidebar hidden md:flex w-60 office-navigation border-r border-line flex-col py-5 px-3 fixed h-full">
         {/* The display face at text-lg put a two-word shop name on the first
             group header. Tight leading and its own space, rather than an
             ellipsis — a shop should not read its own name cut off. */}
         <Link
           href="/"
-          className="mb-4 block px-2 font-display text-base font-extrabold leading-tight tracking-[-0.02em] text-ink"
+          className="office-workspace"
         >
-          <span aria-hidden="true">🐾</span> {config.shopName}
+          <span className="office-brand-mark"><OfficeIcon name="paw" /></span>
+          <span className="min-w-0"><span className="office-workspace-name">{config.shopName}</span><span className="office-workspace-caption">Business workspace</span></span>
         </Link>
         {/* The admin group makes this list long enough to outrun a short screen. */}
-        <nav className="flex-1 space-y-1 text-sm overflow-y-auto">{links}</nav>
-        <div className="text-xs text-muted px-2 space-y-1 pt-3 mt-3 border-t border-line">
+        <nav aria-label="Workspace navigation" className="flex-1 space-y-1 text-sm overflow-y-auto">{links}</nav>
+        <div className="office-account text-xs text-muted px-2 space-y-1 pt-3 mt-3 border-t border-line">
           {/* Presence: the control the floor touches most */}
           {onFloor && (
             <PresenceSwitcher action={setMyPresence} current={presence} returnTo="/staff" />
           )}
           <Link
             href="/staff/profile"
-            className="block pt-1 text-muted hover:text-ink hover:underline"
+            className="office-profile"
           >
-            {session.user.name}
+            <span className="office-avatar" aria-hidden="true">{session.user.name?.trim().charAt(0).toUpperCase() || "U"}</span>
+            <span><span className="block font-semibold text-ink">{session.user.name}</span><span className="block text-xs text-muted">My account</span></span>
           </Link>
           <form
             action={async () => {
@@ -207,7 +229,7 @@ export default async function BackOfficeShell({ children }: { children: React.Re
           document scroll — there is no visible bar to strand there. */}
       <main
         id="main-content"
-        className="flex-1 min-w-0 md:ml-52 p-3 md:p-4 flex flex-col md:h-screen md:overflow-hidden"
+        className="flex-1 min-w-0 md:ml-60 p-3 md:p-6 flex flex-col md:h-screen md:overflow-hidden"
       >
         {children}
       </main>

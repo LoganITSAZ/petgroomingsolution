@@ -14,6 +14,10 @@ import { OCCUPYING_STATUSES, stationCapacity } from "@/lib/stations";
 import PhotoStack from "@/components/PhotoStack";
 import { photoUrl } from "@/lib/photos";
 import { guidesForBreeds, tipLines } from "@/lib/breeds";
+import { groomRecordSummary, lastGroomRecordsForPets } from "@/lib/visit-record";
+import { lastAfterPhotoForPets } from "@/lib/visit-photos";
+import { getConfig } from "@/lib/config";
+import { VACCINE_LEVEL_LABEL, checksForPets } from "@/lib/vaccinations";
 import {
   formatCoatType,
   formatRole,
@@ -27,6 +31,11 @@ import {
   statusBadgeClass,
 } from "@/lib/utils";
 import { assignKennel, releaseKennel, setKennelService } from "../actions";
+import { logVisitEvent, requestConsent } from "@/app/staff/appointments/actions";
+import { SurchargeForm } from "@/components/Ticket";
+import { isEnabled } from "@/lib/features";
+import { consentState } from "@/lib/visit-record";
+import { VisitEventType } from "@prisma/client";
 import { currentStaffIsAdmin } from "@/lib/staff-roles";
 
 // Screen readers announce the title first; without one every page in the
@@ -40,6 +49,10 @@ const NOTICES: Record<string, string> = {
   released: "Kennel emptied.",
   out_of_service: "Kennel marked out of service.",
   back_in_service: "Kennel back in service.",
+  event: "Logged on the visit.",
+  consent: "The owner has been asked.",
+  surcharged: "Fee added to the ticket.",
+  unsurcharged: "Fee taken off the ticket.",
 };
 
 const ERRORS: Record<string, string> = {
@@ -49,6 +62,10 @@ const ERRORS: Record<string, string> = {
   kennel_out_of_service: "That kennel is out of service.",
   appointment_not_found: "That visit no longer exists.",
   not_in_shop: "That pet is not checked in, so it cannot be kennelled.",
+  bad_event: "Pick a valid event type.",
+  no_consent_note: "Say what the owner is being asked to approve.",
+  bad_amount: "A fee has to be an amount above zero.",
+  bad_surcharge: "Say what the fee is for.",
 };
 
 interface PageProps {
@@ -115,6 +132,28 @@ export default async function StaffStationDetailPage(props: PageProps) {
 
   // Breed reference for whoever is standing at this station.
   const guides = await guidesForBreeds(occupants.map((appt) => appt.pet.breed));
+  // What each pet was last groomed with. One query for the whole station.
+  const lastGrooms = await lastGroomRecordsForPets(occupants.map((appt) => appt.pet.id));
+  // The cut, not a description of it. Shown beside the written record so the
+  // next groomer repeats it instead of reading a blade number and guessing.
+  const lastAfterPhotos = await lastAfterPhotoForPets(occupants.map((appt) => appt.pet.id));
+  // Shots, one pair of queries for the whole station. Stated, never enforced:
+  // the pet is on the table.
+  const config = await getConfig();
+  const vaccinationChecks = await checksForPets(
+    occupants.map((appt) => appt.pet.id),
+    config
+  );
+  // The groomer's half of the counter: a fee found on the table, and the two
+  // things that go with it. The whole ticket stays at the counter.
+  const counterPayments = isEnabled(config, "featureCounterPayments");
+  const surchargeOptions = counterPayments
+    ? await prisma.surcharge.findMany({
+        where: { isActive: true },
+        select: { id: true, label: true, minCents: true, maxCents: true, note: true },
+        orderBy: { label: "asc" },
+      })
+    : [];
   // One instant for every row, rather than a fresh clock read per pet.
   const nowMs = new Date().getTime();
 
@@ -337,6 +376,8 @@ export default async function StaffStationDetailPage(props: PageProps) {
             <ul className="divide-y divide-stone-100">
               {occupants.map((appt) => {
                 const guide = guides.get((appt.pet.breed ?? "").trim().toLowerCase()) ?? null;
+                const lastGroom = lastGrooms.get(appt.pet.id) ?? null;
+                const consent = consentState(appt);
                 const mins = appt.checkedInAt
                   ? Math.round((nowMs - appt.checkedInAt.getTime()) / 60000)
                   : null;
@@ -473,6 +514,16 @@ export default async function StaffStationDetailPage(props: PageProps) {
                             ))}
                           </p>
                         )}
+                        {/* Only what is wrong: a line saying every shot is
+                            current is one more thing to read past. */}
+                        {(vaccinationChecks.get(appt.pet.id) ?? [])
+                          .filter((check) => check.level !== "current")
+                          .map((check) => (
+                            <p key={check.requirementId} className="text-sm text-red-700">
+                              <span className="font-semibold">{check.name}: </span>
+                              {VACCINE_LEVEL_LABEL[check.level].toLowerCase()}
+                            </p>
+                          ))}
                         {appt.pet.groomingNotes && (
                           <p className="text-sm text-stone-700 whitespace-pre-wrap">
                             {appt.pet.groomingNotes}
@@ -484,9 +535,45 @@ export default async function StaffStationDetailPage(props: PageProps) {
                             {appt.pet.temperamentNotes}
                           </p>
                         )}
+                        {/* What was actually done last time — the groomer's own
+                            record, below the owner's standing instructions and
+                            never in place of them. */}
+                        {lastGroom && (
+                          <p className="text-sm text-stone-600">
+                            <span className="font-semibold">
+                              Last groom ({formatShopDate(lastGroom.completedAt ?? lastGroom.scheduledAt)}):{" "}
+                            </span>
+                            {groomRecordSummary(lastGroom)}
+                          </p>
+                        )}
+                        {lastAfterPhotos.get(appt.pet.id) && (
+                          <a
+                            href={photoUrl(lastAfterPhotos.get(appt.pet.id)!.photoId) ?? "#"}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-block"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={photoUrl(lastAfterPhotos.get(appt.pet.id)!.photoId) ?? ""}
+                              alt={`${appt.pet.name} after their last groom`}
+                              className="w-24 h-24 object-cover rounded-lg border border-stone-200"
+                            />
+                            <span className="block text-xs text-stone-400 mt-0.5">
+                              Last groom, finished
+                            </span>
+                          </a>
+                        )}
+                        {(appt.pet.vetName || appt.pet.vetPhone) && (
+                          <p className="text-sm text-stone-600">
+                            <span className="font-semibold">Vet: </span>
+                            {[appt.pet.vetName, appt.pet.vetPhone].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
                         {appt.pet.healthFlags.length === 0 &&
                           !appt.pet.groomingNotes &&
-                          !appt.pet.temperamentNotes && (
+                          !appt.pet.temperamentNotes &&
+                          !lastGroom && (
                             <p className="text-sm text-stone-400">Nothing recorded.</p>
                           )}
                       </div>
@@ -502,6 +589,18 @@ export default async function StaffStationDetailPage(props: PageProps) {
                           <span className="text-sky-800"> — {guide.summary}</span>
                         </summary>
                         <div className="px-2 pb-2">
+                          {/* What the coat is meant to look like. Inside the
+                              disclosure, so the pet's own photo above is never
+                              competing with a stock one. */}
+                          {guide.photoUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={guide.photoUrl}
+                              alt={`A ${guide.breed}`}
+                              loading="lazy"
+                              className="float-right ml-2 mb-1 h-24 w-32 rounded object-cover"
+                            />
+                          )}
                           <ul className="list-disc list-inside text-sm text-stone-700 space-y-0.5">
                             {tipLines(guide).map((tip) => (
                               <li key={tip}>{tip}</li>
@@ -519,6 +618,98 @@ export default async function StaffStationDetailPage(props: PageProps) {
                         </div>
                       </details>
                     )}
+                    {/* At the table: what was found, what it costs, and
+                        whether the owner has been asked. Every one of these
+                        used to be reachable only from the counter's screen,
+                        which is not where the pet is. */}
+                    <details className="border border-amber-200 bg-amber-50/60 rounded-lg">
+                      <summary className="px-2 py-1.5 cursor-pointer text-sm font-semibold text-amber-900">
+                        At the table
+                        {consent === "pending" && " — waiting on the owner"}
+                        {consent === "granted" && " — owner approved"}
+                        {consent === "declined" && " — owner declined"}
+                      </summary>
+                      <div className="px-2 pb-2 space-y-3">
+                        {appt.consentNote && consent !== "none" && (
+                          <p className="text-sm text-stone-700 bg-white border border-stone-200 rounded-lg px-2 py-1.5">
+                            <span className="block text-xs text-stone-400">
+                              {consent === "pending"
+                                ? "Asked, no answer yet"
+                                : consent === "granted"
+                                  ? "The owner approved"
+                                  : "The owner declined"}
+                            </span>
+                            {appt.consentNote}
+                          </p>
+                        )}
+
+                        {/* Found something. Ticked visible rides out with the
+                            ready-for-pickup message. */}
+                        <form action={logVisitEvent} className="space-y-2">
+                          <input type="hidden" name="appointmentId" value={appt.id} />
+                          <input
+                            type="hidden"
+                            name="returnTo"
+                            value={`/staff/stations/${station.id}`}
+                          />
+                          <input type="hidden" name="eventType" value={VisitEventType.HEALTH_FINDING} />
+                          <input
+                            name="note"
+                            placeholder="What was found — a hot spot, an ear, a lump"
+                            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm bg-white"
+                            aria-label="What was found"
+                          />
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-xs text-stone-600 flex items-center gap-1.5">
+                              <input type="checkbox" name="ownerVisible" />
+                              Tell the owner
+                            </label>
+                            <button
+                              type="submit"
+                              className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-1.5 rounded-lg text-sm font-semibold"
+                            >
+                              Log finding
+                            </button>
+                          </div>
+                        </form>
+
+                        {/* Cannot be finished as booked. Asking again clears
+                            the previous answer — that rule is in the action. */}
+                        <form action={requestConsent} className="space-y-2">
+                          <input type="hidden" name="appointmentId" value={appt.id} />
+                          <input
+                            type="hidden"
+                            name="returnTo"
+                            value={`/staff/stations/${station.id}`}
+                          />
+                          <input
+                            name="consentNote"
+                            placeholder="What the owner has to approve — a shave-down, stopping early"
+                            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm bg-white"
+                            aria-label="What the owner has to approve"
+                          />
+                          <div className="flex justify-end">
+                            <button
+                              type="submit"
+                              className="border border-amber-300 bg-white hover:bg-amber-100 text-amber-900 px-3 py-1.5 rounded-lg text-sm font-semibold"
+                            >
+                              Ask the owner
+                            </button>
+                          </div>
+                        </form>
+
+                        {counterPayments && (
+                          <div className="border-t border-amber-200 pt-2">
+                            <SurchargeForm
+                              appointmentId={appt.id}
+                              options={surchargeOptions}
+                              returnTo={`/staff/stations/${station.id}`}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </details>
+
                   </li>
                 );
               })}

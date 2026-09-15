@@ -54,6 +54,30 @@ services:
     networks:
       - internal
 
+  # The scheduled job runner: reminders today, more later. A second process,
+  # not a second app instance -- it serves no requests and cannot reach the
+  # in-process SSE map, so a job that must repaint a kiosk goes through the app.
+  # Twilio credentials are not here on purpose: they live on SystemConfig and
+  # lib/sms.ts reads them per send, so this picks them up from the database.
+  jobs:
+    build:
+      context: .
+      target: toolbox
+    container_name: gentlegroomer_jobs
+    restart: unless-stopped
+    command: ["npx", "tsx", "scripts/jobs.ts", "loop"]
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/gentlegroomer
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - internal
+
   app:
     build:
       context: .

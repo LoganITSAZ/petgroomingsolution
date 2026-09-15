@@ -79,14 +79,20 @@ export async function smsReadyForPickup({
   petName,
   shopName,
   phone,
+  hasFindings = false,
 }: {
   to: string | null | undefined;
   petName: string;
   shopName: string;
   phone?: string | null;
+  hasFindings?: boolean;
 }): Promise<boolean> {
+  // The findings themselves go in the email and are read out at the counter.
+  // A text says there are some: a segment is 160 characters, and a groomer's
+  // note about an ear is not worth cutting in half to save a phone call.
   const body =
     `${petName} is ready for pickup at ${shopName}.` +
+    (hasFindings ? ` We noticed a couple of things to mention when you collect.` : "") +
     (phone ? ` Questions? ${phone}` : "") +
     ` Reply STOP to opt out.`;
   return sendSms(to, body);
@@ -105,4 +111,78 @@ export async function smsBookingConfirmation({
   when: string;
 }): Promise<boolean> {
   return sendSms(to, `${shopName}: ${petName} is booked for ${when}. Reply STOP to opt out.`);
+}
+
+/**
+ * The reminder text. One segment: the pet, when, and how to reach the shop.
+ */
+export async function smsAppointmentReminder({
+  to,
+  petName,
+  shopName,
+  when,
+  phone,
+}: {
+  to: string | null | undefined;
+  petName: string;
+  shopName: string;
+  when: string;
+  phone?: string | null;
+}): Promise<boolean> {
+  return sendSms(
+    to,
+    `${shopName}: reminder, ${petName} is booked for ${when}.` +
+      (phone ? ` Changes? ${phone}` : "") +
+      ` Reply STOP to opt out.`
+  );
+}
+
+/**
+ * The rebooking text. One segment, and it asks rather than tells: a shop that
+ * texts "your dog is due" is claiming something only a vet can.
+ */
+export async function smsRebookingPrompt({
+  to,
+  petNames,
+  shopName,
+  daysSince,
+  phone,
+}: {
+  to: string | null | undefined;
+  petNames: string[];
+  shopName: string;
+  daysSince: number;
+  phone?: string | null;
+}): Promise<boolean> {
+  const pets = petNames.length > 0 ? petNames.join(" and ") : "your pet";
+  return sendSms(
+    to,
+    `${shopName}: it has been about ${daysSince} days since ${pets} was in. Book again?` +
+      (phone ? ` ${phone}` : "") +
+      ` Reply STOP to opt out.`
+  );
+}
+
+/**
+ * The text that goes with the consent email. Deliberately does not carry the
+ * detail: what is being asked needs a conversation, and a fee quoted in a text
+ * message is the kind of thing a shop ends up arguing about at the counter.
+ */
+export async function smsConsentRequest({
+  to,
+  petName,
+  shopName,
+  phone,
+}: {
+  to: string | null | undefined;
+  petName: string;
+  shopName: string;
+  phone?: string | null;
+}): Promise<boolean> {
+  return sendSms(
+    to,
+    `${shopName}: we need a quick word about ${petName}'s groom before we carry on.` +
+      (phone ? ` Please call ${phone}.` : " Please call the shop.") +
+      ` Reply STOP to opt out.`
+  );
 }

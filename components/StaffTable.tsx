@@ -126,7 +126,11 @@ export default function StaffTable({ profiles, viewerId, canManage }: {
         <table data-own-columns className="w-full text-sm text-left">
           <caption className="sr-only">Staff availability, assignments and daily progress</caption>
           <thead className="bg-well text-xs text-stone-500">
-            <tr><th scope="col" className="px-3 py-2">Staff</th>{selected.map(column => <th scope="col" key={column.id} className="px-3 py-2 whitespace-nowrap">{column.label}</th>)}</tr>
+            <tr>
+              <th scope="col" className="px-3 py-2">Staff</th>
+              {selected.map(column => <th scope="col" key={column.id} className="px-3 py-2 whitespace-nowrap">{column.label}</th>)}
+              <td className="w-10 px-3 py-2"><StaffColumnsButton viewerId={viewerId} /></td>
+            </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
             {profiles.map(profile => <tr key={profile.id} className="hover:bg-well transition-colors">
@@ -134,6 +138,7 @@ export default function StaffTable({ profiles, viewerId, canManage }: {
                 <StaffProfileDialog profile={profile} canSeeAnalytics={canManage}><span className="underline decoration-stone-300 underline-offset-2">{profile.name}</span></StaffProfileDialog>
               </th>
               {selected.map(column => <td key={column.id} className="px-3 py-2 align-top text-stone-600 min-w-28">{cell(profile, column.id)}</td>)}
+              <td />
             </tr>)}
           </tbody>
         </table>

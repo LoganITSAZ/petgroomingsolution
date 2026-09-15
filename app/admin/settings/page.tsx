@@ -1,5 +1,6 @@
 import { resolveTheme, shopColorsFromForm } from "@/lib/themes";
 import { getConfig } from "@/lib/config";
+import { FEATURES, featureBlockers, featuresByGroup, type FeatureKey } from "@/lib/features";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -43,11 +44,18 @@ async function saveSettings(formData: FormData) {
   const shopAddress = formData.get("shopAddress") as string;
   const shopWebsite = formData.get("shopWebsite") as string;
 
-  const featureOnlineBooking = formData.get("featureOnlineBooking") === "on";
-  const featureWalkInPortal = formData.get("featureWalkInPortal") === "on";
-  const featureEmailNotify = formData.get("featureEmailNotify") === "on";
-  const featureSmsNotify = formData.get("featureSmsNotify") === "on";
-  const featureRewards = formData.get("featureRewards") === "on";
+  /*
+   * The switches this form owns, read from the registry rather than named
+   * five times. The waiver flag is declared in the registry too but lives on
+   * the waiver section with its text, so it is not posted here and must not
+   * be written from an absent checkbox.
+   */
+  const postedFlags = Object.fromEntries(
+    FEATURES.filter((feature) => feature.key !== "featureWaiverRequired").map((feature) => [
+      feature.key,
+      formData.get(feature.key) === "on",
+    ])
+  ) as Record<Exclude<FeatureKey, "featureWaiverRequired">, boolean>;
 
   // A punch card that needs zero visits would hand out a reward every visit.
   const rewardVisitsPerReward = Math.max(
@@ -72,6 +80,28 @@ async function saveSettings(formData: FormData) {
   const pickupLateMins = Math.max(pickupWatchMins + 1, parseInt((formData.get("pickupLateMins") as string) ?? "120", 10) || 120);
   const pickupCriticalMins = Math.max(pickupLateMins + 1, parseInt((formData.get("pickupCriticalMins") as string) ?? "240", 10) || 240);
 
+  // Grace forgives a lapse, so a negative one is meaningless; a year of it is
+  // no gate at all.
+  const vaccinationGateBlocks = formData.get("vaccinationGateBlocks") === "on";
+  const vaccinationGraceDays = Math.min(
+    365,
+    Math.max(0, parseInt((formData.get("vaccinationGraceDays") as string) ?? "0", 10) || 0)
+  );
+
+  // A reminder the same hour as the visit is not a reminder; a month out is
+  // not either. Both ends are clamped rather than trusted.
+  const reminderHoursBefore = Math.min(
+    336,
+    Math.max(1, parseInt((formData.get("reminderHoursBefore") as string) ?? "24", 10) || 24)
+  );
+
+  // Grace past a household's own cadence. Zero is a fair answer -- chase the
+  // day they are late -- so only the top end is a guess worth clamping.
+  const rebookingGraceDays = Math.min(
+    120,
+    Math.max(0, parseInt((formData.get("rebookingGraceDays") as string) ?? "7", 10) || 0)
+  );
+
   // A zero-hour week would mark every shift overtime.
   const overtimeWeeklyHours = Math.min(
     168,
@@ -93,14 +123,14 @@ async function saveSettings(formData: FormData) {
       shopEmail,
       shopAddress,
       shopWebsite,
-      featureOnlineBooking,
-      featureWalkInPortal,
-      featureEmailNotify,
-      featureSmsNotify,
-      featureRewards,
+      ...postedFlags,
       rewardVisitsPerReward,
       rewardLabel,
       rewardValueCents,
+      vaccinationGateBlocks,
+      vaccinationGraceDays,
+      reminderHoursBefore,
+      rebookingGraceDays,
       overtimeWeeklyHours,
       bookingLeadHours,
       bookingWindowDays,
@@ -164,11 +194,13 @@ function FeatureToggle({
   label,
   description,
   checked,
+  blockers = [],
 }: {
   name: string;
   label: string;
   description: string;
   checked: boolean;
+  blockers?: string[];
 }) {
   return (
     /* The <label> has to hold the name, not sit empty beside it: wrapping only
@@ -193,6 +225,11 @@ function FeatureToggle({
       <p id={`${name}-description`} className="text-sm text-stone-500 mt-0.5">
         {description}
       </p>
+      {blockers.length > 0 && (
+        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-1.5">
+          Not live: {blockers.join(" ")}
+        </p>
+      )}
     </div>
   );
 }
@@ -272,36 +309,29 @@ export default async function SettingsPage(props: PageProps) {
 
         <Section title="Features" hint="What the shop offers. Each one can be switched off without losing the data behind it.">
           <div className="-mt-2">
-            <FeatureToggle
-              name="featureOnlineBooking"
-              label="Online Booking"
-              description="Allow customers to book appointments through the online booking portal."
-              checked={config?.featureOnlineBooking ?? false}
-            />
-            <FeatureToggle
-              name="featureWalkInPortal"
-              label="Walk-In Check-In Portal"
-              description="Display a self-service kiosk screen for walk-in customers to register their arrival."
-              checked={config?.featureWalkInPortal ?? false}
-            />
-            <FeatureToggle
-              name="featureEmailNotify"
-              label="Email Notifications"
-              description="Send automated email reminders and confirmations to customers."
-              checked={config?.featureEmailNotify ?? false}
-            />
-            <FeatureToggle
-              name="featureSmsNotify"
-              label="SMS Notifications"
-              description="Send automated SMS reminders to customers. Twilio credentials are entered on the Notifications page."
-              checked={config?.featureSmsNotify ?? false}
-            />
-            <FeatureToggle
-              name="featureRewards"
-              label="Customer Rewards"
-              description="A punch card: every finished visit is a punch, and a set number of them earns a reward staff hand over at the counter."
-              checked={config?.featureRewards ?? false}
-            />
+            {featuresByGroup()
+              // The waiver is declared in the registry but owned by the waiver
+              // section below, so its group renders nothing and must not leave
+              // an empty div behind.
+              .map(({ group, features }) => ({
+                group,
+                features: features.filter((feature) => feature.key !== "featureWaiverRequired"),
+              }))
+              .filter(({ features }) => features.length > 0)
+              .map(({ group, features }) => (
+                <div key={group}>
+                  {features.map((feature) => (
+                    <FeatureToggle
+                      key={feature.key}
+                      name={feature.key}
+                      label={feature.label}
+                      description={feature.blurb}
+                      checked={config?.[feature.key] ?? false}
+                      blockers={config ? featureBlockers(config, feature.key) : []}
+                    />
+                  ))}
+                </div>
+              ))}
           </div>
           <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
             The liability waiver is switched on and off in the{" "}
@@ -356,6 +386,75 @@ export default async function SettingsPage(props: PageProps) {
             Punches are counted from finished visits whether or not this is switched on, so turning
             it on does not start your regulars back at zero. A visit cancelled or marked a no-show
             after it was finished gives its punch back.
+          </p>
+        </Section>
+
+        <Section
+          title="Vaccinations"
+          hint="What the shop checks is a list of requirements, edited on Vaccinations. These two decide what happens to a pet that is not current."
+        >
+          <FeatureToggle
+            name="vaccinationGateBlocks"
+            label="Refuse a booking for a lapsed pet"
+            description="Off, an online booking goes through and the shop is warned on the visit. On, the portal refuses it and tells the owner to bring proof. Staff at the counter are never refused either way — somebody standing in front of you with a certificate in their hand is not an exception to code for."
+            checked={config?.vaccinationGateBlocks ?? false}
+          />
+
+          <Field
+            name="vaccinationGraceDays"
+            label="Grace after expiry (days)"
+            hint="How far past an expiry the shop will still take a booking, for an owner who is on their way to the vet. It moves what is refused, not what is shown: a lapsed pet still reads as lapsed on every screen."
+          >
+            <input type="number" id="vaccinationGraceDays" name="vaccinationGraceDays" defaultValue={config?.vaccinationGraceDays ?? 0} min={0} max={365} className={FIELD} />
+          </Field>
+
+          <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
+            A pet with nothing on file is refused outright when the switch above is on — there is no
+            lapse to forgive. Add or retire what the shop checks on{" "}
+            <Link href="/admin/vaccinations" className="text-amber-700 hover:text-amber-900 underline">
+              Vaccinations
+            </Link>
+            .
+          </p>
+        </Section>
+
+        <Section
+          title="Reminders"
+          hint="The day-before reminder, sent by the shop's job runner rather than by anyone at the counter."
+        >
+          <Field
+            name="reminderHoursBefore"
+            label="Remind this far ahead (hours)"
+            hint="A visit closer than the booking lead time above is skipped — an hour's notice is noise. A reminder is sent once per visit, so a runner that restarts never says it twice."
+          >
+            <input type="number" id="reminderHoursBefore" name="reminderHoursBefore" defaultValue={config?.reminderHoursBefore ?? 24} min={1} max={336} className={FIELD} />
+          </Field>
+
+          <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
+            Reminders go out on whichever channels are live — email, text, or both. Switch the
+            reminder itself off in Features above.
+          </p>
+        </Section>
+
+        <Section
+          title="Rebooking"
+          hint="Who has drifted, measured against their own history rather than a shop-wide interval."
+        >
+          <Field
+            name="rebookingGraceDays"
+            label="Chase this long after they are due (days)"
+            hint="A household that books every eight weeks is not overdue on day 57. Nothing is said about a customer with fewer than three visits on file — a cadence from two is noise."
+          >
+            <input type="number" id="rebookingGraceDays" name="rebookingGraceDays" defaultValue={config?.rebookingGraceDays ?? 7} min={0} max={120} className={FIELD} />
+          </Field>
+
+          <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
+            The call list is at{" "}
+            <Link href="/staff/rebooking" className="text-amber-700 hover:text-amber-900 underline">
+              Rebooking
+            </Link>
+            . A nudge goes out once per finished visit, between 9am and 5pm shop time, on whichever
+            channels are live — a shop with none still works the list by phone.
           </p>
         </Section>
 

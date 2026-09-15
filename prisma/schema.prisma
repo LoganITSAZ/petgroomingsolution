@@ -30,6 +30,25 @@ model SystemConfig {
   featureSmsNotify      Boolean @default(false) // send SMS (requires Twilio config)
   featureWaiverRequired Boolean @default(true) // require liability waiver on first signup
   featureRewards        Boolean @default(false) // visit punch card for customers
+  /// Before/after and issue photos on a visit. On by default: a shop that
+  /// never uploads sees an empty strip, and photos already taken stay
+  /// readable when it is switched off.
+  featureVisitPhotos    Boolean @default(true)
+  /// Per-vaccine records with expiry dates, and the check that reads them.
+  /// On by default, but it gates nothing until the shop adds a requirement
+  /// row -- no rows means no gate.
+  featureVaccinationGate Boolean @default(true)
+  /// The day-before reminder. On by default: a shop with email switched off
+  /// sends nothing anyway, so this decides intent rather than capability.
+  featureAppointmentReminders Boolean @default(true)
+  /// The nudge for a household that is past its own usual gap between
+  /// grooms. Measured from their history, so it says nothing about a
+  /// customer with fewer than three visits on file.
+  featureRebookingPrompts Boolean @default(true)
+  /// The ticket at the counter: surcharges found on the table, what was paid,
+  /// the tip, and the day's takings. The shop's own Clover terminal takes the
+  /// money -- these rows record it.
+  featureCounterPayments Boolean @default(true)
 
   // Liability waiver
   waiverText    String? @db.Text // full waiver body; null = feature off even if flag is true
@@ -83,6 +102,25 @@ model SystemConfig {
   // applies cleanly to a visit carrying several services.
   rewardValueCents      Int    @default(1000)
 
+  // Vaccinations. The gate warns by default: a shop that upgrades with no
+  // records on file must not find its diary refusing every booking.
+  /// True refuses a customer-facing booking for a pet whose shots have
+  /// lapsed. Staff at the counter are never refused either way.
+  vaccinationGateBlocks Boolean @default(false)
+  /// Days past an expiry the shop will still take a booking, for an owner
+  /// who is on their way to the vet. Moves what blocks, not what is shown.
+  vaccinationGraceDays  Int     @default(0)
+
+  // Reminders
+  /// How far ahead of a visit the reminder goes out. A visit closer than
+  /// `bookingLeadHours` is skipped -- an hour's notice is noise.
+  reminderHoursBefore Int @default(24)
+
+  // Rebooking
+  /// Days past a household's own cadence before the shop says anything. A
+  /// customer who books every eight weeks is not overdue on day 57.
+  rebookingGraceDays Int @default(7)
+
   // Payroll
   defaultCommissionPercent Float @default(40) // percent of ticket paid to the groomer
 
@@ -132,11 +170,15 @@ model Staff {
   appointments         Appointment[]
   statusHistory        AppointmentStatusHistory[]
   visitEvents          VisitEvent[]
+  visitPhotos          VisitPhoto[]
   waiverRevisions      WaiverRevision[]
   StaffPresenceEvent   StaffPresenceEvent[]
   StaffShift           StaffShift[]
 
   rewardRedemptions RewardRedemption[]
+  vaccinationsVerified PetVaccination[]
+  surchargesAdded AppointmentSurcharge[]
+  paymentsTaken   Payment[]
 
   @@map("staff")
 }
@@ -206,6 +248,10 @@ model BreedGuide {
   tips        String @db.Text
   // Typical time this breed takes, when it differs from the service default.
   typicalMins Int?
+  // A stock photo of the breed, by URL. Not a pet's photo, so it is not in the
+  // `Photo` table: nothing private, nothing to serve behind auth, and the shop
+  // can point it at any picture it likes.
+  photoUrl    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -228,6 +274,7 @@ model Photo {
   customers Customer[]
   staff     Staff[]
   pets      Pet[]
+  visitPhotos VisitPhoto[]
 
   @@map("photos")
 }
@@ -277,6 +324,7 @@ model Customer {
   waiverAcceptances WaiverAcceptance[]
   rewardEarnings    RewardEarning[]
   rewardRedemptions RewardRedemption[]
+  notifications     NotificationLog[]
 
   @@map("customers")
 }
@@ -329,6 +377,11 @@ model Pet {
   vaccinationsConfirmedAt DateTime?
   groomingNotes    String? // standing instructions for every visit
   hasBiteHistory   Boolean   @default(false) // true if pet has ever bitten a groomer
+  /// Who to ring when something is wrong with the pet rather than the groom.
+  /// Free text like every other contact here: a shop writes down whatever the
+  /// owner says, which is often a practice rather than a named vet.
+  vetName          String?
+  vetPhone         String?
   photoUrl         String? // external image, if the shop uses one
   photoId          String? // uploaded photo held in the database
   isActive         Boolean   @default(true)
@@ -338,6 +391,7 @@ model Pet {
   customer     Customer      @relation(fields: [customerId], references: [id])
   photo        Photo?        @relation(fields: [photoId], references: [id], onDelete: SetNull)
   appointments Appointment[]
+  vaccinations PetVaccination[]
 
   @@map("pets")
 }
@@ -352,6 +406,53 @@ enum Species {
   DOG
   CAT
   OTHER
+}
+
+// ─────────────────────────────────────────────
+// VACCINATIONS (what the shop checks, and what it has seen)
+// ─────────────────────────────────────────────
+
+/// What this shop requires, per species. No rows means no gate: a shop that
+/// checks nothing is never asked to switch anything off, and a shop that
+/// checks only rabies has one row.
+model VaccineRequirement {
+  id        String   @id @default(cuid())
+  /// What the shop calls it on the certificate: "Rabies", "Bordetella".
+  name      String
+  species   Species  @default(DOG)
+  /// Retiring a requirement leaves the records behind it readable.
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  records PetVaccination[]
+
+  @@unique([name, species])
+  @@map("vaccine_requirements")
+}
+
+/// One row per pet per requirement. A renewal updates the row rather than
+/// stacking history: the shop's question is always "is this pet current",
+/// and a pile of expired rows is a document archive this app is not.
+model PetVaccination {
+  id            String    @id @default(cuid())
+  petId         String
+  requirementId String
+  /// The date on the certificate. Null means proof was seen with no date on
+  /// it, which counts as current but never expires -- so it is flagged.
+  expiresOn     DateTime?
+  verifiedAt    DateTime  @default(now())
+  verifiedById  String?
+  note          String?
+
+  pet         Pet                @relation(fields: [petId], references: [id], onDelete: Cascade)
+  requirement VaccineRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  verifiedBy  Staff?             @relation(fields: [verifiedById], references: [id])
+
+  @@unique([petId, requirementId])
+  @@index([expiresOn])
+  @@map("pet_vaccinations")
 }
 
 enum CoatType {
@@ -508,7 +609,75 @@ model Surcharge {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  charged AppointmentSurcharge[]
+
   @@map("surcharges")
+}
+
+/// An extra fee actually charged on one visit.
+///
+/// `Surcharge` has been a published range since it was written -- a matted coat
+/// is $10-$30 depending on what is found on the table -- and nothing ever
+/// attached one to a visit. The range is advisory: a genuinely awful coat is
+/// charged above it and the row says so, because the counter has to explain the
+/// number to an owner who was quoted something smaller.
+model AppointmentSurcharge {
+  id            String  @id @default(cuid())
+  appointmentId String
+  /// The catalog row this came from, kept for reporting. Null once the shop
+  /// deletes the published fee; `label` is what the counter reads out.
+  surchargeId   String?
+  label         String
+  amountCents   Int
+  /// Charged above the published range. A fact on the row rather than something
+  /// inferred later from a price list that has since changed.
+  aboveRange    Boolean @default(false)
+  note          String?
+  /// Who found it. Same reason.
+  addedById     String
+  createdAt     DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  surcharge   Surcharge?  @relation(fields: [surchargeId], references: [id], onDelete: SetNull)
+  addedBy     Staff       @relation(fields: [addedById], references: [id])
+
+  @@index([appointmentId])
+  @@map("appointment_surcharges")
+}
+
+/// Money that changed hands somewhere else.
+///
+/// The shop takes payment on a Clover terminal this app does not integrate
+/// with: staff read the amount off the screen, key it in, and record the result
+/// here. No processor, no card data, no PCI surface. `reference` holds Clover's
+/// transaction id, which is what a dispute is traced by and the only seam a
+/// future integration would need.
+model Payment {
+  id            String        @id @default(cuid())
+  appointmentId String
+  method        PaymentMethod
+  /// What was handed over, tip included -- the terminal's own total, so it
+  /// reconciles against Clover's batch without arithmetic.
+  amountCents   Int
+  tipCents      Int           @default(0)
+  reference     String?
+  note          String?
+  takenById     String
+  takenAt       DateTime      @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  takenBy     Staff       @relation(fields: [takenById], references: [id])
+
+  @@index([appointmentId])
+  @@index([takenAt])
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CARD
+  CASH
+  CHECK
+  OTHER
 }
 
 // ─────────────────────────────────────────────
@@ -553,6 +722,21 @@ model Appointment {
   needsKennel     Boolean           @default(true) // holds a kennel for the visit
   checkedInAt     DateTime?
   completedAt     DateTime?
+
+  // What this pet was actually groomed with, written down so the next groomer
+  // repeats the cut instead of guessing at it. Per visit, never on the pet: a
+  // coat taken short in June is not an instruction for September.
+  groomBlade       String?
+  groomShampoo     String?
+  groomRecordNotes String?
+
+  // What the owner agreed to when the groom could not be done as booked —
+  // matting found on the table, a coat that has to come off. Snapshotted on
+  // the visit, because agreeing once is not agreeing to the next one.
+  consentRequestedAt DateTime?
+  consentNote        String? @db.Text // what was put to the owner, and the fee quoted
+  consentGrantedAt   DateTime?
+  consentDeclinedAt  DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -563,6 +747,7 @@ model Appointment {
   services      AppointmentService[]
   statusHistory AppointmentStatusHistory[]
   visitEvents   VisitEvent[]
+  photos        VisitPhoto[]
   // The compartment this pet is in, once it has been put away.
   kennelId      String?
   kenneledAt    DateTime?
@@ -580,10 +765,49 @@ model Appointment {
   pricingTier   PricingTier?   @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
   rewardEarning RewardEarning?
   rewardRedemptions RewardRedemption[]
+  notifications NotificationLog[]
+  appointmentSurcharges AppointmentSurcharge[]
+  payments      Payment[]
 
   @@index([scheduledAt, status])
   @@index([stationId, status])
   @@map("appointments")
+}
+
+/// What the shop has already told a customer about one visit, so a runner that
+/// restarts does not say it twice. One row per kind per visit: the question is
+/// "have we reminded them", and the channels are a record of what happened
+/// rather than part of the key.
+model NotificationLog {
+  id            String           @id @default(cuid())
+  /// Required, never nullable: Postgres does not treat two NULLs as equal in a
+  /// unique index, so a nullable column would give a constraint that silently
+  /// stops working. A kind that is not about one visit needs its own
+  /// uniqueness decision rather than an inherited one that does not hold.
+  appointmentId String
+  customerId    String
+  kind          NotificationKind
+  /// Which channels it was sent down -- "EMAIL", "SMS". The row is claimed
+  /// before the messages go, so this is what was attempted rather than what a
+  /// carrier confirmed. An empty list is never written: a visit the shop has
+  /// no way to reach is left unclaimed for a later run.
+  channels      String[]
+  sentAt        DateTime         @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([appointmentId, kind])
+  @@index([customerId, sentAt])
+  @@map("notification_logs")
+}
+
+enum NotificationKind {
+  APPOINTMENT_REMINDER
+  /// Anchored on the visit it is chasing -- the customer's last finished one --
+  /// so the unique constraint reads "one prompt per completed visit" and there
+  /// is no cooldown column to keep correct.
+  REBOOKING_PROMPT
 }
 
 // Services booked on one visit. `Appointment.serviceType` stays the primary
@@ -681,6 +905,10 @@ model VisitEvent {
   occurredAt    DateTime       @default(now())
   loggedById    String? // staff who logged it
   note          String? // free-text details
+  /// Tell the owner about this one. Off by default — an equipment fault is the
+  /// shop's business — and what is ticked goes out with the ready-for-pickup
+  /// message, which is the moment the owner is actually reading.
+  ownerVisible  Boolean @default(false)
 
   appointment Appointment @relation(fields: [appointmentId], references: [id])
   loggedBy    Staff?      @relation(fields: [loggedById], references: [id])
@@ -689,6 +917,7 @@ model VisitEvent {
 }
 
 enum VisitEventType {
+  HEALTH_FINDING // something noticed on the pet: ears, skin, lumps, fleas, teeth
   REWASH // pet defecated / urinated during groom, required re-wash
   BITE // pet bit a groomer — triggers hasBiteHistory flag on Pet
   BEHAVIORAL // growling, snapping, excessive stress (non-bite)
@@ -696,6 +925,39 @@ enum VisitEventType {
   MATTING_FOUND // unexpected matting discovered mid-groom
   EQUIPMENT_ISSUE // clippers, dryer, etc. problem
   OTHER // catch-all, use note field for details
+}
+
+// Photographs of one day's work. They hang off the visit, not the pet:
+// `Pet.photoId` is the face that identifies the dog, while a matted coat that
+// had to come off and the cut it was taken to are both about one visit.
+model VisitPhoto {
+  id            String         @id @default(cuid())
+  appointmentId String
+  photoId       String
+  kind          VisitPhotoKind
+  /// What the groomer wants the next one to know. Optional: the kind and the
+  /// picture usually say it.
+  caption       String?
+  /// Opt-*in*, like VisitEvent.ownerVisible. An ISSUE photo is often the
+  /// shop's own evidence rather than something to send the owner.
+  ownerVisible  Boolean        @default(false)
+  takenById     String?
+  createdAt     DateTime       @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  /// Not cascade on purpose: `deletePhotoIfUnused()` owns the bytes and must
+  /// stay the only thing that frees a Photo row.
+  photo       Photo       @relation(fields: [photoId], references: [id])
+  takenBy     Staff?      @relation(fields: [takenById], references: [id])
+
+  @@index([appointmentId, kind])
+  @@map("visit_photos")
+}
+
+enum VisitPhotoKind {
+  BEFORE // the coat as it arrived
+  AFTER // the finished groom -- the cut the next groomer repeats
+  ISSUE // matting, a hot ear, a split nail: what somebody noticed
 }
 
 // ─────────────────────────────────────────────

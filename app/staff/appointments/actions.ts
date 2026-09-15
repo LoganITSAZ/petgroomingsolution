@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireStaff } from "@/lib/auth-guards";
+import { requireFeature, requireStaff } from "@/lib/auth-guards";
 import { broadcastStationBoard, changeAppointmentStatus } from "@/lib/appointment-status";
 import { BOARD_COLUMNS, nextStatus } from "@/lib/appointment-flow";
 import { resolveSelectedServices, setAppointmentServices } from "@/lib/appointment-services";
@@ -10,14 +10,31 @@ import { AppointmentStatus, StationRole, VisitEventType } from "@prisma/client";
 import { isFloorStaff } from "@/lib/utils";
 import { shopDateTimeLocal } from "@/lib/shop-time";
 import { OCCUPYING_STATUSES, stationHasRoom } from "@/lib/stations";
+import { getConfig } from "@/lib/config";
+import { deletePhotoIfUnused, storePhoto } from "@/lib/photos";
+import { readKind } from "@/lib/visit-photos";
+import { sendConsentRequest } from "@/lib/email";
+import { smsConsentRequest } from "@/lib/sms";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-function back(appointmentId: string, params = ""): never {
+function back(appointmentId: string, params = "", returnTo?: string | null): never {
   revalidatePath(`/staff/appointments/${appointmentId}`);
   revalidatePath("/staff/appointments");
   revalidatePath("/staff");
+  // A groomer who logged this from the station job aid goes back to the table,
+  // not to the counter's screen. Only our own paths: an open redirect through
+  // a form field is not worth the convenience.
+  if (returnTo?.startsWith("/staff/")) {
+    revalidatePath(returnTo);
+    redirect(`${returnTo}${params}`);
+  }
   redirect(`/staff/appointments/${appointmentId}${params}`);
+}
+
+/** Where a form wants to land again, if it said. */
+function returnTo(formData: FormData): string | null {
+  return (formData.get("returnTo") as string | null) ?? null;
 }
 
 /** Advance one step along the groom flow, or set an explicit status. */
@@ -417,7 +434,7 @@ export async function logVisitEvent(formData: FormData): Promise<void> {
   const note = ((formData.get("note") as string | null) ?? "").trim() || null;
 
   if (!Object.values(VisitEventType).includes(eventTypeRaw as VisitEventType)) {
-    back(appointmentId, "?error=bad_event");
+    back(appointmentId, "?error=bad_event", returnTo(formData));
   }
   const eventType = eventTypeRaw as VisitEventType;
 
@@ -428,7 +445,16 @@ export async function logVisitEvent(formData: FormData): Promise<void> {
   if (!appointment) redirect("/staff/appointments?error=not_found");
 
   await prisma.visitEvent.create({
-    data: { appointmentId, eventType, note, loggedById: staffId },
+    data: {
+      appointmentId,
+      eventType,
+      note,
+      loggedById: staffId,
+      // Ticked by the groomer logging it. What is ticked rides along with the
+      // ready-for-pickup message instead of relying on someone remembering to
+      // say it at the counter.
+      ownerVisible: formData.get("ownerVisible") != null,
+    },
   });
 
   if (eventType === VisitEventType.BITE) {
@@ -439,5 +465,185 @@ export async function logVisitEvent(formData: FormData): Promise<void> {
     revalidatePath(`/staff/pets/${appointment.petId}`);
   }
 
-  back(appointmentId, "?event=1");
+  back(appointmentId, "?event=1", returnTo(formData));
+}
+
+/**
+ * Write down what the pet was actually groomed with.
+ *
+ * Kept on the visit rather than the pet: this is what happened on the day, and
+ * the next groomer reads it as the last thing that was done, not as a standing
+ * instruction. Standing instructions are `Pet.groomingNotes`.
+ */
+export async function saveGroomRecord(formData: FormData): Promise<void> {
+  await requireStaff();
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const text = (name: string) =>
+    ((formData.get(name) as string | null) ?? "").trim() || null;
+
+  await prisma.appointment.update({
+    where: { id: appointmentId },
+    data: {
+      groomBlade: text("groomBlade"),
+      groomShampoo: text("groomShampoo"),
+      groomRecordNotes: text("groomRecordNotes"),
+    },
+  });
+
+  back(appointmentId, "?record=1");
+}
+
+/**
+ * Ask the owner to approve a change to the groom they booked — matting that
+ * has to come off, a coat that cannot be brushed out.
+ *
+ * The answer comes back by phone or at the door, and staff record it below.
+ * There is no inbound message handling: a reply webhook needs a public
+ * callback URL and signature verification, which is its own piece of work, and
+ * a shave-down is a conversation the shop wants to have anyway.
+ */
+export async function requestConsent(formData: FormData): Promise<void> {
+  await requireStaff();
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const consentNote = ((formData.get("consentNote") as string | null) ?? "").trim();
+  if (!consentNote) back(appointmentId, "?error=no_consent_note", returnTo(formData));
+
+  const appointment = await prisma.appointment.update({
+    where: { id: appointmentId },
+    data: {
+      consentNote,
+      consentRequestedAt: new Date(),
+      // Asking again clears the previous answer: the owner is being asked
+      // about something new, and a stale yes must not read as covering it.
+      consentGrantedAt: null,
+      consentDeclinedAt: null,
+    },
+    include: {
+      pet: { select: { name: true } },
+      customer: { select: { firstName: true, email: true, phone: true, smsOptOut: true } },
+    },
+  });
+
+  const config = await getConfig();
+
+  // Same rule as every other send in the app: a carrier or mailbox problem
+  // must never fail the write. The request is recorded either way, and the
+  // groomer can pick up the phone.
+  if (appointment.customer.email) {
+    await sendConsentRequest({
+      to: appointment.customer.email,
+      ownerName: appointment.customer.firstName,
+      petName: appointment.pet.name,
+      note: consentNote,
+    }).catch(console.error);
+  }
+  if (appointment.customer.phone && !appointment.customer.smsOptOut) {
+    await smsConsentRequest({
+      to: appointment.customer.phone,
+      petName: appointment.pet.name,
+      shopName: config.shopName,
+      phone: config.shopPhone,
+    }).catch(console.error);
+  }
+
+  back(appointmentId, "?consent=1", returnTo(formData));
+}
+
+/** Record the answer the owner gave. */
+export async function recordConsent(formData: FormData): Promise<void> {
+  await requireStaff();
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const answer = (formData.get("answer") as string | null) ?? "";
+  if (answer !== "granted" && answer !== "declined") {
+    back(appointmentId, "?error=bad_consent_answer");
+  }
+
+  const now = new Date();
+  await prisma.appointment.update({
+    where: { id: appointmentId },
+    // Both columns are written every time, so the pair always reflects one
+    // answer rather than leaving an earlier contradicting one behind it.
+    data: {
+      consentGrantedAt: answer === "granted" ? now : null,
+      consentDeclinedAt: answer === "declined" ? now : null,
+    },
+  });
+
+  back(appointmentId, "?answered=1");
+}
+
+/**
+ * Add a photo of this visit.
+ *
+ * Staff only, and never the owner: an owner sending photos in is inbound media
+ * with moderation attached, and nobody asked for it. The bytes go where every
+ * other photo in this app goes -- a `Photo` row behind /api/photos/[id], capped
+ * and type-checked by `storePhoto()`.
+ */
+export async function addVisitPhoto(formData: FormData): Promise<void> {
+  const staffId = await requireStaff();
+  // A server action is its own endpoint, so hiding the uploader is not the
+  // gate. This is.
+  await requireFeature("featureVisitPhotos");
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const kind = readKind(formData.get("kind"));
+  if (!kind) back(appointmentId, "?error=bad_photo_kind");
+
+  const stored = await storePhoto(formData.get("photo"));
+  if (!stored) back(appointmentId, "?error=no_photo");
+  if ("error" in stored) back(appointmentId, `?error=photo_${stored.error}`);
+
+  await prisma.visitPhoto.create({
+    data: {
+      appointmentId,
+      photoId: stored.id,
+      kind,
+      caption: ((formData.get("caption") as string | null) ?? "").trim() || null,
+      // Opt-in, like a visit event: an issue photo is often the shop's own
+      // evidence rather than something to send the owner.
+      ownerVisible: formData.get("ownerVisible") != null,
+      takenById: staffId,
+    },
+  });
+
+  back(appointmentId, "?photo=1");
+}
+
+/** Show this photo to the owner, or stop showing it. */
+export async function setVisitPhotoVisibility(formData: FormData): Promise<void> {
+  await requireStaff();
+  await requireFeature("featureVisitPhotos");
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const id = (formData.get("photoRowId") as string | null) ?? "";
+
+  await prisma.visitPhoto.update({
+    where: { id },
+    data: { ownerVisible: formData.get("ownerVisible") != null },
+  });
+
+  back(appointmentId, "?photo=1");
+}
+
+/**
+ * Remove a photo from the visit.
+ *
+ * The row goes; the bytes go only if nothing else points at them, which is
+ * `deletePhotoIfUnused()`'s decision and not this action's.
+ */
+export async function deleteVisitPhoto(formData: FormData): Promise<void> {
+  await requireStaff();
+  await requireFeature("featureVisitPhotos");
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const id = (formData.get("photoRowId") as string | null) ?? "";
+
+  const row = await prisma.visitPhoto.delete({ where: { id } }).catch(() => null);
+  if (row) await deletePhotoIfUnused(row.photoId);
+
+  back(appointmentId, "?photoRemoved=1");
 }

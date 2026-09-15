@@ -42,6 +42,8 @@ export function PetForm({
     temperamentNotes: string | null;
     healthFlags: string[];
     vaccinationsConfirmedAt: Date | null;
+    vetName: string | null;
+    vetPhone: string | null;
   };
 }) {
   return (
@@ -146,6 +148,27 @@ export function PetForm({
           rows={2}
           defaultValue={pet?.groomingNotes ?? ""}
           className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm resize-y"
+        />
+      </label>
+      {/* The number to ring when something is wrong with the pet rather than
+          the groom. Kept beside the notes a groomer reads, not buried with the
+          owner's own details. */}
+      <label className="text-sm">
+        <span className="block text-stone-500 mb-1">Vet</span>
+        <input
+          name="vetName"
+          defaultValue={pet?.vetName ?? ""}
+          placeholder="Practice or vet's name"
+          className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm"
+        />
+      </label>
+      <label className="text-sm">
+        <span className="block text-stone-500 mb-1">Vet phone</span>
+        <input
+          name="vetPhone"
+          type="tel"
+          defaultValue={pet?.vetPhone ?? ""}
+          className="w-full border border-stone-300 rounded-lg px-2 py-1.5 text-sm"
         />
       </label>
       <label className="text-sm sm:col-span-2">

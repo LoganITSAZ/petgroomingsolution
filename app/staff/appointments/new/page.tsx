@@ -12,6 +12,9 @@ import { formatShopTime24, shopDayKey, shopDayRange } from "@/lib/utils";
 import { shopDateTimeLocal } from "@/lib/shop-time";
 import { getServiceOptions } from "@/lib/appointment-services";
 import { createAppointment } from "@/lib/create-appointment";
+import { getConfig } from "@/lib/config";
+import { checksForPet } from "@/lib/vaccinations";
+import { VaccinationWarning } from "@/components/Vaccinations";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -42,6 +45,17 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
     }),
     getServiceOptions(),
   ]);
+
+  /*
+   * Shots, for a booking started from a pet's own page. The picker below is
+   * client-side, so a pet chosen from the dropdown is not checked until the
+   * visit exists -- the visit screen carries the same warning. Staff are never
+   * refused either way: somebody at the counter with a certificate in their
+   * hand is not an exception to code for.
+   */
+  const bookingConfig = await getConfig();
+  const vaccinationChecks = petId ? await checksForPet(petId, bookingConfig) : [];
+  const vaccinationPet = petId ? pets.find((pet) => pet.id === petId)?.name : undefined;
 
   // Default datetime: next full hour, at least 1 hour from now. The input is
   // shop wall clock, so it is formatted in SHOP_TIMEZONE — getTimezoneOffset()
@@ -203,6 +217,10 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
     >
       <PageSection>
         <form action={createStaffAppointment} className="space-y-3">
+          {vaccinationChecks.some((check) => check.level !== "current") && (
+            <VaccinationWarning checks={vaccinationChecks} petName={vaccinationPet} />
+          )}
+
           <CustomerPetFields
             customers={customers.map((customer) => ({
               id: customer.id,

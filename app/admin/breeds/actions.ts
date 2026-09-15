@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth-guards";
 import { CoatType, Species } from "@prisma/client";
+import { stockPhotoForBreed } from "@/lib/breeds";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -27,6 +28,11 @@ export async function saveBreedGuide(formData: FormData): Promise<void> {
   const speciesRaw = ((formData.get("species") as string | null) ?? "").trim();
   const coatRaw = ((formData.get("coat") as string | null) ?? "").trim();
   const minsRaw = ((formData.get("typicalMins") as string | null) ?? "").trim();
+  // A stock photo is a link the shop pastes, so the scheme is checked here:
+  // anything else reaching an `<img src>` is a `javascript:` URL waiting to be
+  // clicked, and a broken link is better caught while it is being typed.
+  const photoRaw = ((formData.get("photoUrl") as string | null) ?? "").trim();
+  if (photoRaw && !/^https?:\/\//i.test(photoRaw)) done("?error=bad_photo");
   const typicalMins = minsRaw ? Number(minsRaw) : null;
   if (typicalMins != null && (!Number.isInteger(typicalMins) || typicalMins <= 0)) {
     done("?error=bad_minutes");
@@ -41,10 +47,17 @@ export async function saveBreedGuide(formData: FormData): Promise<void> {
       : Species.DOG,
     coat: Object.values(CoatType).includes(coatRaw as CoatType) ? (coatRaw as CoatType) : null,
     typicalMins,
+    photoUrl: photoRaw || null,
   };
 
   const clash = await prisma.breedGuide.findUnique({ where: { breed } });
   if (clash && clash.id !== id) done("?error=duplicate");
+
+  // Nobody goes looking for a picture of a Havanese while writing down what its
+  // coat does, so an empty box is filled in once from Wikipedia. Clearing the
+  // box on a guide that has one is a deliberate removal, not a request to go
+  // and find another.
+  if (!photoRaw && !id) data.photoUrl = await stockPhotoForBreed(breed, data.species);
 
   if (id) {
     await prisma.breedGuide.update({ where: { id }, data });

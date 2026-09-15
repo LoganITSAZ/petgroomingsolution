@@ -19,6 +19,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "staff:password": "tsx scripts/reset-password.ts",
     "db:demo": "tsx prisma/demo.ts",
+    "jobs:once": "tsx scripts/jobs.ts once",
+    "jobs:loop": "tsx scripts/jobs.ts loop",
     "dev:test": "DATABASE_URL=\"${TEST_DATABASE_URL:-postgresql://postgres@localhost:5432/gentlegroomer_test}\" node scripts/dev-server.mjs",
     "db:test:reset": "bash scripts/test-db.sh",
     "test": "vitest run"

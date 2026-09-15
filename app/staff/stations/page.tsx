@@ -143,17 +143,9 @@ export default async function StaffStationsPage(props: {
     0
   );
 
-  const summary = [
-    grooming.list.length > 0 ? `${grooming.used}/${grooming.capacity} grooming in use` : null,
-    bathing.list.length > 0 ? `${bathing.used}/${bathing.capacity} bathing in use` : null,
-    drying.list.length > 0 ? `${drying.used}/${drying.capacity} drying in use` : null,
-    kennelTotal > 0 ? `${kennelOccupied}/${kennelTotal} kennels occupied` : null,
-  ].filter(Boolean);
-
   return (
     <PageShell
       title="Stations"
-      subtitle={summary.length > 0 ? summary.join(" · ") : "Nothing configured yet."}
       actions={
         canManageStations ? (
           <Link

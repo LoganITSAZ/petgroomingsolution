@@ -12,7 +12,14 @@
  * Deterministic: same seed, same shop, so a screenshot from yesterday still
  * matches. Pass a different seed as the first argument for a different shop.
  */
-import { PrismaClient, Prisma, AppointmentStatus, StaffRole } from "@prisma/client";
+import {
+  PrismaClient,
+  Prisma,
+  AppointmentStatus,
+  StaffRole,
+  type Staff,
+  type VaccineRequirement,
+} from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { DEFAULT_ADMIN_EMAIL } from "../lib/branding";
 
@@ -96,11 +103,38 @@ function shopTime(daysFromToday: number, hour: number, minute = 0): Date {
     hour + SHOP_UTC_OFFSET, minute));
 }
 
+/**
+ * A tiny solid-colour PNG, so demo visits have photos without shipping
+ * binaries in the repo. Nobody is looking at the image; the point is that the
+ * strip, the owner's portal and the job aid all have something to render.
+ */
+function swatchPng(hue: number): Buffer {
+  const png = (body: string) => Buffer.from(body, "base64");
+  // 8x8 PNGs, one per hue bucket. Small enough to inline, real enough that a
+  // browser renders them.
+  const swatches = [
+    "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR42mOYmWaMFTEMLQkA/ftMgRJZpicAAAAASUVORK5CYII=",
+    "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR42mM4c/UWVsQwtCQAA+qewewSRtMAAAAASUVORK5CYII=",
+    "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR42mPYNqsYK2IYWhIAHxxwwZB/KsQAAAAASUVORK5CYII=",
+  ];
+  return png(swatches[hue % swatches.length]);
+}
+
+/** Store a swatch as a Photo row and return its id. */
+async function demoPhoto(hue: number): Promise<string> {
+  const data = swatchPng(hue);
+  const photo = await prisma.photo.create({
+    data: { mimeType: "image/png", byteSize: data.byteLength, data },
+  });
+  return photo.id;
+}
+
 async function main() {
-  const [config, services, stations] = await Promise.all([
+  const [config, services, stations, surcharges] = await Promise.all([
     prisma.systemConfig.findUnique({ where: { id: "global" } }),
     prisma.service.findMany({ where: { isActive: true } }),
     prisma.station.findMany({ where: { isActive: true } }),
+    prisma.surcharge.findMany({ where: { isActive: true } }),
   ]);
   if (!config || services.length === 0 || stations.length === 0) {
     throw new Error("Run `npm run db:seed` first — demo data builds on the catalog and stations.");
@@ -176,7 +210,7 @@ async function main() {
     { name: "Alice Moreau", roles: ["GROOMER", "BATHER"] },
     { name: "Theo Banks", roles: ["BATHER"] },
   ];
-  const groomers = [];
+  const groomers: Staff[] = [];
   for (const [i, spec] of groomerSpecs.entries()) {
     const email = `${spec.name.split(" ")[0].toLowerCase()}@demo.test`;
     groomers.push(
@@ -217,6 +251,55 @@ async function main() {
       note: "Customers from before the 2015 price rise.",
     },
   });
+
+  // ── what the shop checks ───────────────────────────────────────────────────
+  // Three rows, so the gate has something to read. A shop that checks nothing
+  // has no rows and no gate -- which is why this is data rather than a flag.
+  const requirements: VaccineRequirement[] = [];
+  for (const spec of [
+    { name: "Rabies", species: "DOG" as const, sortOrder: 0 },
+    { name: "Bordetella", species: "DOG" as const, sortOrder: 1 },
+    { name: "Rabies", species: "CAT" as const, sortOrder: 0 },
+  ]) {
+    requirements.push(
+      await prisma.vaccineRequirement.upsert({
+        where: { name_species: { name: spec.name, species: spec.species } },
+        update: {},
+        create: spec,
+      })
+    );
+  }
+
+  /**
+   * A spread of vaccination records for one pet, so every level on the badge
+   * appears somewhere on the demo floor: current, expiring inside the month,
+   * lapsed, a record with no expiry, and nothing on file at all.
+   */
+  const vaccinationsFor = (petId: string, species: "DOG" | "CAT") =>
+    requirements
+      .filter((requirement) => requirement.species === species)
+      .flatMap((requirement) => {
+        const roll = Math.random();
+        if (roll < 0.1) return []; // nothing on file
+        return [
+          {
+            petId,
+            requirementId: requirement.id,
+            // Rabies runs three years, bordetella one -- an expiry per record
+            // is the reason these are rows rather than one date on the pet.
+            expiresOn:
+              roll < 0.16
+                ? null
+                : roll < 0.28
+                  ? shopTime(-int(1, 200), 12)
+                  : roll < 0.4
+                    ? shopTime(int(1, 30), 12)
+                    : shopTime(int(60, requirement.name === "Rabies" ? 1095 : 365), 12),
+            note: roll < 0.16 ? "Proof seen at the counter, no date recorded." : null,
+            verifiedById: pick(groomers).id,
+          },
+        ];
+      });
 
   /**
    * Stand the pet at a station that matches the stage it is at. A pet waiting
@@ -295,9 +378,25 @@ async function main() {
           groomingNotes: pick(GROOMING_NOTES),
           healthFlags: pick(HEALTH_FLAGS),
           hasBiteHistory: chance(0.06),
+          // Most households give the shop a practice; some never do.
+          ...(chance(0.75)
+            ? {
+                vetName: pick([
+                  "Camelback Animal Clinic",
+                  "Desert Paws Veterinary",
+                  "North Valley Animal Hospital",
+                  "Dr. Ramirez, Sunrise Vet",
+                ]),
+                vetPhone: `(602) 555-0${int(100, 199)}`,
+              }
+            : {}),
         },
       });
       petCount++;
+
+      await prisma.petVaccination.createMany({
+        data: vaccinationsFor(pet.id, isCat ? "CAT" : "DOG"),
+      });
 
       // Visit history: roughly every 6-10 weeks back through the last nine
       // months, plus bookings on the books ahead. Every pet spans well over 90
@@ -345,6 +444,15 @@ async function main() {
             checkedInAt: status === "SCHEDULED" ? null : scheduledAt,
             completedAt: finished(status) ? new Date(+scheduledAt + duration * 60_000) : null,
             visitNotes: chance(0.2) ? "Owner called ahead — running late." : null,
+            // What the coat was actually taken to, on most finished visits —
+            // the thing the next groomer reads before picking up a clipper.
+            ...(finished(status) && chance(0.7)
+              ? {
+                  groomBlade: pick(["#4F", "#5F", "#7F", "#10", "Snap-on combs"]),
+                  groomShampoo: pick(["Oatmeal", "Hypoallergenic", "Deshedding", "Medicated"]),
+                  groomRecordNotes: chance(0.4) ? "Head left long, feet scissored." : null,
+                }
+              : {}),
             kennelId,
             kenneledAt: kennelId ? scheduledAt : null,
             services: { create: lines },
@@ -365,6 +473,98 @@ async function main() {
           });
         }
 
+        // Before and after on most finished visits, and now and then the
+        // matting that explains why a coat came off. The after is the one the
+        // owner is shown; the issue photo is the shop's own record.
+        if (finished(status) && chance(0.6)) {
+          await prisma.visitPhoto.create({
+            data: {
+              appointmentId: appointment.id,
+              photoId: await demoPhoto(0),
+              kind: "BEFORE",
+              caption: "As they arrived.",
+              takenById: groomer.id,
+              createdAt: scheduledAt,
+            },
+          });
+          await prisma.visitPhoto.create({
+            data: {
+              appointmentId: appointment.id,
+              photoId: await demoPhoto(1),
+              kind: "AFTER",
+              caption: pick(["Finished.", "Teddy head, tight body.", "Shaved down, feet tidied."]),
+              ownerVisible: true,
+              takenById: groomer.id,
+              createdAt: appointment.completedAt ?? scheduledAt,
+            },
+          });
+          if (chance(0.25)) {
+            await prisma.visitPhoto.create({
+              data: {
+                appointmentId: appointment.id,
+                photoId: await demoPhoto(2),
+                kind: "ISSUE",
+                caption: pick([
+                  "Matting behind both ears — had to come off.",
+                  "Pelted through the chest.",
+                  "Split nail, front left.",
+                ]),
+                takenById: groomer.id,
+                createdAt: scheduledAt,
+              },
+            });
+          }
+        }
+
+        /*
+         * The counter. A fee on the coats that needed one, then what the
+         * terminal took -- mostly the lot, now and then a part payment so the
+         * "still owing" list on /staff/takings is not empty on a demo.
+         */
+        if (finished(status) && surcharges.length > 0) {
+          const listCents = lines.reduce((sum, line) => sum + (line.priceCents ?? 0), 0);
+          let extraCents = 0;
+          if (chance(0.22)) {
+            const surcharge = pick(surcharges);
+            // In the shop's own $10 steps, inside the published range.
+            const steps = int(1, Math.max(1, Math.floor(((surcharge.maxCents ?? 4000) - (surcharge.minCents ?? 1500)) / 1000)));
+            extraCents = (surcharge.minCents ?? 1500) + steps * 1000;
+            await prisma.appointmentSurcharge.create({
+              data: {
+                appointmentId: appointment.id,
+                surchargeId: surcharge.id,
+                label: surcharge.label,
+                amountCents: extraCents,
+                note: chance(0.6) ? "Found on the table, owner told before it came off." : null,
+                addedById: groomer.id,
+                createdAt: scheduledAt,
+              },
+            });
+          }
+
+          const dueCents = Math.max(
+            0,
+            listCents + extraCents - (appointment.pricingDiscountCents ?? 0)
+          );
+          if (dueCents > 0 && chance(0.92)) {
+            // A part payment on a few, so a balance exists to chase.
+            const part = chance(0.08);
+            const method = pick(["CARD", "CARD", "CARD", "CASH", "CHECK"] as const);
+            const tipCents = method === "CHECK" || !chance(0.55) ? 0 : int(1, 8) * 500;
+            await prisma.payment.create({
+              data: {
+                appointmentId: appointment.id,
+                method,
+                amountCents: (part ? Math.round(dueCents / 2) : dueCents) + tipCents,
+                tipCents,
+                reference: method === "CARD" ? `CLV${int(100000, 999999)}` : null,
+                takenById: groomer.id,
+                takenAt: appointment.completedAt ?? scheduledAt,
+              },
+            });
+          }
+        }
+
         if (chance(0.05)) {
           await prisma.visitEvent.create({
             data: {
@@ -372,6 +572,26 @@ async function main() {
               eventType: pick(["REWASH", "MATTING_FOUND", "INJURY", "BEHAVIORAL", "OTHER"] as const),
               occurredAt: scheduledAt,
               note: "Logged by the groomer during the visit.",
+              loggedById: groomer.id,
+            },
+          });
+        }
+
+        // Something the groomer noticed on the pet and passed on. Marked for
+        // the owner, which is what puts it in the ready-for-pickup message.
+        if (chance(0.08)) {
+          await prisma.visitEvent.create({
+            data: {
+              appointmentId: appointment.id,
+              eventType: "HEALTH_FINDING",
+              occurredAt: scheduledAt,
+              note: pick([
+                "Right ear was red and smelled yeasty — worth a vet's look.",
+                "Small lump on the left flank, about pea-sized. Not new to the owner.",
+                "Flea dirt through the rump. Treated coat, told the owner.",
+                "Both dew claws had grown into the pad side. Trimmed back carefully.",
+              ]),
+              ownerVisible: true,
               loggedById: groomer.id,
             },
           });

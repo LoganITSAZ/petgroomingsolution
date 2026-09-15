@@ -1,0 +1,74 @@
+# The four checks CLAUDE.md says to keep green, run on every pull request so a
+# branch cannot go red unnoticed. Node 20 matches the Dockerfile's base image.
+#
+# `next lint` covers the test files too, so an unused import in one of them
+# fails the build — the lint and build steps are not independent.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    # The migration drift check needs a real database to replay against, and a
+    # throwaway one is cheaper here than a shadow database on the shop's.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gentlegroomer_ci
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Every check below needs the generated client, including the typecheck.
+      - run: npx prisma generate
+
+      # Before the build, because a page that reads SystemConfig expects a
+      # database to be there.
+      - name: Prepare the databases
+        run: |
+          psql postgresql://postgres:postgres@localhost:5432/postgres \
+            -c 'CREATE DATABASE gentlegroomer_ci' \
+            -c 'CREATE DATABASE gentlegroomer_ci_shadow'
+          npx prisma migrate deploy
+
+      - run: npm run lint
+
+      - run: npx tsc --noEmit
+
+      - run: npm test
+
+      - run: npm run build
+
+      # Hand-written migrations are the convention here, so nothing guarantees
+      # they match schema.prisma except this. `migrate diff` replays them into
+      # the shadow database, which is why it had to be created above.
+      - name: Migrations match the schema
+        run: |
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url postgresql://postgres:postgres@localhost:5432/gentlegroomer_ci_shadow \
+            --exit-code

@@ -19,7 +19,7 @@ import SaveToast from "@/components/SaveToast";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
-export const metadata = { title: "Edit Schedule" };
+export const metadata = { title: "Scheduling" };
 
 /**
  * The week's rota: staff down the side, days across. Shifts are edited in
@@ -104,7 +104,7 @@ export default async function SchedulePage(props: PageProps) {
 
   return (
     <PageShell
-      title="Edit Schedule"
+      title="Scheduling"
       subtitle={
         <>
           {shifts.length} shift{shifts.length !== 1 ? "s" : ""} this week across {staff.length}{" "}

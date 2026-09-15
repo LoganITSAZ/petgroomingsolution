@@ -11,7 +11,7 @@
   display: flex; flex-direction: column; gap: 6px; padding: 18px;
   border-radius: 16px; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   background: linear-gradient(130deg, color-mix(in srgb, var(--accent) 19%, rgb(var(--surface))), rgb(var(--surface)));
-  border-top: 4px solid var(--accent); color: rgb(var(--ink));
+  color: rgb(var(--ink));
 }
 .metric:hover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .metric strong { font-size: clamp(2rem, 4vw, 3rem); line-height: 1; font-variant-numeric: tabular-nums; }
@@ -21,11 +21,11 @@
 .amber { --accent: var(--dashboard-amber); }
 .green { --accent: var(--dashboard-green); }
 .purple { --accent: var(--dashboard-purple); }
-.panel { min-width: 0; overflow: hidden; border: 1px solid rgb(var(--well-line)); border-radius: 14px; background: rgb(var(--surface)); border-top: 3px solid var(--accent, rgb(var(--well-line))); }
+.panel { min-width: 0; overflow: hidden; border: 1px solid rgb(var(--well-line)); border-radius: 16px; background: rgb(var(--surface)); }
 .panel > [data-page-section] { border-top: 0; }
-.dashboard .panel :global(.section-heading) { background: color-mix(in srgb, var(--accent, #64748b) 9%, rgb(var(--surface))); padding: 12px 14px; border-inline-start-color: var(--accent, rgb(var(--well-line))); }
+.dashboard .panel :global(.section-heading) { background: color-mix(in srgb, var(--accent, #64748b) 9%, rgb(var(--surface))); padding: 12px 14px; border-bottom-color: rgb(var(--well-line)); }
 .dashboard .panel :global(.section-heading) h2 { color: rgb(var(--ink)); font-size: 12px; }
-.progress { padding: 14px 16px; border: 1px solid rgb(var(--well-line)); border-radius: 14px; background: rgb(var(--surface)); }
+.progress { padding: 14px 16px; border: 1px solid rgb(var(--well-line)); border-radius: 16px; background: rgb(var(--surface)); }
 .progressHeader { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 10px; color: rgb(var(--muted)); font-size: 12px; }
 @media (max-width: 640px) { .body { padding: 10px; gap: 12px; } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .metric { padding: 14px; } }
 
