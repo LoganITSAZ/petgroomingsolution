@@ -251,6 +251,27 @@ export default async function PetDetailPage(props: PageProps) {
               </span>
             )}
           </p>
+          {/* The vet sits with the health flags for the same reason the
+              vaccination date does: it is what the shop needs when a groom
+              stops being routine. */}
+          <p className="mb-3 text-sm text-stone-700">
+            <span className="text-stone-500">Vet: </span>
+            {pet.vetName || pet.vetPhone ? (
+              <>
+                {pet.vetName ?? "Not named"}
+                {pet.vetPhone && (
+                  <>
+                    {" · "}
+                    <a className="underline underline-offset-2" href={`tel:${pet.vetPhone}`}>
+                      {pet.vetPhone}
+                    </a>
+                  </>
+                )}
+              </>
+            ) : (
+              <span className="text-stone-400">None on file.</span>
+            )}
+          </p>
           {pet.healthFlags.length === 0 ? (
             <p className="text-sm text-stone-400">None on file.</p>
           ) : (

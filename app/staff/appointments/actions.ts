@@ -10,6 +10,9 @@ import { AppointmentStatus, StationRole, VisitEventType } from "@prisma/client";
 import { isFloorStaff } from "@/lib/utils";
 import { shopDateTimeLocal } from "@/lib/shop-time";
 import { OCCUPYING_STATUSES, stationHasRoom } from "@/lib/stations";
+import { getConfig } from "@/lib/config";
+import { sendConsentRequest } from "@/lib/email";
+import { smsConsentRequest } from "@/lib/sms";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -428,7 +431,16 @@ export async function logVisitEvent(formData: FormData): Promise<void> {
   if (!appointment) redirect("/staff/appointments?error=not_found");
 
   await prisma.visitEvent.create({
-    data: { appointmentId, eventType, note, loggedById: staffId },
+    data: {
+      appointmentId,
+      eventType,
+      note,
+      loggedById: staffId,
+      // Ticked by the groomer logging it. What is ticked rides along with the
+      // ready-for-pickup message instead of relying on someone remembering to
+      // say it at the counter.
+      ownerVisible: formData.get("ownerVisible") != null,
+    },
   });
 
   if (eventType === VisitEventType.BITE) {
@@ -440,4 +452,111 @@ export async function logVisitEvent(formData: FormData): Promise<void> {
   }
 
   back(appointmentId, "?event=1");
+}
+
+/**
+ * Write down what the pet was actually groomed with.
+ *
+ * Kept on the visit rather than the pet: this is what happened on the day, and
+ * the next groomer reads it as the last thing that was done, not as a standing
+ * instruction. Standing instructions are `Pet.groomingNotes`.
+ */
+export async function saveGroomRecord(formData: FormData): Promise<void> {
+  await requireStaff();
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const text = (name: string) =>
+    ((formData.get(name) as string | null) ?? "").trim() || null;
+
+  await prisma.appointment.update({
+    where: { id: appointmentId },
+    data: {
+      groomBlade: text("groomBlade"),
+      groomShampoo: text("groomShampoo"),
+      groomRecordNotes: text("groomRecordNotes"),
+    },
+  });
+
+  back(appointmentId, "?record=1");
+}
+
+/**
+ * Ask the owner to approve a change to the groom they booked — matting that
+ * has to come off, a coat that cannot be brushed out.
+ *
+ * The answer comes back by phone or at the door, and staff record it below.
+ * There is no inbound message handling: a reply webhook needs a public
+ * callback URL and signature verification, which is its own piece of work, and
+ * a shave-down is a conversation the shop wants to have anyway.
+ */
+export async function requestConsent(formData: FormData): Promise<void> {
+  await requireStaff();
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const consentNote = ((formData.get("consentNote") as string | null) ?? "").trim();
+  if (!consentNote) back(appointmentId, "?error=no_consent_note");
+
+  const appointment = await prisma.appointment.update({
+    where: { id: appointmentId },
+    data: {
+      consentNote,
+      consentRequestedAt: new Date(),
+      // Asking again clears the previous answer: the owner is being asked
+      // about something new, and a stale yes must not read as covering it.
+      consentGrantedAt: null,
+      consentDeclinedAt: null,
+    },
+    include: {
+      pet: { select: { name: true } },
+      customer: { select: { firstName: true, email: true, phone: true, smsOptOut: true } },
+    },
+  });
+
+  const config = await getConfig();
+
+  // Same rule as every other send in the app: a carrier or mailbox problem
+  // must never fail the write. The request is recorded either way, and the
+  // groomer can pick up the phone.
+  if (appointment.customer.email) {
+    await sendConsentRequest({
+      to: appointment.customer.email,
+      ownerName: appointment.customer.firstName,
+      petName: appointment.pet.name,
+      note: consentNote,
+    }).catch(console.error);
+  }
+  if (appointment.customer.phone && !appointment.customer.smsOptOut) {
+    await smsConsentRequest({
+      to: appointment.customer.phone,
+      petName: appointment.pet.name,
+      shopName: config.shopName,
+      phone: config.shopPhone,
+    }).catch(console.error);
+  }
+
+  back(appointmentId, "?consent=1");
+}
+
+/** Record the answer the owner gave. */
+export async function recordConsent(formData: FormData): Promise<void> {
+  await requireStaff();
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const answer = (formData.get("answer") as string | null) ?? "";
+  if (answer !== "granted" && answer !== "declined") {
+    back(appointmentId, "?error=bad_consent_answer");
+  }
+
+  const now = new Date();
+  await prisma.appointment.update({
+    where: { id: appointmentId },
+    // Both columns are written every time, so the pair always reflects one
+    // answer rather than leaving an earlier contradicting one behind it.
+    data: {
+      consentGrantedAt: answer === "granted" ? now : null,
+      consentDeclinedAt: answer === "declined" ? now : null,
+    },
+  });
+
+  back(appointmentId, "?answered=1");
 }

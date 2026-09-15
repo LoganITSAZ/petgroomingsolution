@@ -122,14 +122,35 @@ export async function sendPasswordReset({
   });
 }
 
+/**
+ * Notes typed by a groomer, going into an email body. Escaped rather than
+ * trusted: staff are not attackers, but a `<` in "coat <1 inch" should reach
+ * the owner as a `<` rather than swallowing the rest of the sentence.
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * `findings` are the visit events staff ticked as the owner's to see — a hot
+ * ear, a lump, fleas. They ride on this message because the pet being ready is
+ * the moment the owner is actually reading, and a finding nobody passes on is
+ * the single thing owners say separates a groomer from a good one.
+ */
 export async function sendReadyForPickup({
   to,
   ownerName,
   petName,
+  findings = [],
 }: {
   to: string;
   ownerName: string;
   petName: string;
+  findings?: string[];
 }) {
   const config = await getConfig();
   if (!config.featureEmailNotify) return;
@@ -150,7 +171,64 @@ export async function sendReadyForPickup({
       <p>Hi ${ownerName},</p>
       <p><strong>${petName}</strong> is all done and ready to be picked up!</p>
       <p>Please come by at your earliest convenience.</p>
+      ${
+        findings.length
+          ? `<p>While we were working, we noticed a few things worth mentioning:</p>
+      <ul>${findings.map((finding) => `<li>${escapeHtml(finding)}</li>`).join("")}</ul>
+      <p>We are groomers, not vets — this is just what we saw, and your
+         veterinarian is the one to ask about any of it.</p>`
+          : ""
+      }
       ${config.shopPhone ? `<p>Questions? Call us at ${config.shopPhone}.</p>` : ""}
+      <p>— ${config.shopName}</p>
+    `,
+  });
+}
+
+/**
+ * "We need your say-so before we carry on."
+ *
+ * Sent when a groom cannot be finished as booked — matting found under the
+ * coat, a pelt that has to come off. Behind `featureEmailNotify` like the
+ * other visit mail: a shop with notifications off rings the owner instead, and
+ * the request is recorded on the visit either way.
+ */
+export async function sendConsentRequest({
+  to,
+  ownerName,
+  petName,
+  note,
+}: {
+  to: string;
+  ownerName: string;
+  petName: string;
+  note: string;
+}) {
+  const config = await getConfig();
+  if (!config.featureEmailNotify) return;
+
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY is not set — skipping consent request email");
+    return;
+  }
+
+  const from = await getFrom();
+
+  await resend.emails.send({
+    from,
+    to,
+    subject: `We need your OK for ${petName}'s groom`,
+    html: `
+      <p>Hi ${ownerName},</p>
+      <p>We have had to stop partway through <strong>${petName}</strong>'s groom
+         and would like your say-so before we carry on:</p>
+      <blockquote style="border-left:3px solid #ccc;margin:0;padding:0 0 0 12px">
+        ${escapeHtml(note)}
+      </blockquote>
+      <p>Please call us and we will talk it through — nothing else happens until
+         we hear from you.</p>
+      ${config.shopPhone ? `<p><strong>${config.shopPhone}</strong></p>` : ""}
       <p>— ${config.shopName}</p>
     `,
   });

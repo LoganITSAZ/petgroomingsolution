@@ -5,6 +5,7 @@ import { sendReadyForPickup } from "@/lib/email";
 import { smsReadyForPickup } from "@/lib/sms";
 import { getConfig } from "@/lib/config";
 import { AppointmentStatus } from "@prisma/client";
+import { formatVisitEvent } from "@/lib/utils";
 import { OCCUPYING_STATUSES } from "@/lib/stations";
 import { syncRewardForVisit } from "@/lib/rewards";
 
@@ -40,6 +41,22 @@ export async function broadcastStationBoard(stationId: string): Promise<void> {
   ]);
   if (!station) return;
   broadcastToStation(stationId, { type: "status_update", appointments, station });
+}
+
+/**
+ * What the groomer ticked as the owner's to hear about, in the order it
+ * happened. A finding with no note still says something — the type alone tells
+ * the owner there is something to ask about at the counter.
+ */
+async function ownerVisibleFindings(appointmentId: string): Promise<string[]> {
+  const events = await prisma.visitEvent.findMany({
+    where: { appointmentId, ownerVisible: true },
+    select: { eventType: true, note: true },
+    orderBy: { occurredAt: "asc" },
+  });
+  return events.map((event) =>
+    event.note?.trim() ? `${formatVisitEvent(event.eventType)}: ${event.note.trim()}` : formatVisitEvent(event.eventType)
+  );
 }
 
 export async function changeAppointmentStatus({
@@ -91,11 +108,14 @@ export async function changeAppointmentStatus({
   // tried: the shop switches each on independently, and a customer who reads
   // neither email nor text is no reason for the pet to sit uncollected.
   if (status === AppointmentStatus.READY_PICKUP) {
+    const findings = await ownerVisibleFindings(updated.id);
+
     if (updated.customer.email) {
       await sendReadyForPickup({
         to: updated.customer.email,
         ownerName: `${updated.customer.firstName} ${updated.customer.lastName}`,
         petName: updated.pet.name,
+        findings,
       }).catch(console.error);
     }
 
@@ -106,6 +126,7 @@ export async function changeAppointmentStatus({
         petName: updated.pet.name,
         shopName: config.shopName,
         phone: config.shopPhone,
+        hasFindings: findings.length > 0,
       }).catch(console.error);
     }
   }

@@ -14,6 +14,7 @@ import { OCCUPYING_STATUSES, stationCapacity } from "@/lib/stations";
 import PhotoStack from "@/components/PhotoStack";
 import { photoUrl } from "@/lib/photos";
 import { guidesForBreeds, tipLines } from "@/lib/breeds";
+import { groomRecordSummary, lastGroomRecordsForPets } from "@/lib/visit-record";
 import {
   formatCoatType,
   formatRole,
@@ -115,6 +116,8 @@ export default async function StaffStationDetailPage(props: PageProps) {
 
   // Breed reference for whoever is standing at this station.
   const guides = await guidesForBreeds(occupants.map((appt) => appt.pet.breed));
+  // What each pet was last groomed with. One query for the whole station.
+  const lastGrooms = await lastGroomRecordsForPets(occupants.map((appt) => appt.pet.id));
   // One instant for every row, rather than a fresh clock read per pet.
   const nowMs = new Date().getTime();
 
@@ -337,6 +340,7 @@ export default async function StaffStationDetailPage(props: PageProps) {
             <ul className="divide-y divide-stone-100">
               {occupants.map((appt) => {
                 const guide = guides.get((appt.pet.breed ?? "").trim().toLowerCase()) ?? null;
+                const lastGroom = lastGrooms.get(appt.pet.id) ?? null;
                 const mins = appt.checkedInAt
                   ? Math.round((nowMs - appt.checkedInAt.getTime()) / 60000)
                   : null;
@@ -484,9 +488,27 @@ export default async function StaffStationDetailPage(props: PageProps) {
                             {appt.pet.temperamentNotes}
                           </p>
                         )}
+                        {/* What was actually done last time — the groomer's own
+                            record, below the owner's standing instructions and
+                            never in place of them. */}
+                        {lastGroom && (
+                          <p className="text-sm text-stone-600">
+                            <span className="font-semibold">
+                              Last groom ({formatShopDate(lastGroom.completedAt ?? lastGroom.scheduledAt)}):{" "}
+                            </span>
+                            {groomRecordSummary(lastGroom)}
+                          </p>
+                        )}
+                        {(appt.pet.vetName || appt.pet.vetPhone) && (
+                          <p className="text-sm text-stone-600">
+                            <span className="font-semibold">Vet: </span>
+                            {[appt.pet.vetName, appt.pet.vetPhone].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
                         {appt.pet.healthFlags.length === 0 &&
                           !appt.pet.groomingNotes &&
-                          !appt.pet.temperamentNotes && (
+                          !appt.pet.temperamentNotes &&
+                          !lastGroom && (
                             <p className="text-sm text-stone-400">Nothing recorded.</p>
                           )}
                       </div>

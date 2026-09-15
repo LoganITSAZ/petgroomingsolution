@@ -20,6 +20,7 @@ import {
   formatShopTime,
   formatSpecies,
   formatStatus,
+  formatVisitEvent,
   statusBadgeClass,
 } from "@/lib/utils";
 import {
@@ -35,10 +36,15 @@ import PhotoStack from "@/components/PhotoStack";
 import InsightList from "@/components/InsightList";
 import { customerInsights, petInsights } from "@/lib/insights";
 import { photoUrl } from "@/lib/photos";
+import { consentState, groomRecordSummary, lastGroomRecordForPet } from "@/lib/visit-record";
+import { BLADE_TERMS } from "@/lib/resources";
 import { redeemCustomerReward } from "@/app/staff/customers/actions";
 import {
   logVisitEvent,
   moveStatus,
+  recordConsent,
+  requestConsent,
+  saveGroomRecord,
   moveToKennel,
   updateAssignment,
   updateServices,
@@ -55,21 +61,14 @@ export const metadata = { title: "Visit" };
  */
 
 
-const eventLabel: Record<VisitEventType, string> = {
-  REWASH: "Re-wash",
-  BITE: "Bite",
-  BEHAVIORAL: "Behavioural",
-  INJURY: "Injury",
-  MATTING_FOUND: "Matting found",
-  EQUIPMENT_ISSUE: "Equipment issue",
-  OTHER: "Other",
-};
-
 const NOTICES: Record<string, string> = {
   moved: "Status updated.",
   saved: "Appointment saved.",
   services: "Services updated.",
   event: "Visit event logged.",
+  record: "Groom record saved.",
+  consent: "Consent request sent to the owner.",
+  answered: "The owner's answer has been recorded.",
   redeemed: "Reward applied to this bill.",
 };
 
@@ -92,6 +91,8 @@ const ERRORS: Record<string, string> = {
   kennel_occupied: "That kennel already holds another pet.",
   kennel_out_of_service: "That kennel is out of service.",
   bad_event: "Pick a valid event type.",
+  no_consent_note: "Say what the owner is being asked to approve.",
+  bad_consent_answer: "Record the owner's answer as approved or declined.",
   not_floor_staff:
     "That account does not work the storefront — admin-only accounts cannot be assigned to a pet.",
   station_full: "That station is already at its maximum number of pets.",
@@ -190,6 +191,11 @@ export default async function AppointmentDetailPage(props: PageProps) {
     ...(await petInsights(appointment.petId)),
     ...(await customerInsights(appointment.customerId)),
   ];
+
+  // What this pet was last groomed with, so the blade is a decision made once
+  // rather than re-guessed every visit.
+  const previousGroom = await lastGroomRecordForPet(appointment.petId, appointment.id);
+  const consent = consentState(appointment);
 
   const next = nextStatus(appointment.status);
   const arrival =
@@ -671,6 +677,176 @@ export default async function AppointmentDetailPage(props: PageProps) {
       </PageSection>
 
       <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* What the pet was groomed with, for whoever has it next */}
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">Groom record</h2>
+          {previousGroom ? (
+            <p className="text-sm text-stone-600 mb-3 rounded-lg bg-white border border-stone-200 px-3 py-2">
+              <span className="block text-xs text-stone-400">
+                Last time ({formatShopDate(previousGroom.completedAt ?? previousGroom.scheduledAt)})
+              </span>
+              {groomRecordSummary(previousGroom)}
+            </p>
+          ) : (
+            <p className="text-sm text-stone-400 mb-3">
+              Nothing written down from a previous visit.
+            </p>
+          )}
+
+          <form action={saveGroomRecord} className="space-y-2">
+            <input type="hidden" name="appointmentId" value={appointment.id} />
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-sm">
+                <span className="block text-stone-500 mb-1 text-xs">Blade / comb</span>
+                <input
+                  name="groomBlade"
+                  list="blade-terms"
+                  defaultValue={appointment.groomBlade ?? ""}
+                  placeholder="#7F"
+                  className={`${inputClass} py-1.5`}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="block text-stone-500 mb-1 text-xs">Shampoo</span>
+                <input
+                  name="groomShampoo"
+                  defaultValue={appointment.groomShampoo ?? ""}
+                  placeholder="Oatmeal"
+                  className={`${inputClass} py-1.5`}
+                />
+              </label>
+            </div>
+            {/* The blade chart the shop already reads at /staff/resources, as
+                suggestions rather than a closed list — every shop keeps a tool
+                that is not on it. */}
+            <datalist id="blade-terms">
+              {BLADE_TERMS.map((term) => (
+                <option key={term} value={term} />
+              ))}
+            </datalist>
+            <label className="text-sm block">
+              <span className="block text-stone-500 mb-1 text-xs">
+                What the next groomer should know
+              </span>
+              <textarea
+                name="groomRecordNotes"
+                rows={2}
+                defaultValue={appointment.groomRecordNotes ?? ""}
+                placeholder="Left the head long, feet scissored, owner wants shorter next time"
+                className={`${inputClass} py-1.5 resize-y`}
+              />
+            </label>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-stone-400">
+                This visit only. Standing instructions live on {appointment.pet.name}&apos;s profile.
+              </p>
+              <button
+                type="submit"
+                className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap"
+              >
+                Save record
+              </button>
+            </div>
+          </form>
+        </section>
+
+        {/* Owner's say-so when the groom cannot be done as booked */}
+        <section className="border border-stone-200 rounded-lg bg-well p-4">
+          <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">Owner consent</h2>
+
+          {consent === "none" ? (
+            <p className="text-sm text-stone-400 mb-3">
+              Nothing has been put to the owner on this visit.
+            </p>
+          ) : (
+            <div
+              className={`text-sm rounded-lg border px-3 py-2 mb-3 ${
+                consent === "granted"
+                  ? "border-green-200 bg-green-50 text-green-800"
+                  : consent === "declined"
+                    ? "border-red-200 bg-red-50 text-red-800"
+                    : "border-amber-200 bg-amber-50 text-amber-800"
+              }`}
+            >
+              <p className="font-semibold">
+                {consent === "granted"
+                  ? "Owner approved"
+                  : consent === "declined"
+                    ? "Owner declined"
+                    : "Waiting on the owner"}
+              </p>
+              {appointment.consentNote && (
+                <p className="mt-1 whitespace-pre-wrap">{appointment.consentNote}</p>
+              )}
+              <p className="text-xs mt-1 opacity-80">
+                Asked{" "}
+                {appointment.consentRequestedAt
+                  ? formatShopTime(appointment.consentRequestedAt)
+                  : "in person"}
+                {consent !== "pending" &&
+                  ` · answered ${formatShopTime(
+                    (consent === "granted"
+                      ? appointment.consentGrantedAt
+                      : appointment.consentDeclinedAt)!
+                  )}`}
+              </p>
+            </div>
+          )}
+
+          {consent === "pending" && (
+            <form action={recordConsent} className="flex gap-2 mb-3">
+              <input type="hidden" name="appointmentId" value={appointment.id} />
+              <button
+                type="submit"
+                name="answer"
+                value="granted"
+                className="flex-1 bg-green-700 hover:bg-green-800 text-white px-3 py-2 rounded-lg text-xs font-semibold"
+              >
+                They approved it
+              </button>
+              <button
+                type="submit"
+                name="answer"
+                value="declined"
+                className="flex-1 bg-stone-700 hover:bg-stone-800 text-white px-3 py-2 rounded-lg text-xs font-semibold"
+              >
+                They said no
+              </button>
+            </form>
+          )}
+
+          <details className="disclosure" open={consent === "none"}>
+            <summary className="text-sm font-semibold text-amber-700 cursor-pointer">
+              {consent === "none" ? "Ask the owner" : "Ask about something else"}
+            </summary>
+            <form action={requestConsent} className="mt-3 space-y-2">
+              <input type="hidden" name="appointmentId" value={appointment.id} />
+              <textarea
+                name="consentNote"
+                rows={3}
+                required
+                aria-label="What the owner is being asked to approve"
+                placeholder="Matting is too tight to brush out safely. We would need to take the coat to a #7F, plus the matting fee."
+                className={`${inputClass} py-1.5 resize-y`}
+              />
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-stone-400">
+                  Emails and texts the owner, then wait for them to call back. Asking again clears
+                  any earlier answer.
+                </p>
+                <button
+                  type="submit"
+                  className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap"
+                >
+                  Send request
+                </button>
+              </div>
+            </form>
+          </details>
+        </section>
+      </PageSection>
+
+      <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Visit events */}
         <section className="border border-stone-200 rounded-lg bg-well p-4">
           <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">
@@ -689,8 +865,13 @@ export default async function AppointmentDetailPage(props: PageProps) {
                         : "bg-stone-100 text-stone-600"
                     }`}
                   >
-                    {eventLabel[event.eventType]}
+                    {formatVisitEvent(event.eventType)}
                   </span>
+                  {event.ownerVisible && (
+                    <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                      Told the owner
+                    </span>
+                  )}
                   {event.note && <span className="ml-2 text-stone-700">{event.note}</span>}
                   <span className="block text-xs text-stone-400 mt-0.5">
                     {formatShopTime(event.occurredAt)} on {formatShopDate(event.occurredAt)}
@@ -710,7 +891,7 @@ export default async function AppointmentDetailPage(props: PageProps) {
                 </option>
                 {Object.values(VisitEventType).map((type) => (
                   <option key={type} value={type}>
-                    {eventLabel[type]}
+                    {formatVisitEvent(type)}
                   </option>
                 ))}
               </select>
@@ -722,6 +903,16 @@ export default async function AppointmentDetailPage(props: PageProps) {
               </button>
             </div>
             <input name="note" aria-label="Incident details" placeholder="Details (optional)" className={`${inputClass} py-1.5`} />
+            <label className="flex items-start gap-2 text-sm text-stone-600">
+              <input type="checkbox" name="ownerVisible" className="mt-0.5 h-4 w-4 accent-amber-600" />
+              <span>
+                Tell the owner
+                <span className="block text-xs text-stone-400">
+                  Goes out with the ready-for-pickup message. Tick it for anything you noticed on
+                  the pet — ears, skin, lumps, fleas.
+                </span>
+              </span>
+            </label>
             <p className="text-xs text-stone-400">
               Logging a bite permanently flags {appointment.pet.name} on every screen, including the
               station display.

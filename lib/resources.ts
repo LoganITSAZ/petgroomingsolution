@@ -164,6 +164,13 @@ const owner: ResourceSection = {
  */
 export const RESOURCE_SECTIONS: ResourceSection[] = [safety, blades, handling, coatCare, owner];
 
+/**
+ * Blade names on their own, for the groom-record box on a visit. Suggestions,
+ * never a closed list — every shop keeps a tool that is not on the chart, and
+ * a groomer who types "comb C" has still written down what they used.
+ */
+export const BLADE_TERMS: string[] = blades.entries.map((entry) => entry.term);
+
 /** Term, qualifier and detail are all searchable — a groomer types "1/4" as readily as "blade". */
 function entryHaystack(entry: ResourceEntry): string {
   return `${entry.term} ${entry.note ?? ""} ${entry.detail}`.toLowerCase();

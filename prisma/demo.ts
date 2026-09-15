@@ -295,6 +295,18 @@ async function main() {
           groomingNotes: pick(GROOMING_NOTES),
           healthFlags: pick(HEALTH_FLAGS),
           hasBiteHistory: chance(0.06),
+          // Most households give the shop a practice; some never do.
+          ...(chance(0.75)
+            ? {
+                vetName: pick([
+                  "Camelback Animal Clinic",
+                  "Desert Paws Veterinary",
+                  "North Valley Animal Hospital",
+                  "Dr. Ramirez, Sunrise Vet",
+                ]),
+                vetPhone: `(602) 555-0${int(100, 199)}`,
+              }
+            : {}),
         },
       });
       petCount++;
@@ -345,6 +357,15 @@ async function main() {
             checkedInAt: status === "SCHEDULED" ? null : scheduledAt,
             completedAt: finished(status) ? new Date(+scheduledAt + duration * 60_000) : null,
             visitNotes: chance(0.2) ? "Owner called ahead — running late." : null,
+            // What the coat was actually taken to, on most finished visits —
+            // the thing the next groomer reads before picking up a clipper.
+            ...(finished(status) && chance(0.7)
+              ? {
+                  groomBlade: pick(["#4F", "#5F", "#7F", "#10", "Snap-on combs"]),
+                  groomShampoo: pick(["Oatmeal", "Hypoallergenic", "Deshedding", "Medicated"]),
+                  groomRecordNotes: chance(0.4) ? "Head left long, feet scissored." : null,
+                }
+              : {}),
             kennelId,
             kenneledAt: kennelId ? scheduledAt : null,
             services: { create: lines },
@@ -372,6 +393,26 @@ async function main() {
               eventType: pick(["REWASH", "MATTING_FOUND", "INJURY", "BEHAVIORAL", "OTHER"] as const),
               occurredAt: scheduledAt,
               note: "Logged by the groomer during the visit.",
+              loggedById: groomer.id,
+            },
+          });
+        }
+
+        // Something the groomer noticed on the pet and passed on. Marked for
+        // the owner, which is what puts it in the ready-for-pickup message.
+        if (chance(0.08)) {
+          await prisma.visitEvent.create({
+            data: {
+              appointmentId: appointment.id,
+              eventType: "HEALTH_FINDING",
+              occurredAt: scheduledAt,
+              note: pick([
+                "Right ear was red and smelled yeasty — worth a vet's look.",
+                "Small lump on the left flank, about pea-sized. Not new to the owner.",
+                "Flea dirt through the rump. Treated coat, told the owner.",
+                "Both dew claws had grown into the pad side. Trimmed back carefully.",
+              ]),
+              ownerVisible: true,
               loggedById: groomer.id,
             },
           });
