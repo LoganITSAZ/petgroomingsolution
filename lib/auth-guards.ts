@@ -1,4 +1,6 @@
 import { auth } from "@/lib/auth";
+import { getConfig } from "@/lib/config";
+import { isEnabled, type FeatureKey } from "@/lib/features";
 import { canManage, getStaffRoles } from "@/lib/staff-roles";
 import { StaffRole } from "@prisma/client";
 
@@ -47,4 +49,19 @@ export async function requireManager(): Promise<string> {
 /** Signed-in admin. Returns their id. Roles are read from the database. */
 export async function requireAdmin(): Promise<string> {
   return requireRoles((roles) => roles.includes(StaffRole.ADMIN));
+}
+
+/**
+ * Refuse a mutation belonging to a feature the shop has switched off.
+ *
+ * Hiding a link or a section is presentation. A server action is its own
+ * endpoint, so a disabled feature whose action is still callable is only
+ * disabled on screen — this is the gate underneath. Reads the config at
+ * request time, never a build-time snapshot.
+ */
+export async function requireFeature(key: FeatureKey): Promise<void> {
+  const config = await getConfig();
+  if (!isEnabled(config, key)) {
+    throw new Error("Feature off");
+  }
 }
