@@ -109,7 +109,7 @@ export function PageSection({
       data-page-section
       className={cn(
         "min-w-0 border-t border-well-line first:border-t-0",
-        tone === "muted" && "bg-band shadow-[inset_0_1px_0_rgb(var(--well-line))]",
+        tone === "muted" && "bg-band",
         grow && "flex-1 min-h-0 flex flex-col",
         className
       )}
@@ -117,9 +117,9 @@ export function PageSection({
       {(title || hint || actions) && (
         <div
           className={cn(
-            "section-heading flex items-center justify-between gap-3 flex-wrap px-3 py-1.5",
+            "section-heading flex items-center justify-between gap-3 flex-wrap border-b border-well-line px-3 py-1.5",
             // The heading reads as a label because the strip it sits on does.
-            tone === "plain" && "bg-band border-b border-well-line"
+            tone === "plain" && "bg-band"
           )}
         >
           {title && (
@@ -214,7 +214,7 @@ export function StatStrip({
   return (
     <div
       className={cn(
-        "glass-stat-strip bg-band border-t border-stone-100 first:border-t-0 px-3 py-2 flex flex-wrap gap-x-5 gap-y-0.5 text-sm text-muted",
+        "glass-stat-strip bg-band border-t border-well-line first:border-t-0 px-3 py-2 flex flex-wrap gap-x-5 gap-y-0.5 text-sm text-muted",
         className
       )}
     >

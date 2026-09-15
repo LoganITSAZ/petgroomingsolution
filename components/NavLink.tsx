@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import OfficeIcon, { navigationIcon } from "./OfficeIcon";
 import { usePathname } from "next/navigation";
 
 /**
@@ -32,7 +33,8 @@ export default function NavLink({ href, label }: { href: string; label: string }
           : "text-ink",
       ].join(" ")}
     >
-      {label}
+      <OfficeIcon name={navigationIcon(href)} />
+      <span>{label}</span>
     </Link>
   );
 }

@@ -122,16 +122,16 @@ describe("PageShell", () => {
     ).toHaveNoViolations();
   });
 
-  it("renders muted sections as a recessed toolbar band", () => {
+  it("renders muted sections with a single divider and a bordered heading", () => {
     render(
       <PageSection title="Filters" tone="muted">
         <div>Filter rows</div>
       </PageSection>
     );
 
-    expect(screen.getByText("Filters").closest("div")?.parentElement).toHaveClass(
-      "bg-band",
-        "shadow-[inset_0_1px_0_rgb(var(--well-line))]"
-    );
+    const heading = screen.getByText("Filters").closest("div");
+    expect(heading).toHaveClass("border-b", "border-well-line");
+    expect(heading?.parentElement).toHaveClass("bg-band", "border-t", "border-well-line");
+    expect(heading?.parentElement?.className).not.toContain("shadow-");
   });
 });

@@ -3,6 +3,7 @@ import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
 import { getConfig } from "@/lib/config";
 import "./globals.css";
 import "./liquid-glass.css";
+import "./workspace.css";
 
 /**
  * One face, carried on a CSS variable so Tailwind's `font-sans` resolves to it

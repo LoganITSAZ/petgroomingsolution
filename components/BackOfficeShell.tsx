@@ -13,6 +13,7 @@ import { setMyPresence } from "@/app/staff/presence-actions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
+import OfficeIcon from "@/components/OfficeIcon";
 
 /**
  * One back office, one shell. Staff and admin screens are the same product to
@@ -167,12 +168,12 @@ export default async function BackOfficeShell({ children }: { children: React.Re
       </a>
 
       {/* Phone: presence first, navigation behind a tap */}
-      <header className="md:hidden sticky top-0 z-40 office-navigation border-b border-line px-3 py-2">
+      <header className="office-mobile-header md:hidden sticky top-0 z-40 office-navigation border-b border-line px-3 py-2">
         <div className="flex items-center gap-3">
           <MobileMenu summaryClassName="nav-menu-toggle" menuClassName="office-navigation border border-line max-h-[75dvh] overflow-y-auto">{links}</MobileMenu>
 
           <Link href="/staff" className="font-display font-extrabold tracking-tight text-ink truncate">
-            <span aria-hidden="true">🐾</span> {session.user.name}
+            <span className="office-mobile-brand"><OfficeIcon name="paw" /> {config.shopName}</span>
           </Link>
 
           {onFloor && (
@@ -184,28 +185,30 @@ export default async function BackOfficeShell({ children }: { children: React.Re
       </header>
 
       {/* Terminal: the familiar sidebar */}
-      <aside className="hidden md:flex w-52 office-navigation border-r border-line flex-col py-5 px-3 fixed h-full">
+      <aside className="office-sidebar hidden md:flex w-60 office-navigation border-r border-line flex-col py-5 px-3 fixed h-full">
         {/* The display face at text-lg put a two-word shop name on the first
             group header. Tight leading and its own space, rather than an
             ellipsis — a shop should not read its own name cut off. */}
         <Link
           href="/"
-          className="mb-4 block px-2 font-display text-base font-extrabold leading-tight tracking-[-0.02em] text-ink"
+          className="office-workspace"
         >
-          <span aria-hidden="true">🐾</span> {config.shopName}
+          <span className="office-brand-mark"><OfficeIcon name="paw" /></span>
+          <span className="min-w-0"><span className="office-workspace-name">{config.shopName}</span><span className="office-workspace-caption">Business workspace</span></span>
         </Link>
         {/* The admin group makes this list long enough to outrun a short screen. */}
-        <nav className="flex-1 space-y-1 text-sm overflow-y-auto">{links}</nav>
-        <div className="text-xs text-muted px-2 space-y-1 pt-3 mt-3 border-t border-line">
+        <nav aria-label="Workspace navigation" className="flex-1 space-y-1 text-sm overflow-y-auto">{links}</nav>
+        <div className="office-account text-xs text-muted px-2 space-y-1 pt-3 mt-3 border-t border-line">
           {/* Presence: the control the floor touches most */}
           {onFloor && (
             <PresenceSwitcher action={setMyPresence} current={presence} returnTo="/staff" />
           )}
           <Link
             href="/staff/profile"
-            className="block pt-1 text-muted hover:text-ink hover:underline"
+            className="office-profile"
           >
-            {session.user.name}
+            <span className="office-avatar" aria-hidden="true">{session.user.name?.trim().charAt(0).toUpperCase() || "U"}</span>
+            <span><span className="block font-semibold text-ink">{session.user.name}</span><span className="block text-xs text-muted">My account</span></span>
           </Link>
           <form
             action={async () => {
@@ -223,7 +226,7 @@ export default async function BackOfficeShell({ children }: { children: React.Re
           document scroll — there is no visible bar to strand there. */}
       <main
         id="main-content"
-        className="flex-1 min-w-0 md:ml-52 p-3 md:p-4 flex flex-col md:h-screen md:overflow-hidden"
+        className="flex-1 min-w-0 md:ml-60 p-3 md:p-6 flex flex-col md:h-screen md:overflow-hidden"
       >
         {children}
       </main>

@@ -621,11 +621,15 @@
    Mix with the current surface so shop palettes work in either color mode. */
 .page-card > .page-heading {
   background-color: color-mix(in srgb, rgb(var(--brand-500)) 22%, rgb(var(--surface)));
-  border-bottom: 2px solid rgb(var(--brand-500));
+  border-bottom: 1px solid rgb(var(--well-line));
+}
+/* The page header owns this shared edge, even when its body is a custom grid. */
+.page-card > .page-heading + :is([data-page-section], .glass-stat-strip) {
+  border-top: 0;
 }
 .page-card .section-heading {
   background-color: color-mix(in srgb, rgb(var(--brand-500)) 14%, rgb(var(--surface)));
-  border-inline-start: 3px solid rgb(var(--brand-500));
+  border-bottom: 1px solid rgb(var(--well-line));
 }
 .service-group-heading,
 .service-group {
