@@ -62,10 +62,10 @@ export function PageShell({
           )}
           <div className="ml-auto flex items-center justify-end gap-2 flex-wrap">
             {actions}
-            {columns && <PageColumnsButton />}
           </div>
         </header>
         {children}
+        {columns && <PageColumnsButton />}
       </section>
     </div>
   );

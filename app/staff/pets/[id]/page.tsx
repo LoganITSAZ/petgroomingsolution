@@ -8,6 +8,8 @@ import {
   statusBadgeClass,
 } from "@/lib/utils";
 import Link from "next/link";
+import ProfileFacts from "@/components/ProfileFacts";
+import ProfileAvatar from "@/components/ProfileAvatar";
 import { PageShell, PageSection } from "@/components/ui";
 import VisitPhotoStrip from "@/components/VisitPhotoStrip";
 import { getConfig } from "@/lib/config";
@@ -27,7 +29,6 @@ import { shopDayKey } from "@/lib/utils";
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
 export const metadata = { title: "Pet" };
-
 
 const visitEventLabel: Record<string, string> = {
   REWASH: "Re-wash",
@@ -113,11 +114,20 @@ export default async function PetDetailPage(props: PageProps) {
 
   return (
     <PageShell
-      back={{ href: "/staff/customers", label: "Back to Customers" }}
+      back={{ href: `/staff/customers/${pet.customer.id}`, label: `${pet.customer.firstName} ${pet.customer.lastName} / Pets` }}
       title={pet.name}
       subtitle={`${formatSpecies(pet.species)}${pet.breed ? ` · ${pet.breed}` : ""}`}
-      className="max-w-5xl w-full"
+      className="profile-page w-full"
+      actions={
+            <Link
+              href={`/staff/appointments/new?petId=${pet.id}&customerId=${pet.customer.id}`}
+              className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+            >
+              + New Appointment
+            </Link>
+      }
     >
+      <div className="profile-grid">
 
       {searchParams.updated === "1" && <p role="status" className="px-3 py-2 text-green-800 text-sm">Profile updated.</p>}
       {searchParams.error === "pet_name" && <p role="alert" className="px-3 py-2 text-red-800 text-sm">A pet needs a name.</p>}
@@ -142,7 +152,7 @@ export default async function PetDetailPage(props: PageProps) {
 
       {/* Bite history banner */}
       {pet.hasBiteHistory && (
-        <div className="border-t border-stone-100 bg-red-600 text-white px-3 py-2.5 flex items-center gap-3 font-bold text-sm">
+        <div className="profile-wide rounded-xl border border-red-700 bg-red-600 text-white px-3 py-2.5 flex items-center gap-3 font-bold text-sm">
           <span className="text-xl" aria-hidden="true">⚠</span>
           <span>BITE HISTORY — Handle with extreme caution</span>
         </div>
@@ -150,115 +160,70 @@ export default async function PetDetailPage(props: PageProps) {
 
       {/* Pet header */}
       <PageSection
-        title="Profile Details"
+        title="At a glance"
+        className="profile-summary profile-wide"
         actions={
-          <>
           <ModalButton label="Edit Profile" title={`Edit ${pet.name}`} variant="secondary">
             <PetForm customerId={pet.customer.id} pet={pet} flagOptions={flagOptions} returnToPet />
           </ModalButton>
-            <Link
-              href={`/staff/appointments/new?petId=${pet.id}&customerId=${pet.customer.id}`}
-              className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
-            >
-              + New Appointment
-            </Link>
-          </>
         }
       >
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-3">
+        <div className="flex items-start justify-between gap-5 flex-wrap">
+          <div className="flex min-w-0 flex-1 flex-wrap items-start gap-5">
             <PhotoUpload
               action={setPetPhoto}
               idField="petId"
               idValue={pet.id}
               currentUrl={photoUrl(pet.photoId) ?? pet.photoUrl}
+              size={96}
               label={pet.name}
             />
-            <div>
-            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-0.5 text-sm text-stone-500">
-              <span>
-                <span className="font-medium text-stone-700">Species:</span>{" "}
-                {formatSpecies(pet.species)}
-              </span>
-              {pet.breed && (
-                <span>
-                  <span className="font-medium text-stone-700">Breed:</span> {pet.breed}
-                </span>
-              )}
-              {pet.weightLbs != null && (
-                <span>
-                  <span className="font-medium text-stone-700">Weight:</span> {pet.weightLbs} lbs
-                </span>
-              )}
-              {age !== null && (
-                <span>
-                  <span className="font-medium text-stone-700">Age:</span> {age}{" "}
-                  {age === 1 ? "year" : "years"}
-                </span>
-              )}
-              {pet.dateOfBirth && (
-                <span>
-                  <span className="font-medium text-stone-700">DOB:</span>{" "}
-                  {new Date(pet.dateOfBirth).toLocaleDateString("en-US", {
-                    month: "long",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </span>
-              )}
-              {pet.coatType && (
-                <span>
-                  <span className="font-medium text-stone-700">Coat:</span>{" "}
-                  {formatCoatType(pet.coatType)}
-                </span>
-              )}
-              {pet.sex !== "UNKNOWN" && (
-                <span>
-                  <span className="font-medium text-stone-700">Sex:</span>{" "}
-                  {pet.sex === "MALE" ? "Male" : "Female"}
-                </span>
-              )}
-            </div>
+            <div className="min-w-0 flex-1 basis-64">
+            <ProfileFacts facts={[
+              { label: "Species", value: formatSpecies(pet.species) },
+              { label: "Breed", value: pet.breed || <span className="text-muted">Not on file</span> },
+              { label: "Weight", value: pet.weightLbs != null ? `${pet.weightLbs} lbs` : <span className="text-muted">Not on file</span> },
+              { label: "Age", value: age !== null ? (age < 1 ? "Under 1 year" : `${age} ${age === 1 ? "year" : "years"}`) : <span className="text-muted">Not on file</span> },
+              { label: "Coat", value: pet.coatType ? formatCoatType(pet.coatType) : <span className="text-muted">Not on file</span> },
+              { label: "Sex", value: pet.sex === "UNKNOWN" ? <span className="text-muted">Not on file</span> : pet.sex === "MALE" ? "Male" : "Female" },
+              ...(pet.dateOfBirth ? [{ label: "Date of birth", value: formatShopDate(pet.dateOfBirth, { month: "long", day: "numeric", year: "numeric" }) }] : []),
+            ]} />
             </div>
           </div>
 
         </div>
       </PageSection>
 
-      {insights.length > 0 && (
-        <PageSection title="What past visits show">
-          <InsightList insights={insights} compact />
-        </PageSection>
-      )}
-
-
         {/* Owner card */}
         <PageSection title="Owner">
+          <div className="mb-3">
+            <ProfileAvatar src={photoUrl(pet.customer.photoId)} name={`${pet.customer.firstName} ${pet.customer.lastName}`} size={52} />
+          </div>
           <p className="font-bold text-stone-900">
             {pet.customer.firstName} {pet.customer.lastName}
           </p>
           <p className="text-sm text-stone-500 mt-0.5">
-            <a href={`mailto:${pet.customer.email}`} className="hover:text-amber-700 underline underline-offset-2">
+            <a href={`mailto:${pet.customer.email}`} className="hover:text-brand-text underline underline-offset-2">
               {pet.customer.email}
             </a>
           </p>
           {pet.customer.phone && (
             <p className="text-sm text-stone-500 mt-0.5">
-              <a href={`tel:${pet.customer.phone}`} className="hover:text-amber-700">
+              <a href={`tel:${pet.customer.phone}`} className="hover:text-brand-text">
                 {pet.customer.phone}
               </a>
             </p>
           )}
           <Link
             href={`/staff/customers/${pet.customer.id}`}
-            className="inline-block mt-3 text-sm text-amber-700 hover:text-amber-900 font-medium underline underline-offset-2"
+            className="inline-block mt-3 text-sm text-brand-text hover:text-ink font-medium underline underline-offset-2"
           >
             View customer profile →
           </Link>
         </PageSection>
 
         {/* Health flags */}
-        <PageSection title="Health Flags">
+        <PageSection title="Health & vaccinations" className="profile-care">
           {/* Vaccinations sit with the flags because they are the same question
               a groomer asks before the pet is on the table. Unconfirmed is
               stated rather than left blank: silence reads as fine. */}
@@ -355,7 +320,7 @@ export default async function PetDetailPage(props: PageProps) {
         </PageSection>
 
         {/* Grooming notes */}
-        <PageSection title="Grooming Notes">
+        <PageSection title="Grooming Notes" className="profile-notes">
           {pet.groomingNotes ? (
             <p className="text-sm text-stone-700 whitespace-pre-wrap">{pet.groomingNotes}</p>
           ) : (
@@ -364,7 +329,7 @@ export default async function PetDetailPage(props: PageProps) {
         </PageSection>
 
         {/* Temperament notes */}
-        <PageSection title="Temperament Notes">
+        <PageSection title="Temperament Notes" className="profile-notes">
           {pet.temperamentNotes ? (
             <p className="text-sm text-stone-700 whitespace-pre-wrap">{pet.temperamentNotes}</p>
           ) : (
@@ -372,16 +337,22 @@ export default async function PetDetailPage(props: PageProps) {
           )}
         </PageSection>
 
+      {insights.length > 0 && (
+        <PageSection title="What past visits show" className="profile-wide">
+          <InsightList insights={insights} compact />
+        </PageSection>
+      )}
+
       {/* Visit event log */}
       {(config.featureVisitPhotos || visitPhotos.length > 0) && visitPhotos.length > 0 && (
-        <PageSection title={`Visit Photos (${visitPhotos.length})`}>
+        <PageSection title={`Visit Photos (${visitPhotos.length})`} className="profile-wide">
           <VisitPhotoStrip photos={visitPhotos} petName={pet.name} showVisibility>
             {(photo) => {
               const visit = visitPhotos.find((row) => row.id === photo.id)?.appointment;
               return visit ? (
                 <Link
                   href={`/staff/appointments/${visit.id}`}
-                  className="text-xs text-amber-700 hover:text-amber-900 underline"
+                  className="text-xs text-brand-text hover:text-ink underline"
                 >
                   Open that visit
                 </Link>
@@ -391,7 +362,7 @@ export default async function PetDetailPage(props: PageProps) {
         </PageSection>
       )}
 
-      <PageSection title="Visit Events">
+      <PageSection title="Visit Events" className="profile-wide">
         {visitEvents.length === 0 ? (
           <div className="border border-stone-200 rounded-lg bg-well p-4 text-center text-stone-400 text-sm">
             No visit events recorded.
@@ -399,7 +370,7 @@ export default async function PetDetailPage(props: PageProps) {
         ) : (
           <div className="border border-well-line rounded-lg overflow-hidden divide-y divide-stone-100">
             {visitEvents.map((event) => (
-              <div key={event.id} className="px-4 py-2.5 flex items-start gap-3">
+              <div key={event.id} className="px-4 py-3 flex flex-wrap items-start gap-3">
                 <span
                   className={`flex-shrink-0 mt-0.5 text-xs font-bold px-2.5 py-1 rounded-full ${
                     visitEventColor[event.eventType] ?? "bg-stone-100 text-stone-500"
@@ -431,7 +402,7 @@ export default async function PetDetailPage(props: PageProps) {
       </PageSection>
 
       {/* Appointment history */}
-      <PageSection title="Appointment History">
+      <PageSection title="Appointment History" className="profile-wide">
         {pet.appointments.length === 0 ? (
           <div className="border border-stone-200 rounded-lg bg-well p-4 text-center text-stone-400 text-sm">
             No appointments yet.
@@ -491,6 +462,7 @@ export default async function PetDetailPage(props: PageProps) {
           </div>
         )}
       </PageSection>
+      </div>
     </PageShell>
   );
 }

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { Prisma, AppointmentStatus, AppointmentType, StaffRole, StationRole } from "@prisma/client";
+import { Prisma, AppointmentStatus, StaffRole } from "@prisma/client";
 import { nextStatus } from "@/lib/appointment-flow";
 import {
   formatServiceType,
@@ -58,11 +58,11 @@ type View = keyof typeof VIEWS;
 
 const GROUPS = {
   active: "Active",
-  all: "All (incl. cancelled)",
-  open: "Open",
+  scheduled: "Not arrived",
   in_shop: "In the shop",
-  finished: "Finished",
+  picked_up: "Picked up",
   cancelled: "Cancelled",
+  all: "All (incl. cancelled)",
 } as const;
 type Group = keyof typeof GROUPS;
 
@@ -72,15 +72,23 @@ type Group = keyof typeof GROUPS;
  */
 const DEFAULT_GROUP: Group = "active";
 
+/*
+ * Below "Active" the groups are the stages of one day and they do not overlap:
+ * every status belongs to exactly one of them. The menu used to carry "Open"
+ * and "Finished" as well, which each spanned two of the others — picking one
+ * of five options that share their rows tells the counter nothing about what
+ * the list is now missing.
+ */
 const GROUP_FILTER: Record<Group, AppointmentStatus[] | null> = {
   active: Object.values(AppointmentStatus).filter(
     (status) => status !== AppointmentStatus.CANCELLED
   ),
-  all: null,
-  open: [AppointmentStatus.SCHEDULED, ...IN_SHOP, AppointmentStatus.READY_PICKUP],
-  in_shop: IN_SHOP,
-  finished: [AppointmentStatus.READY_PICKUP, AppointmentStatus.PICKED_UP],
+  scheduled: [AppointmentStatus.SCHEDULED],
+  // A pet whose owner has been rung is still standing in the shop.
+  in_shop: [...IN_SHOP, AppointmentStatus.READY_PICKUP],
+  picked_up: [AppointmentStatus.PICKED_UP],
   cancelled: [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW],
+  all: null,
 };
 
 interface Filters {
@@ -89,8 +97,6 @@ interface Filters {
   group: Group;
   q: string;
   staffId: string;
-  stationId: string;
-  type: string;
 }
 
 function queryString(filters: Filters, patch: Partial<Filters> = {}): string {
@@ -101,8 +107,6 @@ function queryString(filters: Filters, patch: Partial<Filters> = {}): string {
   if (merged.group !== DEFAULT_GROUP) params.set("group", merged.group);
   if (merged.q) params.set("q", merged.q);
   if (merged.staffId) params.set("staffId", merged.staffId);
-  if (merged.stationId) params.set("stationId", merged.stationId);
-  if (merged.type) params.set("type", merged.type);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }
@@ -129,8 +133,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     group: (searchParams.group as Group) in GROUPS ? (searchParams.group as Group) : DEFAULT_GROUP,
     q: searchParams.q?.trim() ?? "",
     staffId: searchParams.staffId ?? "",
-    stationId: searchParams.stationId ?? "",
-    type: searchParams.type ?? "",
   };
 
   // Range for the chosen view, always resolved in shop time.
@@ -149,8 +151,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     scheduledAt: range,
     ...(statuses ? { status: { in: statuses } } : {}),
     ...(filters.staffId ? { staffId: filters.staffId } : {}),
-    ...(filters.stationId ? { stationId: filters.stationId } : {}),
-    ...(filters.type ? { appointmentType: filters.type as AppointmentType } : {}),
     ...(filters.q
       ? {
           OR: [
@@ -166,7 +166,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
   const [
     appointments,
     groomers,
-    stations,
     kennels,
     arrivals,
     counts,
@@ -187,11 +186,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     prisma.staff.findMany({
       where: { isActive: true, roles: { hasSome: [StaffRole.GROOMER, StaffRole.BATHER] } },
       select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.station.findMany({
-      where: { isActive: true, role: { not: StationRole.KENNEL } },
-      select: { id: true, name: true, role: true },
       orderBy: { name: "asc" },
     }),
     prisma.kennel.findMany({
@@ -234,8 +228,18 @@ export default async function StaffAppointmentsPage(props: PageProps) {
   const listQuery = queryString(filters);
 
   const isFiltered =
-    Boolean(filters.q || filters.staffId || filters.stationId || filters.type) ||
-    filters.group !== DEFAULT_GROUP;
+    Boolean(filters.q || filters.staffId) || filters.group !== DEFAULT_GROUP;
+
+  /*
+    Clearing the filters is not going back to today: the counter narrowing
+    Thursday wants Thursday unnarrowed. Only the three controls below the
+    counts are cleared — the view and the date stay where they were put.
+  */
+  const clearedHref = `/staff/appointments${queryString(filters, {
+    group: DEFAULT_GROUP,
+    q: "",
+    staffId: "",
+  })}`;
 
   /*
    * Compartments with room, offered when a pet arrives. Room is per customer,
@@ -262,15 +266,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
         capacity: room.limit,
         sharedHousehold: room.sharedHousehold,
       }));
-  // Filters stay collapsed until asked for, but never hide the fact that some
-  // are applied.
-  const activeFilters = [
-    filters.q,
-    filters.group !== DEFAULT_GROUP ? filters.group : "",
-    filters.staffId,
-    filters.stationId,
-    filters.type,
-  ].filter(Boolean).length;
   const selectClass =
     "border border-stone-300 rounded-lg px-2 py-1.5 text-sm text-stone-800 bg-white shadow-sm ";
 
@@ -314,29 +309,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
   );
 
   /*
-    Filters is a control on the toolbar, and the panel it opens is a band across
-    the whole card — a <details> cannot straddle the two, and this page is a
-    server component with no client JS of its own. A checkbox its label toggles
-    does it in CSS: the input is the `peer` (for the label's focus ring), the
-    label is the button, and the panel shows when the card `:has()` the box
-    checked. `defaultChecked` opens it when filters are already applied, so
-    nothing is narrowing the list invisibly.
-  */
-  const filtersToggle = (
-    <label
-      htmlFor="filters-open"
-      className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-well-line bg-white px-2.5 py-1.5 text-xs font-semibold text-stone-700 shadow-sm transition-colors hover:bg-well peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2"
-    >
-      Filters
-      {activeFilters > 0 && (
-        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-          {activeFilters}
-        </span>
-      )}
-    </label>
-  );
-
-  /*
     Everything the list is narrowed by, carried through the date form so
     jumping to a day keeps the filters that were applied to it.
   */
@@ -347,8 +319,6 @@ export default async function StaffAppointmentsPage(props: PageProps) {
         group: filters.group,
         q: filters.q,
         staffId: filters.staffId,
-        stationId: filters.stationId,
-        type: filters.type,
       })
         .filter(([, value]) => value)
         .map(([name, value]) => (
@@ -437,33 +407,31 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     */
     <PageShell
       title="Appointments"
-      subtitle={`${appointments.length} shown`}
-      actions={
-        <>
-          {/* The checkbox rides with its label so the toggle still draws a
-              focus ring. The panel it opens is a band further down the card,
-              which is no longer a sibling — `:has()` on the card reaches it. */}
-          <input
-            id="filters-open"
-            type="checkbox"
-            className="peer sr-only"
-            defaultChecked={activeFilters > 0}
-            aria-label="Show filters"
-          />
-          {filtersToggle}
-          {newVisit}
-        </>
-      }
+      actions={newVisit}
     >
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-well-line bg-band px-3 py-2">
           {dayNav}
           {viewTabs}
         </div>
 
-        {/* The panel the header's toggle opens. */}
+
+        {/* Counts for the range, regardless of the current filter */}
+        <StatStrip stats={summary} />
+
+        {searchParams.error === "not_found" && (
+          <div className="mx-3 mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-red-800 text-sm font-medium">
+            That appointment no longer exists.
+          </div>
+        )}
+
+        {/*
+          Three controls, sitting on the list they narrow. They were behind a
+          header toggle two bands up, which meant reading the counts, the date
+          and the stat strip before finding out why the list was short.
+        */}
         <form
           method="GET"
-          className="hidden [.page-card:has(#filters-open:checked)_&]:flex px-3 py-2 border-t border-stone-100 flex-wrap items-center gap-2"
+          className="flex flex-wrap items-center gap-2 border-t border-well-line bg-band px-3 py-2"
         >
           <FilterAutoSubmit scope="filters">
             <input type="hidden" name="view" value={filters.view} />
@@ -493,41 +461,19 @@ export default async function StaffAppointmentsPage(props: PageProps) {
                 </option>
               ))}
             </select>
-            <select name="stationId" aria-label="Filter by station" defaultValue={filters.stationId} className={selectClass}>
-              <option value="">Any station</option>
-              {stations.map((station) => (
-                <option key={station.id} value={station.id}>
-                  {station.name}
-                </option>
-              ))}
-            </select>
-            <select name="type" aria-label="Filter by visit type" defaultValue={filters.type} className={selectClass}>
-              <option value="">Any type</option>
-              <option value={AppointmentType.APPOINTMENT}>Booked</option>
-              <option value={AppointmentType.WALK_IN}>Walk-in</option>
-            </select>
             <button
               type="submit"
               className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-1.5 rounded-lg text-sm font-semibold"
             >
               Apply
             </button>
-            {listQuery && (
-              <Link href="/staff/appointments" className="text-xs text-stone-400 hover:text-stone-600 underline">
+            {isFiltered && (
+              <Link href={clearedHref} className="text-xs text-stone-400 hover:text-stone-600 underline">
                 Reset
               </Link>
             )}
           </FilterAutoSubmit>
         </form>
-
-        {/* Counts for the range, regardless of the current filter */}
-        <StatStrip stats={summary} />
-
-        {searchParams.error === "not_found" && (
-          <div className="mx-3 mb-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-red-800 text-sm font-medium">
-            That appointment no longer exists.
-          </div>
-        )}
 
         {/* List — takes whatever height is left and scrolls inside the card */}
         {appointments.length === 0 ? (
@@ -543,7 +489,7 @@ export default async function StaffAppointmentsPage(props: PageProps) {
                 "+ New" button on the toolbar above. */}
             {isFiltered && (
               <Link
-                href="/staff/appointments"
+                href={clearedHref}
                 className="mt-2 inline-block font-semibold text-brand-text hover:underline"
               >
                 Clear the filters

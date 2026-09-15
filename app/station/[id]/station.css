@@ -2,6 +2,7 @@
 .station-hud {
   padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
   background-image: radial-gradient(ellipse at 0 0, rgb(var(--brand-500) / 0.12), transparent 55rem);
+  background-attachment: scroll;
   line-height: 1.55;
 }
 .station-hud .station-header {

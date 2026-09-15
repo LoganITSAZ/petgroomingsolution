@@ -6,6 +6,8 @@ import {
   statusBadgeClass,
 } from "@/lib/utils";
 import Link from "next/link";
+import ProfileFacts from "@/components/ProfileFacts";
+import ProfileAvatar from "@/components/ProfileAvatar";
 import { PageShell, PageSection } from "@/components/ui";
 import { notFound } from "next/navigation";
 import {
@@ -36,7 +38,6 @@ import { PetForm, healthFlagOptions } from "../PetForm";
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
 export const metadata = { title: "Customer" };
-
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -179,8 +180,17 @@ export default async function CustomerDetailPage(props: PageProps) {
       back={{ href: "/staff/customers", label: "Back to Customers" }}
       title={`${customer.firstName} ${customer.lastName}`}
       subtitle={`Member since ${memberSince}`}
-      className="max-w-5xl w-full"
+      className="profile-page w-full"
+      actions={
+            <Link
+              href={`/staff/appointments/new?customerId=${customer.id}`}
+              className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
+            >
+              + New Appointment
+            </Link>
+      }
     >
+      <div className="profile-grid">
 
       {searchParams.updated === "1" && <p role="status" className="px-3 py-2 text-green-800 text-sm">Profile updated.</p>}
       {searchParams.error === "profile_invalid" && <p role="alert" className="px-3 py-2 text-red-800 text-sm">Enter a first name, last name, and valid email address.</p>}
@@ -212,9 +222,9 @@ export default async function CustomerDetailPage(props: PageProps) {
 
       {/* Customer header */}
       <PageSection
-        title="Profile Details"
+        title="At a glance"
+        className="profile-summary profile-wide"
         actions={
-          <>
           <ModalButton label="Edit Profile" title="Edit customer profile" variant="secondary">
             <form action={saveCustomerProfile} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input type="hidden" name="customerId" value={customer.id} />
@@ -251,63 +261,32 @@ export default async function CustomerDetailPage(props: PageProps) {
               </div>
             </form>
           </ModalButton>
-            <Link
-              href={`/staff/appointments/new?customerId=${customer.id}`}
-              className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
-            >
-              + New Appointment
-            </Link>
-          </>
         }
       >
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-3">
+        <div className="flex items-start justify-between gap-5 flex-wrap">
+          <div className="flex min-w-0 flex-1 flex-wrap items-start gap-5">
             <PhotoUpload
               action={setCustomerPhoto}
               idField="customerId"
               idValue={customer.id}
               currentUrl={photoUrl(customer.photoId)}
+              size={96}
               label={`${customer.firstName} ${customer.lastName}`}
             />
-            <div>
-            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-0.5 text-sm text-stone-500">
-              <span>
-                <span className="font-medium text-stone-700">Email:</span>{" "}
-                <a href={`mailto:${customer.email}`} className="hover:text-amber-700 underline underline-offset-2">
-                  {customer.email}
-                </a>
-              </span>
-              {customer.phone && (
-                <span>
-                  <span className="font-medium text-stone-700">Phone:</span>{" "}
-                  <a href={`tel:${customer.phone}`} className="hover:text-amber-700">
-                    {customer.phone}
-                  </a>
-                </span>
-              )}
-              {customer.address && (
-                <span>
-                  <span className="font-medium text-stone-700">Address:</span>{" "}
-                  <AddressLink address={customer.address} />
-                </span>
-              )}
-              <span>
-                <span className="font-medium text-stone-700">Member since:</span> {memberSince}
-              </span>
-              <span>
-                <span className="font-medium text-stone-700">Preferred groomer:</span>{" "}
-                {customer.preferredStaff
-                  ? `${customer.preferredStaff.name}${
-                      customer.preferredStaff.defaultStation
-                        ? ` · ${customer.preferredStaff.defaultStation.name}`
-                        : ""
-                    }`
-                  : "assigned at check-in"}
-              </span>
-            </div>
+            <div className="min-w-0 flex-1 basis-64">
+            <ProfileFacts facts={[
+              { label: "Email", value: <a href={`mailto:${customer.email}`} className="hover:text-brand-text underline underline-offset-4">{customer.email}</a> },
+              { label: "Phone", value: customer.phone ? <a href={`tel:${customer.phone}`} className="hover:text-brand-text">{customer.phone}</a> : <span className="text-muted">Not on file</span> },
+              { label: "Address", value: customer.address ? <AddressLink address={customer.address} /> : <span className="text-muted">Not on file</span> },
+              { label: "Pets", value: `${customer.pets.length} on this profile` },
+              { label: "Preferred groomer", value: customer.preferredStaff
+                ? `${customer.preferredStaff.name}${customer.preferredStaff.defaultStation ? ` · ${customer.preferredStaff.defaultStation.name}` : ""}`
+                : "Assigned at check-in" },
+              { label: "Visit texts", value: customer.smsOptOut ? "Opted out" : "Opted in" },
+            ]} />
             </div>
           </div>
-          <form action={setPreferredGroomer} className="flex items-center gap-2">
+          <form action={setPreferredGroomer} className="flex w-full flex-wrap items-center gap-2 rounded-xl border border-line bg-band p-3">
             <input type="hidden" name="customerId" value={customer.id} />
             <span className="text-sm text-stone-500">Preferred groomer</span>
             <select
@@ -325,12 +304,76 @@ export default async function CustomerDetailPage(props: PageProps) {
             </select>
             <button
               type="submit"
-              className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline"
+              className="text-xs font-semibold text-brand-text hover:text-ink underline"
             >
               Save
             </button>
           </form>
 
+        </div>
+      </PageSection>
+
+      {/* Pets section */}
+      <PageSection title={`Pets (${customer.pets.length})`} className="profile-wide" actions={
+            <ModalButton
+              label="+ Add pet"
+              title="Add a pet"
+              description={`A pet on ${customer.firstName} ${customer.lastName}'s profile.`}
+              variant="secondary"
+            >
+              <PetForm customerId={customer.id} flagOptions={flagOptions} />
+            </ModalButton>
+      }>
+        {customer.pets.length === 0 && <p className="py-5 text-center text-sm text-muted">No pets on this profile yet. Add their first pet to start a care record.</p>}
+        <div className="profile-pet-grid">
+          {customer.pets.map((pet) => (
+            <div
+              key={pet.id}
+              className="profile-pet-card bg-surface border border-line rounded-xl p-4 flex flex-col gap-4"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <Link href={`/staff/pets/${pet.id}`} className="group min-w-0">
+                  <ProfileAvatar src={photoUrl(pet.photoId) ?? pet.photoUrl} name={pet.name} pet size={64} />
+                  <p className="mt-3 text-lg font-bold text-ink group-hover:text-brand-text transition-colors">
+                    {pet.name}
+                  </p>
+                  <p className="text-sm text-stone-500 mt-0.5">
+                    {formatSpecies(pet.species)}
+                    {pet.breed ? ` · ${pet.breed}` : ""}
+                  </p>
+                  {pet.weightLbs != null && (
+                    <p className="text-xs text-stone-400 mt-2">{pet.weightLbs} lbs</p>
+                  )}
+                </Link>
+                {pet.hasBiteHistory && (
+                  <span className="flex-shrink-0 bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                    ⚠ Bite history
+                  </span>
+                )}
+              </div>
+              <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-line pt-3">
+                <Link href={`/staff/pets/${pet.id}`} className="mr-auto text-sm font-semibold text-brand-text hover:underline underline-offset-4">View profile →</Link>
+                <ModalButton
+                  label="Edit"
+                  title={`Edit ${pet.name}`}
+                  description="What the groomer needs to know about this pet."
+                  variant="secondary"
+                >
+                  <PetForm customerId={customer.id} pet={pet} flagOptions={flagOptions} />
+                </ModalButton>
+                <form action={removePet}>
+                  <input type="hidden" name="customerId" value={customer.id} />
+                  <input type="hidden" name="petId" value={pet.id} />
+                  <button
+                    type="submit"
+                    className="text-sm font-bold px-3 py-1.5 rounded-lg border border-stone-200 text-red-700 hover:bg-red-50 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </form>
+              </div>
+            </div>
+          ))}
 
         </div>
       </PageSection>
@@ -381,6 +424,8 @@ export default async function CustomerDetailPage(props: PageProps) {
             </p>
           )}
 
+          <details className="disclosure mt-4 border-t border-line pt-3">
+            <summary className="py-1 text-sm font-semibold text-brand-text">Adjust pricing</summary>
           <form action={setPricingTier} className="mt-3 space-y-2">
             <input type="hidden" name="customerId" value={customer.id} />
             <label className="text-sm block" htmlFor="pricingTierId">
@@ -416,12 +461,13 @@ export default async function CustomerDetailPage(props: PageProps) {
             <div className="flex justify-end">
               <button
                 type="submit"
-                className="text-xs font-semibold text-amber-700 hover:text-amber-900 underline"
+                className="text-xs font-semibold text-brand-text hover:text-ink underline"
               >
                 Save pricing
               </button>
             </div>
           </form>
+          </details>
       </PageSection>
 
       {card.enabled && (
@@ -511,74 +557,11 @@ export default async function CustomerDetailPage(props: PageProps) {
         </p>
       )}
 
-      {/* Pets section */}
-      <PageSection title={`Pets (${customer.pets.length})`}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {customer.pets.map((pet) => (
-            <div
-              key={pet.id}
-              className="bg-well border border-well-line rounded-lg p-4 flex flex-col gap-2"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <Link href={`/staff/pets/${pet.id}`} className="group min-w-0">
-                  <p className="font-bold text-stone-900 group-hover:text-amber-700 transition-colors">
-                    {pet.name}
-                  </p>
-                  <p className="text-sm text-stone-500 mt-0.5">
-                    {formatSpecies(pet.species)}
-                    {pet.breed ? ` · ${pet.breed}` : ""}
-                  </p>
-                  {pet.weightLbs && (
-                    <p className="text-xs text-stone-400 mt-2">{pet.weightLbs} lbs</p>
-                  )}
-                </Link>
-                {pet.hasBiteHistory && (
-                  <span className="flex-shrink-0 bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                    ⚠ Bite
-                  </span>
-                )}
-              </div>
-              <div className="mt-auto flex items-center gap-2">
-                <ModalButton
-                  label="Edit"
-                  title={`Edit ${pet.name}`}
-                  description="What the groomer needs to know about this pet."
-                  variant="secondary"
-                >
-                  <PetForm customerId={customer.id} pet={pet} flagOptions={flagOptions} />
-                </ModalButton>
-                <form action={removePet}>
-                  <input type="hidden" name="customerId" value={customer.id} />
-                  <input type="hidden" name="petId" value={pet.id} />
-                  <button
-                    type="submit"
-                    className="text-sm font-bold px-3 py-1.5 rounded-lg border border-stone-200 text-red-700 hover:bg-red-50 transition-colors"
-                  >
-                    Remove
-                  </button>
-                </form>
-              </div>
-            </div>
-          ))}
-
-          <div className="flex items-center justify-center rounded-lg border border-well-line bg-well p-4">
-            <ModalButton
-              label="Add a Pet +"
-              title="Add a pet"
-              description={`A pet on ${customer.firstName} ${customer.lastName}'s profile.`}
-              variant="secondary"
-            >
-              <PetForm customerId={customer.id} flagOptions={flagOptions} />
-            </ModalButton>
-          </div>
-        </div>
-      </PageSection>
-
       {/* Where they are — for pickups, drop-offs and checking the service area */}
       <PageSection title="Address">
         {customer.address ? (
-          <div className="border border-stone-200 rounded-lg bg-well p-4 grid gap-3 md:grid-cols-2">
-            <div className="flex items-start justify-between gap-3">
+          <div className="border border-stone-200 rounded-lg bg-well p-4 grid gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <p className="text-sm text-stone-700 whitespace-pre-wrap">{customer.address}</p>
               <div className="flex flex-none items-center gap-2">
                 <ModalButton
@@ -629,7 +612,7 @@ export default async function CustomerDetailPage(props: PageProps) {
           {customer.alternateContacts.map((alternate) => (
             <div
               key={alternate.id}
-              className="w-full border border-stone-200 rounded-lg bg-well p-3 flex items-start justify-between gap-3"
+              className="w-full border border-stone-200 rounded-lg bg-well p-3 flex flex-wrap items-start justify-between gap-3"
             >
               <div className="text-sm min-w-0">
                 <p className="font-bold text-stone-800">{alternate.name}</p>
@@ -671,13 +654,13 @@ export default async function CustomerDetailPage(props: PageProps) {
       </PageSection>
 
       {insights.length > 0 && (
-        <PageSection title="What their history shows">
+        <PageSection title="What their history shows" className="profile-wide">
           <InsightList insights={insights} compact />
         </PageSection>
       )}
 
       {/* Recent appointments */}
-      <PageSection title="Recent Appointments">
+      <PageSection title="Recent Appointments" className="profile-wide">
         {customer.appointments.length === 0 ? (
           <div className="border border-stone-200 rounded-lg bg-well p-4 text-center text-stone-400 text-sm">
             No appointments yet.
@@ -714,7 +697,7 @@ export default async function CustomerDetailPage(props: PageProps) {
                       <td className="px-3 py-2 font-medium text-stone-800">
                         <Link
                           href={`/staff/pets/${appt.pet.id}`}
-                          className="hover:text-amber-700 underline underline-offset-2"
+                          className="hover:text-brand-text underline underline-offset-2"
                         >
                           {appt.pet.name}
                         </Link>
@@ -742,6 +725,7 @@ export default async function CustomerDetailPage(props: PageProps) {
           </div>
         )}
       </PageSection>
+      </div>
     </PageShell>
   );
 }

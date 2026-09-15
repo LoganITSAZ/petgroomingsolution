@@ -62,7 +62,7 @@ const MANAGE_NAV: NavItem[] = [
   { href: "/admin/services", label: "Services & Pricing" },
   { href: "/admin/loyalty", label: "Loyalty Tiers" },
   { href: "/admin/staff", label: "Staff" },
-  { href: "/admin/schedule", label: "Schedule" },
+  { href: "/admin/schedule", label: "Scheduling" },
   { href: "/admin/stations", label: "Stations" },
   { href: "/admin/marketing", label: "Marketing" },
   { href: "/admin/vaccinations", label: "Vaccinations", feature: "featureVaccinationGate" },

@@ -56,20 +56,11 @@ export default async function StaffServicesPage() {
     { heading: "Other", items: services.filter((s) => s.species === Species.OTHER) },
   ].filter((group) => group.items.length > 0);
 
-  const walkIns = services.filter((s) => s.walkInEligible);
-  const promoCount = Array.from(promotions.values()).reduce((n, list) => n + list.length, 0);
 
   return (
     <PageShell
       columns={false}
       title="Services"
-      subtitle={
-        <>
-          {services.length} service{services.length !== 1 ? "s" : ""} offered ·{" "}
-          {walkIns.length} available as walk-ins
-          {promoCount > 0 && ` · ${promoCount} running promotion${promoCount !== 1 ? "s" : ""}`}
-        </>
-      }
       actions={
         isAdmin ? (
           <Link

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * `next dev` with one thing added: it refuses to start on a port that is
- * already taken rather than sliding to the next one.
+ * Generate the Prisma client before starting `next dev`, and refuse to
+ * start on a port that is already taken rather than sliding to the next one.
  */
 import { spawn, execFileSync } from "node:child_process";
 import net from "node:net";
@@ -55,6 +55,18 @@ if (!(await portIsFree(PORT))) {
       `[dev] stop what is on it, or start this one somewhere else with \`npm run dev -- -p ${PORT + 1}\`.\n`
   );
   process.exit(1);
+}
+
+// Schema changes can add enums and models. Generate before Next loads the
+// client so a previous checkout's generated exports cannot leak into dev.
+try {
+  execFileSync(
+    process.execPath,
+    [path.join(ROOT, "node_modules/prisma/build/index.js"), "generate"],
+    { cwd: ROOT, stdio: "inherit" },
+  );
+} catch (error) {
+  process.exit(error.status ?? 1);
 }
 
 // -p last so the probed port wins even if nothing was passed.

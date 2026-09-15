@@ -74,46 +74,37 @@ export default async function StaffSchedulePage(props: PageProps) {
   return (
     <PageShell
       title="Schedule"
-      subtitle={
-        <>
-          Who is on this week, across {staff.length} groomer{staff.length === 1 ? "" : "s"} and
-          bathers.
-          {isAdmin && (
-            <>
-              {" "}
-              <Link
-                href={`/admin/schedule?week=${shopDayKey(weekStart)}`}
-                className="text-amber-700 hover:text-amber-900 underline"
-              >
-                Edit this week
-              </Link>
-            </>
-          )}
-        </>
-      }
       actions={
-        <>
+        isAdmin ? (
           <Link
-            href={`/staff/schedule?week=${prevWeek}`}
-            aria-label="Previous week"
-            className="px-2 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-sm"
+            href={`/admin/schedule?week=${shopDayKey(weekStart)}`}
+            className="inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2"
           >
-            ←
+            Manage Scheduling
           </Link>
-          <span className="text-sm font-semibold text-stone-800">
-            {formatShopDate(weekStart, { month: "short", day: "numeric" })} –{" "}
-            {formatShopDate(days[6], { month: "short", day: "numeric" })}
-          </span>
-          <Link
-            href={`/staff/schedule?week=${nextWeek}`}
-            aria-label="Next week"
-            className="px-2 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-sm"
-          >
-            →
-          </Link>
-        </>
+        ) : null
       }
     >
+      <PageSection tone="muted" bodyClassName="flex items-center gap-3 flex-wrap">
+        <Link
+          href={`/staff/schedule?week=${prevWeek}`}
+          aria-label="Previous week"
+          className="px-2 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-sm"
+        >
+          ←
+        </Link>
+        <span className="text-sm font-semibold text-stone-800">
+          {formatShopDate(weekStart, { month: "short", day: "numeric" })} –{" "}
+          {formatShopDate(days[6], { month: "short", day: "numeric" })}
+        </span>
+        <Link
+          href={`/staff/schedule?week=${nextWeek}`}
+          aria-label="Next week"
+          className="px-2 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 text-sm"
+        >
+          →
+        </Link>
+      </PageSection>
       {/* Your own week first — it is why most people open this page. */}
       {mine && (
         <PageSection tone="muted">
