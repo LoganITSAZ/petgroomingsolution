@@ -156,4 +156,47 @@ const owner: ResourceSection = {
   ],
 };
 
-export const RESOURCE_SECTIONS: ResourceSection[] = [blades, safety, handling, coatCare, owner];
+/**
+ * Safety leads. Everything else here is a lookup — a blade number, a dilution
+ * ratio — and a lookup is what the search box is for. The safety card is the
+ * one somebody opens with a hurt pet in their arms, and that person is
+ * scanning, not typing.
+ */
+export const RESOURCE_SECTIONS: ResourceSection[] = [safety, blades, handling, coatCare, owner];
+
+/** Term, qualifier and detail are all searchable — a groomer types "1/4" as readily as "blade". */
+function entryHaystack(entry: ResourceEntry): string {
+  return `${entry.term} ${entry.note ?? ""} ${entry.detail}`.toLowerCase();
+}
+
+/**
+ * Narrow every section to the entries matching `query`, dropping the sections
+ * that keep none.
+ *
+ * A section whose own title or blurb matches keeps all of its entries: someone
+ * typing "safety" wants that card, not the three entries that happen to repeat
+ * the word. Words are ANDed so a second word narrows rather than widens.
+ */
+export function filterSections(
+  sections: ResourceSection[],
+  query: string
+): ResourceSection[] {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return sections;
+
+  return sections.flatMap((section) => {
+    const sectionHay = `${section.title} ${section.blurb}`.toLowerCase();
+    if (words.every((word) => sectionHay.includes(word))) return [section];
+
+    const entries = section.entries.filter((entry) => {
+      const hay = entryHaystack(entry);
+      return words.every((word) => hay.includes(word));
+    });
+    return entries.length > 0 ? [{ ...section, entries }] : [];
+  });
+}
+
+/** Total entries across sections — what the search strip counts. */
+export function countEntries(sections: ResourceSection[]): number {
+  return sections.reduce((total, section) => total + section.entries.length, 0);
+}
