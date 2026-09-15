@@ -94,25 +94,28 @@ async function main() {
   // are stations too, with a rows x columns layout instead of a single spot.
   // Names follow the shop's own rule — role plus the next free number, the
   // same strings `nextStationName()` hands out, since nobody types one.
+  //
+  // First boot only, same rule as the admin above: once the shop has any
+  // station the seed leaves them alone. It used to upsert on an id derived
+  // from the name, which stopped matching the moment
+  // `20260913120000_station_names_derived` renamed "Station 1" to
+  // "Grooming Table 1" — the old row keeps id `station-1`, the lookup misses
+  // and every deploy adds a fresh duplicate floor.
   const stations: { name: string; role: StationRole }[] = [
     { name: "Grooming Table 1", role: "GROOMER" },
     { name: "Grooming Table 2", role: "GROOMER" },
     { name: "Grooming Table 3", role: "GROOMER" },
     { name: "Bath 1", role: "BATHING" },
   ];
-  for (const { name, role } of stations) {
-    await prisma.station.upsert({
-      where: { id: name.toLowerCase().replace(/ /g, "-") },
-      update: { role },
-      create: {
-        id: name.toLowerCase().replace(/ /g, "-"),
-        name,
-        role,
-        isActive: true,
-      },
+  const stationCount = await prisma.station.count();
+  if (stationCount === 0) {
+    await prisma.station.createMany({
+      data: stations.map(({ name, role }) => ({ name, role, isActive: true })),
     });
+    console.log(`✓ ${stations.length} stations`);
+  } else {
+    console.log(`✓ Stations — ${stationCount} already exist, skipped`);
   }
-  console.log(`✓ ${stations.length} stations`);
 
   // Service catalog — the prices the shop publishes. Dog services are priced by
   // size; cats and add-ons use a flat price, with priceMaxCents when the shop
