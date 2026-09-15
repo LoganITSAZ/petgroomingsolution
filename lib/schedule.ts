@@ -243,6 +243,10 @@ export const HOURS_LEVEL_LABEL: Record<StaffWeekHours["level"], string> = {
 export interface ScheduleAdvice {
   id: string;
   tone: "warn" | "info";
+  /** Whether the line is about a person's week or a day's cover. */
+  scope: "people" | "days";
+  /** Day key when the line belongs to one day, so the grid can mark it. */
+  day?: string;
   title: string;
   /** The numbers behind the claim. Never ship one without them. */
   evidence: string;
@@ -289,6 +293,7 @@ export async function scheduleAdvice({
     if (row.level === "overtime") {
       advice.push({
         id: `overtime-${row.staffId}`,
+        scope: "people",
         tone: "warn",
         title: `${row.staffName} is scheduled into overtime`,
         evidence: `${formatHours(row.minutes)} across ${row.shifts} shift${row.shifts === 1 ? "" : "s"}, against a ${overtimeHours}h week — ${formatHours(row.minutes - overtimeHours * 60)} over.`,
@@ -296,6 +301,7 @@ export async function scheduleAdvice({
     } else if (row.level === "approaching") {
       advice.push({
         id: `near-overtime-${row.staffId}`,
+        scope: "people",
         tone: "info",
         title: `${row.staffName} is close to overtime`,
         evidence: `${formatHours(row.minutes)} scheduled, ${formatHours(overtimeHours * 60 - row.minutes)} short of the ${overtimeHours}h week.`,
@@ -308,6 +314,7 @@ export async function scheduleAdvice({
     if (row.longestRun >= 6) {
       advice.push({
         id: `run-${row.staffId}`,
+        scope: "people",
         tone: "warn",
         title: `${row.staffName} works ${row.longestRun} days in a row`,
         evidence: `Scheduled on ${row.daysWorked} of the 7 days shown, with no break across ${row.longestRun} of them.`,
@@ -330,6 +337,8 @@ export async function scheduleAdvice({
     if (onThatDay.length === 0) {
       advice.push({
         id: `empty-${dayKey}`,
+        scope: "days",
+        day: dayKey,
         tone: "warn",
         title: `Nobody is scheduled ${label}`,
         evidence: `The shop is open ${open.open}–${open.close} with no shifts on the rota.`,
@@ -343,6 +352,8 @@ export async function scheduleAdvice({
     if (firstIn > opensAt) {
       advice.push({
         id: `late-open-${dayKey}`,
+        scope: "days",
+        day: dayKey,
         tone: "warn",
         title: `${label} opens with nobody on`,
         evidence: `Doors open ${open.open}; the first shift starts ${formatShopTime(firstIn)}.`,
@@ -351,6 +362,8 @@ export async function scheduleAdvice({
     if (lastOut < closesAt) {
       advice.push({
         id: `early-close-${dayKey}`,
+        scope: "days",
+        day: dayKey,
         tone: "warn",
         title: `${label} is uncovered before closing`,
         evidence: `The last shift ends ${formatShopTime(lastOut)}; the shop closes ${open.close}.`,
@@ -384,6 +397,8 @@ export async function scheduleAdvice({
     if (people === 0 || pets / people > 6) {
       advice.push({
         id: `thin-${dayKey}`,
+        scope: "days",
+        day: dayKey,
         tone: people === 0 ? "warn" : "info",
         title:
           people === 0
@@ -399,6 +414,7 @@ export async function scheduleAdvice({
   if (idle.length > 0 && idle.length < staff.length) {
     advice.push({
       id: "unscheduled",
+      scope: "people",
       tone: "info",
       title: `${idle.length} ${idle.length === 1 ? "person has" : "people have"} no shifts this week`,
       evidence: idle.map((row) => row.staffName).join(", ") + ".",

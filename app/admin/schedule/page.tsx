@@ -39,6 +39,11 @@ const ERRORS: Record<string, string> = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+const ADVICE_GROUPS = [
+  { scope: "days", label: "Cover" },
+  { scope: "people", label: "People" },
+] as const;
+
 interface PageProps {
   searchParams: Promise<{
     week?: string;
@@ -82,6 +87,13 @@ export default async function SchedulePage(props: PageProps) {
   for (const shift of shifts) {
     const key = `${shift.staffId}|${shopDayKey(shift.startsAt)}`;
     byStaffDay.set(key, [...(byStaffDay.get(key) ?? []), shift]);
+  }
+
+  const warnCount = advice.filter((item) => item.tone === "warn").length;
+  // A day's problems are marked on its column too, so the grid says where to look.
+  const adviceByDay = new Map<string, typeof advice>();
+  for (const item of advice) {
+    if (item.day) adviceByDay.set(item.day, [...(adviceByDay.get(item.day) ?? []), item]);
   }
 
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
@@ -137,38 +149,59 @@ export default async function SchedulePage(props: PageProps) {
       )}
 
       {/* What to look at before this week is worked */}
-      <PageSection title="Scheduling check" hint={`Overtime past ${config.overtimeWeeklyHours}h/week`}>
+      <PageSection
+        title="Scheduling check"
+        hint={
+          advice.length === 0
+            ? `Overtime past ${config.overtimeWeeklyHours}h/week`
+            : `${warnCount} to fix, ${advice.length - warnCount} to watch`
+        }
+      >
         {advice.length === 0 ? (
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-muted">
             Nothing to flag: every open day is covered, nobody is scheduled into overtime, and no
             day is short-handed against what is booked.
           </p>
         ) : (
-          <ul className="space-y-1.5">
-            {advice.map((item) => (
-              <li
-                key={item.id}
-                className={`rounded-lg px-3 py-2 border ${
-                  item.tone === "warn"
-                    ? "bg-red-50 border-red-200"
-                    : "bg-amber-50 border-amber-200"
-                }`}
-              >
-                <p
-                  className={`text-sm font-semibold ${
-                    item.tone === "warn" ? "text-red-800" : "text-amber-900"
-                  }`}
-                >
-                  {item.title}
-                </p>
-                {/* The numbers behind the claim — never a bare assertion. */}
-                <p className="text-xs text-stone-600 mt-0.5">{item.evidence}</p>
-              </li>
-            ))}
-          </ul>
+          // Grouped by what the reader would act on — a day's cover is fixed in
+          // a column, a person's week across a row — rather than one long stack.
+          <div className="grid gap-3 md:grid-cols-2">
+            {ADVICE_GROUPS.map(({ scope, label }) => {
+              // Worst first: a day nobody is on outranks a day that looks thin.
+              const items = advice
+                .filter((item) => item.scope === scope)
+                .sort((a, b) => Number(b.tone === "warn") - Number(a.tone === "warn"));
+              if (items.length === 0) return null;
+              return (
+                <section key={scope}>
+                  <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted mb-1">
+                    {label} ({items.length})
+                  </h3>
+                  <ul className="rounded-lg border border-well-line bg-well divide-y divide-well-line">
+                    {items.map((item) => (
+                      <li key={item.id} className="flex gap-2 px-2.5 py-1.5">
+                        <span
+                          aria-hidden
+                          className={`mt-[0.4rem] h-1.5 w-1.5 shrink-0 rounded-full ${
+                            item.tone === "warn" ? "bg-red-500" : "bg-amber-400"
+                          }`}
+                        />
+                        <p className="text-[13px] leading-snug text-stone-800">
+                          <span className="sr-only">{item.tone === "warn" ? "Fix: " : "Watch: "}</span>
+                          <span className="font-semibold">{item.title}.</span>{" "}
+                          {/* The numbers behind the claim — never a bare assertion. */}
+                          <span className="text-muted">{item.evidence}</span>
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
         )}
 
-        <div className="mt-3 pt-2 border-t border-stone-100 flex flex-wrap gap-1.5">
+        <div className="mt-3 pt-2 border-t border-well-line flex flex-wrap gap-1.5">
           {hours.map((row) => (
             <span
               key={row.staffId}
@@ -179,7 +212,7 @@ export default async function SchedulePage(props: PageProps) {
             </span>
           ))}
         </div>
-            </PageSection>
+      </PageSection>
 
       {/* Lay down a whole week at once */}
       <details className="border-t border-stone-100">
@@ -262,11 +295,24 @@ export default async function SchedulePage(props: PageProps) {
             <thead className="bg-well text-stone-500 text-[10px] tracking-tight">
               <tr>
                 <th scope="col" className="px-3 py-2 text-left sticky left-0 bg-stone-50">Staff</th>
-                {days.map((day) => (
-                  <th scope="col" key={day.toISOString()} className="px-2 py-2 text-left whitespace-nowrap">
-                    {formatShopDate(day, { weekday: "short", day: "numeric" })}
-                  </th>
-                ))}
+                {days.map((day) => {
+                  const flags = adviceByDay.get(shopDayKey(day)) ?? [];
+                  return (
+                    <th scope="col" key={day.toISOString()} className="px-2 py-2 text-left whitespace-nowrap">
+                      {formatShopDate(day, { weekday: "short", day: "numeric" })}
+                      {flags.length > 0 && (
+                        <span
+                          className={
+                            flags.some((item) => item.tone === "warn") ? "ml-1 text-red-500" : "ml-1 text-amber-500"
+                          }
+                          title={flags.map((item) => item.title).join("\n")}
+                        >
+                          ●
+                        </span>
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
