@@ -218,13 +218,13 @@ file, so no unused imports in it.
   they are on the settings screen. The registry describes switches, not the
   numbers a feature runs on.
 
-## Open questions
+## Resolved
 
-1. **Does anything outside the app call `/api/admin/settings`?** A script, a
-   curl one-liner, something on the Pi would not appear in a grep. Default is
-   to delete. If it is in use, keep the route and derive `PATCHABLE_FIELDS`
-   from `FEATURES` plus an explicit non-feature list — a two-line change rather
-   than a deletion.
+- **Nothing outside this project calls `/api/admin/settings`** — confirmed by
+  the shop, 2026-09-14. The route is deleted rather than kept with a
+  registry-derived allowlist, and `PATCHABLE_FIELDS` goes with it. The same
+  answer covers every other file here: there are no external consumers, so an
+  unreferenced endpoint is dead code, not an interface.
 
 ## Why this is cluster 0
 
