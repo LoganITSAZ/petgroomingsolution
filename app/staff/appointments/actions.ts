@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireStaff } from "@/lib/auth-guards";
+import { requireFeature, requireStaff } from "@/lib/auth-guards";
 import { broadcastStationBoard, changeAppointmentStatus } from "@/lib/appointment-status";
 import { BOARD_COLUMNS, nextStatus } from "@/lib/appointment-flow";
 import { resolveSelectedServices, setAppointmentServices } from "@/lib/appointment-services";
@@ -11,6 +11,8 @@ import { isFloorStaff } from "@/lib/utils";
 import { shopDateTimeLocal } from "@/lib/shop-time";
 import { OCCUPYING_STATUSES, stationHasRoom } from "@/lib/stations";
 import { getConfig } from "@/lib/config";
+import { deletePhotoIfUnused, storePhoto } from "@/lib/photos";
+import { readKind } from "@/lib/visit-photos";
 import { sendConsentRequest } from "@/lib/email";
 import { smsConsentRequest } from "@/lib/sms";
 import { revalidatePath } from "next/cache";
@@ -559,4 +561,77 @@ export async function recordConsent(formData: FormData): Promise<void> {
   });
 
   back(appointmentId, "?answered=1");
+}
+
+/**
+ * Add a photo of this visit.
+ *
+ * Staff only, and never the owner: an owner sending photos in is inbound media
+ * with moderation attached, and nobody asked for it. The bytes go where every
+ * other photo in this app goes -- a `Photo` row behind /api/photos/[id], capped
+ * and type-checked by `storePhoto()`.
+ */
+export async function addVisitPhoto(formData: FormData): Promise<void> {
+  const staffId = await requireStaff();
+  // A server action is its own endpoint, so hiding the uploader is not the
+  // gate. This is.
+  await requireFeature("featureVisitPhotos");
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const kind = readKind(formData.get("kind"));
+  if (!kind) back(appointmentId, "?error=bad_photo_kind");
+
+  const stored = await storePhoto(formData.get("photo"));
+  if (!stored) back(appointmentId, "?error=no_photo");
+  if ("error" in stored) back(appointmentId, `?error=photo_${stored.error}`);
+
+  await prisma.visitPhoto.create({
+    data: {
+      appointmentId,
+      photoId: stored.id,
+      kind,
+      caption: ((formData.get("caption") as string | null) ?? "").trim() || null,
+      // Opt-in, like a visit event: an issue photo is often the shop's own
+      // evidence rather than something to send the owner.
+      ownerVisible: formData.get("ownerVisible") != null,
+      takenById: staffId,
+    },
+  });
+
+  back(appointmentId, "?photo=1");
+}
+
+/** Show this photo to the owner, or stop showing it. */
+export async function setVisitPhotoVisibility(formData: FormData): Promise<void> {
+  await requireStaff();
+  await requireFeature("featureVisitPhotos");
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const id = (formData.get("photoRowId") as string | null) ?? "";
+
+  await prisma.visitPhoto.update({
+    where: { id },
+    data: { ownerVisible: formData.get("ownerVisible") != null },
+  });
+
+  back(appointmentId, "?photo=1");
+}
+
+/**
+ * Remove a photo from the visit.
+ *
+ * The row goes; the bytes go only if nothing else points at them, which is
+ * `deletePhotoIfUnused()`'s decision and not this action's.
+ */
+export async function deleteVisitPhoto(formData: FormData): Promise<void> {
+  await requireStaff();
+  await requireFeature("featureVisitPhotos");
+
+  const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const id = (formData.get("photoRowId") as string | null) ?? "";
+
+  const row = await prisma.visitPhoto.delete({ where: { id } }).catch(() => null);
+  if (row) await deletePhotoIfUnused(row.photoId);
+
+  back(appointmentId, "?photoRemoved=1");
 }

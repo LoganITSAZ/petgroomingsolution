@@ -109,6 +109,10 @@ export async function changeAppointmentStatus({
   // neither email nor text is no reason for the pet to sit uncollected.
   if (status === AppointmentStatus.READY_PICKUP) {
     const findings = await ownerVisibleFindings(updated.id);
+    // Linked, not attached: the bytes stay behind /api/photos/[id].
+    const sharedPhotos = await prisma.visitPhoto.count({
+      where: { appointmentId: updated.id, ownerVisible: true },
+    });
 
     if (updated.customer.email) {
       await sendReadyForPickup({
@@ -116,6 +120,7 @@ export async function changeAppointmentStatus({
         ownerName: `${updated.customer.firstName} ${updated.customer.lastName}`,
         petName: updated.pet.name,
         findings,
+        hasPhotos: sharedPhotos > 0,
       }).catch(console.error);
     }
 

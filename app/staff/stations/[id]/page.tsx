@@ -15,6 +15,7 @@ import PhotoStack from "@/components/PhotoStack";
 import { photoUrl } from "@/lib/photos";
 import { guidesForBreeds, tipLines } from "@/lib/breeds";
 import { groomRecordSummary, lastGroomRecordsForPets } from "@/lib/visit-record";
+import { lastAfterPhotoForPets } from "@/lib/visit-photos";
 import {
   formatCoatType,
   formatRole,
@@ -118,6 +119,9 @@ export default async function StaffStationDetailPage(props: PageProps) {
   const guides = await guidesForBreeds(occupants.map((appt) => appt.pet.breed));
   // What each pet was last groomed with. One query for the whole station.
   const lastGrooms = await lastGroomRecordsForPets(occupants.map((appt) => appt.pet.id));
+  // The cut, not a description of it. Shown beside the written record so the
+  // next groomer repeats it instead of reading a blade number and guessing.
+  const lastAfterPhotos = await lastAfterPhotoForPets(occupants.map((appt) => appt.pet.id));
   // One instant for every row, rather than a fresh clock read per pet.
   const nowMs = new Date().getTime();
 
@@ -498,6 +502,24 @@ export default async function StaffStationDetailPage(props: PageProps) {
                             </span>
                             {groomRecordSummary(lastGroom)}
                           </p>
+                        )}
+                        {lastAfterPhotos.get(appt.pet.id) && (
+                          <a
+                            href={photoUrl(lastAfterPhotos.get(appt.pet.id)!.photoId) ?? "#"}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-block"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={photoUrl(lastAfterPhotos.get(appt.pet.id)!.photoId) ?? ""}
+                              alt={`${appt.pet.name} after their last groom`}
+                              className="w-24 h-24 object-cover rounded-lg border border-stone-200"
+                            />
+                            <span className="block text-xs text-stone-400 mt-0.5">
+                              Last groom, finished
+                            </span>
+                          </a>
                         )}
                         {(appt.pet.vetName || appt.pet.vetPhone) && (
                           <p className="text-sm text-stone-600">

@@ -26,12 +26,18 @@ export type FeatureKey =
   | "featureEmailNotify"
   | "featureSmsNotify"
   | "featureWaiverRequired"
-  | "featureRewards";
+  | "featureRewards"
+  | "featureVisitPhotos";
 
-export type FeatureGroup = "Customers" | "Notifications" | "Compliance";
+export type FeatureGroup = "Customers" | "Visits" | "Notifications" | "Compliance";
 
 /** Group order on the settings screen. */
-export const FEATURE_GROUPS: FeatureGroup[] = ["Customers", "Notifications", "Compliance"];
+export const FEATURE_GROUPS: FeatureGroup[] = [
+  "Customers",
+  "Visits",
+  "Notifications",
+  "Compliance",
+];
 
 /**
  * The columns this module reads — a structural subset of `SystemConfig`, so a
@@ -44,6 +50,7 @@ export interface FeatureConfig {
   featureSmsNotify: boolean;
   featureWaiverRequired: boolean;
   featureRewards: boolean;
+  featureVisitPhotos: boolean;
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
   twilioFromNumber: string | null;
@@ -101,6 +108,14 @@ export const FEATURES: Feature[] = [
       "A punch card: every finished visit is a punch, and a set number of them earns a reward. Punches accrue while this is off, so switching it on does not start the regulars at zero.",
     group: "Customers",
     offMeans: "accrues",
+  },
+  {
+    key: "featureVisitPhotos",
+    label: "Visit Photos",
+    blurb:
+      "Before, after and issue photos on a visit, taken by staff. Off, no new photos are added; the ones already taken stay on the visits they belong to.",
+    group: "Visits",
+    offMeans: "frozen",
   },
   {
     key: "featureEmailNotify",

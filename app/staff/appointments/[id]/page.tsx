@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
-import { AppointmentStatus, StaffRole, StationRole, VisitEventType } from "@prisma/client";
+import { AppointmentStatus, StaffRole, StationRole, VisitEventType, VisitPhotoKind } from "@prisma/client";
 import { nextStatus } from "@/lib/appointment-flow";
 import { getServiceOptions } from "@/lib/appointment-services";
 import {
@@ -37,14 +37,19 @@ import InsightList from "@/components/InsightList";
 import { customerInsights, petInsights } from "@/lib/insights";
 import { photoUrl } from "@/lib/photos";
 import { consentState, groomRecordSummary, lastGroomRecordForPet } from "@/lib/visit-record";
+import VisitPhotoStrip from "@/components/VisitPhotoStrip";
+import { getConfig } from "@/lib/config";
 import { BLADE_TERMS } from "@/lib/resources";
 import { redeemCustomerReward } from "@/app/staff/customers/actions";
 import {
+  addVisitPhoto,
+  deleteVisitPhoto,
   logVisitEvent,
   moveStatus,
   recordConsent,
   requestConsent,
   saveGroomRecord,
+  setVisitPhotoVisibility,
   moveToKennel,
   updateAssignment,
   updateServices,
@@ -70,6 +75,8 @@ const NOTICES: Record<string, string> = {
   consent: "Consent request sent to the owner.",
   answered: "The owner's answer has been recorded.",
   redeemed: "Reward applied to this bill.",
+  photo: "Visit photos updated.",
+  photoRemoved: "Photo removed from this visit.",
 };
 
 /** A visit past these is closed: its bill is no longer open to a discount. */
@@ -81,6 +88,10 @@ const SETTLED_FOR_REWARD: AppointmentStatus[] = [
 
 const ERRORS: Record<string, string> = {
   redeem_failed: "That reward could not be applied to this bill.",
+  bad_photo_kind: "Say whether that photo is a before, an after, or something you noticed.",
+  no_photo: "Choose a photo to upload.",
+  photo_too_large: "That image is over 2 MB. Photograph it again at a smaller size.",
+  photo_bad_type: "Photos have to be JPEG, PNG or WebP.",
   no_next_status: "This visit is already at the end of the groom flow.",
   already_there: "That is already the current status.",
   bad_date: "That date and time could not be read.",
@@ -133,6 +144,10 @@ export default async function AppointmentDetailPage(props: PageProps) {
       visitEvents: {
         include: { loggedBy: { select: { name: true } } },
         orderBy: { occurredAt: "desc" },
+      },
+      photos: {
+        include: { takenBy: { select: { name: true } } },
+        orderBy: { createdAt: "asc" },
       },
     },
   });
@@ -196,6 +211,7 @@ export default async function AppointmentDetailPage(props: PageProps) {
   // rather than re-guessed every visit.
   const previousGroom = await lastGroomRecordForPet(appointment.petId, appointment.id);
   const consent = consentState(appointment);
+  const config = await getConfig();
 
   const next = nextStatus(appointment.status);
   const arrival =
@@ -845,6 +861,85 @@ export default async function AppointmentDetailPage(props: PageProps) {
           </details>
         </section>
       </PageSection>
+
+      {/* Photos of the day. Hidden with the feature, but the photos already
+          taken are still here when it comes back -- the strip renders whatever
+          is on the visit and the uploader is what goes away. */}
+      {(config.featureVisitPhotos || appointment.photos.length > 0) && (
+        <PageSection title={`Photos (${appointment.photos.length})`}>
+          <VisitPhotoStrip photos={appointment.photos} petName={appointment.pet.name} showVisibility>
+            {(photo) =>
+              config.featureVisitPhotos ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <form action={setVisitPhotoVisibility}>
+                    <input type="hidden" name="appointmentId" value={appointment.id} />
+                    <input type="hidden" name="photoRowId" value={photo.id} />
+                    {/* Absent means off, the same convention every checkbox in
+                        this app posts under. */}
+                    {!photo.ownerVisible && <input type="hidden" name="ownerVisible" value="on" />}
+                    <button type="submit" className="text-xs text-amber-700 hover:text-amber-900 underline">
+                      {photo.ownerVisible ? "Hide from owner" : "Show owner"}
+                    </button>
+                  </form>
+                  <form action={deleteVisitPhoto}>
+                    <input type="hidden" name="appointmentId" value={appointment.id} />
+                    <input type="hidden" name="photoRowId" value={photo.id} />
+                    <button type="submit" className="text-xs text-stone-400 hover:text-red-700 underline">
+                      Remove
+                    </button>
+                  </form>
+                </div>
+              ) : null
+            }
+          </VisitPhotoStrip>
+
+          {config.featureVisitPhotos && (
+            <form
+              action={addVisitPhoto}
+              encType="multipart/form-data"
+              className="mt-3 border-t border-stone-100 pt-3 space-y-2 max-w-md"
+            >
+              <input type="hidden" name="appointmentId" value={appointment.id} />
+              <div className="flex gap-2">
+                <select name="kind" aria-label="What the photo is of" defaultValue="" required className={`${inputClass} py-1.5`}>
+                  <option value="" disabled>
+                    What is it…
+                  </option>
+                  <option value={VisitPhotoKind.BEFORE}>Before — the coat as it arrived</option>
+                  <option value={VisitPhotoKind.AFTER}>After — the finished groom</option>
+                  <option value={VisitPhotoKind.ISSUE}>Something you noticed</option>
+                </select>
+                <button
+                  type="submit"
+                  className="bg-stone-800 hover:bg-stone-900 text-white px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap"
+                >
+                  Add
+                </button>
+              </div>
+              <input
+                type="file"
+                name="photo"
+                required
+                accept="image/jpeg,image/png,image/webp"
+                aria-label="Photo file"
+                className="w-full text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-stone-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold hover:file:bg-stone-200"
+              />
+              <input name="caption" aria-label="Caption" placeholder="Caption (optional)" className={`${inputClass} py-1.5`} />
+              <label className="flex items-start gap-2 text-sm text-stone-600">
+                <input type="checkbox" name="ownerVisible" className="mt-0.5 h-4 w-4 accent-amber-600" />
+                <span>
+                  Show the owner
+                  <span className="block text-xs text-stone-400">
+                    Off by default. A matted belly is usually the shop&apos;s own record; the
+                    finished groom is what an owner wants.
+                  </span>
+                </span>
+              </label>
+              <p className="text-xs text-stone-400">JPEG, PNG or WebP, up to 2 MB.</p>
+            </form>
+          )}
+        </PageSection>
+      )}
 
       <PageSection bodyClassName="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Visit events */}

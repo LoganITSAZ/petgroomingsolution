@@ -96,6 +96,32 @@ function shopTime(daysFromToday: number, hour: number, minute = 0): Date {
     hour + SHOP_UTC_OFFSET, minute));
 }
 
+/**
+ * A tiny solid-colour PNG, so demo visits have photos without shipping
+ * binaries in the repo. Nobody is looking at the image; the point is that the
+ * strip, the owner's portal and the job aid all have something to render.
+ */
+function swatchPng(hue: number): Buffer {
+  const png = (body: string) => Buffer.from(body, "base64");
+  // 8x8 PNGs, one per hue bucket. Small enough to inline, real enough that a
+  // browser renders them.
+  const swatches = [
+    "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR42mOYmWaMFTEMLQkA/ftMgRJZpicAAAAASUVORK5CYII=",
+    "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR42mM4c/UWVsQwtCQAA+qewewSRtMAAAAASUVORK5CYII=",
+    "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR42mPYNqsYK2IYWhIAHxxwwZB/KsQAAAAASUVORK5CYII=",
+  ];
+  return png(swatches[hue % swatches.length]);
+}
+
+/** Store a swatch as a Photo row and return its id. */
+async function demoPhoto(hue: number): Promise<string> {
+  const data = swatchPng(hue);
+  const photo = await prisma.photo.create({
+    data: { mimeType: "image/png", byteSize: data.byteLength, data },
+  });
+  return photo.id;
+}
+
 async function main() {
   const [config, services, stations] = await Promise.all([
     prisma.systemConfig.findUnique({ where: { id: "global" } }),
@@ -384,6 +410,49 @@ async function main() {
               earnedAt: appointment.completedAt ?? scheduledAt,
             },
           });
+        }
+
+        // Before and after on most finished visits, and now and then the
+        // matting that explains why a coat came off. The after is the one the
+        // owner is shown; the issue photo is the shop's own record.
+        if (finished(status) && chance(0.6)) {
+          await prisma.visitPhoto.create({
+            data: {
+              appointmentId: appointment.id,
+              photoId: await demoPhoto(0),
+              kind: "BEFORE",
+              caption: "As they arrived.",
+              takenById: groomer.id,
+              createdAt: scheduledAt,
+            },
+          });
+          await prisma.visitPhoto.create({
+            data: {
+              appointmentId: appointment.id,
+              photoId: await demoPhoto(1),
+              kind: "AFTER",
+              caption: pick(["Finished.", "Teddy head, tight body.", "Shaved down, feet tidied."]),
+              ownerVisible: true,
+              takenById: groomer.id,
+              createdAt: appointment.completedAt ?? scheduledAt,
+            },
+          });
+          if (chance(0.25)) {
+            await prisma.visitPhoto.create({
+              data: {
+                appointmentId: appointment.id,
+                photoId: await demoPhoto(2),
+                kind: "ISSUE",
+                caption: pick([
+                  "Matting behind both ears — had to come off.",
+                  "Pelted through the chest.",
+                  "Split nail, front left.",
+                ]),
+                takenById: groomer.id,
+                createdAt: scheduledAt,
+              },
+            });
+          }
         }
 
         if (chance(0.05)) {

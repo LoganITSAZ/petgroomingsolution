@@ -35,12 +35,15 @@ export async function storePhoto(
 /** Remove a photo nothing points at any more. */
 export async function deletePhotoIfUnused(photoId: string | null): Promise<void> {
   if (!photoId) return;
-  const [customers, pets, staff] = await Promise.all([
+  const [customers, pets, staff, visits] = await Promise.all([
     prisma.customer.count({ where: { photoId } }),
     prisma.pet.count({ where: { photoId } }),
     prisma.staff.count({ where: { photoId } }),
+    // A visit photo holds the same bytes as any profile picture, and its
+    // foreign key is RESTRICT, so a delete that ignored it would throw.
+    prisma.visitPhoto.count({ where: { photoId } }),
   ]);
-  if (customers === 0 && pets === 0 && staff === 0) {
+  if (customers === 0 && pets === 0 && staff === 0 && visits === 0) {
     await prisma.photo.delete({ where: { id: photoId } }).catch(() => undefined);
   }
 }

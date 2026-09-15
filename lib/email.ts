@@ -146,11 +146,14 @@ export async function sendReadyForPickup({
   ownerName,
   petName,
   findings = [],
+  hasPhotos = false,
 }: {
   to: string;
   ownerName: string;
   petName: string;
   findings?: string[];
+  /** Photos are linked, never attached: the portal already gates the bytes. */
+  hasPhotos?: boolean;
 }) {
   const config = await getConfig();
   if (!config.featureEmailNotify) return;
@@ -177,6 +180,11 @@ export async function sendReadyForPickup({
       <ul>${findings.map((finding) => `<li>${escapeHtml(finding)}</li>`).join("")}</ul>
       <p>We are groomers, not vets — this is just what we saw, and your
          veterinarian is the one to ask about any of it.</p>`
+          : ""
+      }
+      ${
+        hasPhotos
+          ? `<p>We took a few photos of ${escapeHtml(petName)} today — they are on your visit in the customer portal.</p>`
           : ""
       }
       ${config.shopPhone ? `<p>Questions? Call us at ${config.shopPhone}.</p>` : ""}

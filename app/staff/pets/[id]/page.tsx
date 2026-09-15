@@ -9,6 +9,8 @@ import {
 } from "@/lib/utils";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
+import VisitPhotoStrip from "@/components/VisitPhotoStrip";
+import { getConfig } from "@/lib/config";
 import PhotoUpload from "@/components/PhotoUpload";
 import InsightList from "@/components/InsightList";
 import { petInsights } from "@/lib/insights";
@@ -80,6 +82,16 @@ export default async function PetDetailPage(props: PageProps) {
     orderBy: { occurredAt: "desc" },
     take: 20,
   });
+
+  // VisitPhoto hangs off Appointment too. Read across the pet's visits so a
+  // groomer can see the last few cuts without opening each one.
+  const visitPhotos = await prisma.visitPhoto.findMany({
+    where: { appointment: { petId: params.id } },
+    include: { appointment: { select: { id: true, scheduledAt: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 12,
+  });
+  const config = await getConfig();
 
   const insights = await petInsights(params.id);
   const flagOptions = await healthFlagOptions();
@@ -307,6 +319,24 @@ export default async function PetDetailPage(props: PageProps) {
         </PageSection>
 
       {/* Visit event log */}
+      {(config.featureVisitPhotos || visitPhotos.length > 0) && visitPhotos.length > 0 && (
+        <PageSection title={`Visit Photos (${visitPhotos.length})`}>
+          <VisitPhotoStrip photos={visitPhotos} petName={pet.name} showVisibility>
+            {(photo) => {
+              const visit = visitPhotos.find((row) => row.id === photo.id)?.appointment;
+              return visit ? (
+                <Link
+                  href={`/staff/appointments/${visit.id}`}
+                  className="text-xs text-amber-700 hover:text-amber-900 underline"
+                >
+                  Open that visit
+                </Link>
+              ) : null;
+            }}
+          </VisitPhotoStrip>
+        </PageSection>
+      )}
+
       <PageSection title="Visit Events">
         {visitEvents.length === 0 ? (
           <div className="border border-stone-200 rounded-lg bg-well p-4 text-center text-stone-400 text-sm">

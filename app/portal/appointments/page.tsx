@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { formatStatus, formatServiceType, statusBadgeClass } from "@/lib/utils";
 import Link from "next/link";
 import { PageShell, PageSection, Well } from "@/components/ui";
+import VisitPhotoStrip from "@/components/VisitPhotoStrip";
+import { getConfig } from "@/lib/config";
+import { formatShopDate } from "@/lib/utils";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -16,14 +19,21 @@ export default async function PortalAppointmentsPage() {
   const customerId = session.user.id;
   const now = new Date();
 
+  const config = await getConfig();
+
   const appointments = await prisma.appointment.findMany({
     where: { customerId },
     include: {
       pet: true,
       station: true,
+      // Only what a groomer ticked. The bytes are gated the same way in
+      // /api/photos/[id], so an id guessed from this page is still refused.
+      photos: { where: { ownerVisible: true }, orderBy: { createdAt: "asc" } },
     },
     orderBy: { scheduledAt: "desc" },
   });
+
+  const photographed = appointments.filter((appt) => appt.photos.length > 0);
 
   const upcoming = appointments.filter(
     (a) => new Date(a.scheduledAt) >= now && a.status !== "CANCELLED" && a.status !== "NO_SHOW"
@@ -61,6 +71,23 @@ export default async function PortalAppointmentsPage() {
           </Well>
         )}
       </PageSection>
+
+      {/* The finished dog is what an owner actually came back for. Only the
+          photos the shop chose to share appear here. */}
+      {config.featureVisitPhotos && photographed.length > 0 && (
+        <PageSection title="Photos of your visits">
+          <div className="space-y-4">
+            {photographed.slice(0, 5).map((appt) => (
+              <div key={appt.id}>
+                <p className="text-sm font-semibold text-stone-700 mb-1.5">
+                  {appt.pet.name} · {formatShopDate(appt.scheduledAt)}
+                </p>
+                <VisitPhotoStrip photos={appt.photos} petName={appt.pet.name} />
+              </div>
+            ))}
+          </div>
+        </PageSection>
+      )}
 
       {/* History is the reason someone scrolls past what is booked. It opens
           on request rather than pushing the next visit off the screen. */}
