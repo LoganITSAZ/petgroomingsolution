@@ -4,6 +4,7 @@ import { resolveTheme, themeCss } from "@/lib/themes";
 import { shopDayKey, isFloorStaff } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
+import { isEnabled, type FeatureKey } from "@/lib/features";
 import { headers } from "next/headers";
 import SystemThemeScript from "@/components/SystemThemeScript";
 import PresenceSwitcher from "@/components/PresenceSwitcher";
@@ -30,7 +31,14 @@ import NavLink from "@/components/NavLink";
  * every mutation by `requireAdmin()`.
  */
 
-const NAV = [
+/** A sidebar entry. `feature` hides the row when the shop has that feature off. */
+interface NavItem {
+  href: string;
+  label: string;
+  feature?: FeatureKey;
+}
+
+const NAV: NavItem[] = [
   { href: "/staff", label: "Dashboard" },
   { href: "/staff/appointments", label: "Appointments" },
   { href: "/staff/customers", label: "Customers" },
@@ -47,7 +55,7 @@ const NAV = [
  * these, which put "Loyalty Tiers" and "Appearance" — a rate a customer is on
  * and the colour of the website — in the same list with nothing between them.
  */
-const MANAGE_NAV = [
+const MANAGE_NAV: NavItem[] = [
   { href: "/admin/services", label: "Services & Pricing" },
   { href: "/admin/loyalty", label: "Loyalty Tiers" },
   { href: "/admin/staff", label: "Staff" },
@@ -57,7 +65,7 @@ const MANAGE_NAV = [
 ];
 
 /** What the shop reads about itself. Nothing here is editable. */
-const INSIGHTS_NAV = [
+const INSIGHTS_NAV: NavItem[] = [
   // Analytics keeps its /staff URL — a groomer's saved link should not
   // break — but it is a shop screen: it carries the leaderboard and every
   // groomer's estimated pay.
@@ -66,7 +74,7 @@ const INSIGHTS_NAV = [
 ];
 
 /** Set once and left alone. */
-const SETTINGS_NAV = [
+const SETTINGS_NAV: NavItem[] = [
   { href: "/admin/settings", label: "Shop Settings" },
   { href: "/admin/appearance", label: "Appearance" },
 ];
@@ -76,13 +84,13 @@ const SETTINGS_NAV = [
  * and the notification credentials stay with ADMIN, and both pages re-check
  * for themselves — hiding a link is presentation, never the gate.
  */
-const TECHNICAL_NAV = [
+const TECHNICAL_NAV: NavItem[] = [
   { href: "/admin", label: "System Status" },
   { href: "/admin/notifications", label: "Notifications" },
 ];
 
 /** A group header names a scope, never a page. */
-function NavGroup({ label, items, first = false }: { label: string; items: { href: string; label: string }[]; first?: boolean }) {
+function NavGroup({ label, items, first = false }: { label: string; items: NavItem[]; first?: boolean }) {
   return (
     <>
       <p
@@ -120,21 +128,29 @@ export default async function BackOfficeShell({ children }: { children: React.Re
   const onFloor = isFloorStaff(roles);
   const presence = me?.presence ?? "OFF_SHIFT";
 
+  /*
+   * A feature that is off takes its nav rows with it. Presentation only — the
+   * page behind each one redirects for itself, the same rule the admin links
+   * follow.
+   */
+  const live = (items: NavItem[]) =>
+    items.filter((item) => !item.feature || isEnabled(config, item.feature));
+
   const links = (
     <>
       <NavGroup
         first
         label="Storefront"
-        items={onFloor ? [...NAV.slice(0, 1), { href: "/staff/me", label: "My Shift" }, ...NAV.slice(1)] : NAV}
+        items={live(onFloor ? [...NAV.slice(0, 1), { href: "/staff/me", label: "My Shift" }, ...NAV.slice(1)] : NAV)}
       />
       {canManageShop && (
         <>
-          <NavGroup label="Management" items={MANAGE_NAV} />
-          <NavGroup label="Insights" items={INSIGHTS_NAV} />
-          <NavGroup label="Settings" items={SETTINGS_NAV} />
+          <NavGroup label="Management" items={live(MANAGE_NAV)} />
+          <NavGroup label="Insights" items={live(INSIGHTS_NAV)} />
+          <NavGroup label="Settings" items={live(SETTINGS_NAV)} />
         </>
       )}
-      {isAdmin && <NavGroup label="System" items={TECHNICAL_NAV} />}
+      {isAdmin && <NavGroup label="System" items={live(TECHNICAL_NAV)} />}
     </>
   );
 
