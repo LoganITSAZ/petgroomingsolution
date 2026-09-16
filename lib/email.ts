@@ -343,3 +343,123 @@ export async function sendConsentRequest({
     `,
   });
 }
+
+/**
+ * The morning brief, to whoever runs the shop.
+ *
+ * The only mail in this module that goes to staff rather than to a customer,
+ * which is why it says nothing a customer would be told and everything a
+ * manager would otherwise have to open three screens to read.
+ *
+ * Plain sections, no styling worth the name: this is read on a phone at
+ * seven in the morning, and every line of it is already true on the dashboard.
+ */
+export async function sendDailyDigest({
+  to,
+  day,
+  bookedToday,
+  alerts,
+  insights,
+}: {
+  to: string[];
+  day: Date;
+  bookedToday: number;
+  alerts: { title: string; detail: string }[];
+  insights: { title: string; detail: string; evidence: string }[];
+}) {
+  const config = await getConfig();
+  if (!config.featureEmailNotify) return;
+  if (to.length === 0) return;
+
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY is not set — skipping daily digest email");
+    return;
+  }
+
+  const from = await getFrom();
+  const dateLabel = formatShopDate(day, { weekday: "long", month: "long", day: "numeric" });
+
+  const section = (heading: string, rows: string[]): string =>
+    rows.length === 0 ? "" : `<h3 style="margin:18px 0 6px">${heading}</h3><ul>${rows.join("")}</ul>`;
+
+  const html = `
+    <p>Good morning. Here is ${escapeHtml(config.shopName)} for <strong>${dateLabel}</strong>.</p>
+    <p><strong>${bookedToday}</strong> ${bookedToday === 1 ? "visit is" : "visits are"} on the books today.</p>
+    ${section(
+      "Needs chasing",
+      alerts.map(
+        (alert) =>
+          `<li><strong>${escapeHtml(alert.title)}</strong><br><span style="color:#555">${escapeHtml(alert.detail)}</span></li>`
+      )
+    )}
+    ${section(
+      "Worth knowing",
+      insights.map(
+        (insight) =>
+          `<li><strong>${escapeHtml(insight.title)}</strong><br><span style="color:#555">${escapeHtml(insight.detail)}</span><br><span style="color:#888;font-size:12px">${escapeHtml(insight.evidence)}</span></li>`
+      )
+    )}
+    ${
+      alerts.length === 0 && insights.length === 0
+        ? "<p>Nothing is flagged. A quiet start.</p>"
+        : ""
+    }
+    <p style="color:#888;font-size:12px">Figures drawn from published prices are a floor, not a
+       ticket. Turn this off under Settings → Morning Brief.</p>
+  `;
+
+  // One message to everyone who runs the shop. They are colleagues reading the
+  // same brief, so there is nothing to hide between them.
+  await resend.emails.send({
+    from,
+    to,
+    subject: `${config.shopName}: ${dateLabel}`,
+    html,
+  });
+}
+
+/**
+ * A slot came free. Sent to households whose own habit says they are about due.
+ *
+ * It offers and stops there: there is no link to claim it, because there is no
+ * inbound path in this app and a race between two owners tapping the same link
+ * is worse than a phone call.
+ */
+export async function sendSlotOffer({
+  to,
+  ownerName,
+  petNames,
+  when,
+}: {
+  to: string;
+  ownerName: string;
+  petNames: string[];
+  when: string;
+}) {
+  const config = await getConfig();
+  if (!config.featureEmailNotify) return;
+
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY is not set — skipping slot offer email");
+    return;
+  }
+
+  const from = await getFrom();
+  const pets = petNames.length > 0 ? petNames.join(" and ") : "your pet";
+
+  await resend.emails.send({
+    from,
+    to,
+    subject: `An opening on ${when}`,
+    html: `
+      <p>Hi ${escapeHtml(ownerName)},</p>
+      <p>We have had a cancellation and <strong>${escapeHtml(when)}</strong> is now free.
+      It looked about the right time for ${escapeHtml(pets)}, so we thought of you first.</p>
+      <p>It is first come, first served — give us a ring and we will put it in the book.
+      ${config.shopPhone ? escapeHtml(config.shopPhone) : ""}</p>
+      <p>— ${escapeHtml(config.shopName)}</p>
+    `,
+  });
+}

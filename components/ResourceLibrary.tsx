@@ -280,49 +280,26 @@ export default function ResourceLibrary({
                       {section.blurb}
                     </p>
                   </div>
-                  <ul className="flex-1 divide-y divide-well-line px-4">
-                    {section.entries.map((entry) => {
-                      const isSaved = saved.includes(
-                        keyFor(section.slug, entry.term),
-                      );
-                      return (
-                        <li
-                          key={entry.term}
-                          className="flex items-center gap-2 py-1"
+                  <ul className="flex flex-wrap gap-2 p-4">
+                    {section.entries.map((entry) => (
+                      <li key={entry.term}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelected({
+                              slug: section.slug,
+                              term: entry.term,
+                            })
+                          }
+                          className="rounded-lg border border-well-line bg-well px-3 py-2 text-sm font-semibold hover:bg-band"
                         >
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSelected({
-                                slug: section.slug,
-                                term: entry.term,
-                              })
-                            }
-                            className="min-w-0 flex-1 rounded-lg px-1 py-3 text-left hover:bg-band"
-                          >
-                            <span className="block text-sm font-semibold">
-                              {entry.term}
-                            </span>
-                            {entry.note && (
-                              <span className="mt-1 block text-xs text-muted">
-                                {entry.note}
-                              </span>
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`${isSaved ? "Unsave" : "Save"} ${entry.term}`}
-                            aria-pressed={isSaved}
-                            onClick={() =>
-                              toggleSaved(keyFor(section.slug, entry.term))
-                            }
-                            className="rounded-lg p-3 text-lg text-brand-text hover:bg-band"
-                          >
-                            {isSaved ? "★" : "☆"}
-                          </button>
-                        </li>
-                      );
-                    })}
+                          {entry.term}
+                          {saved.includes(keyFor(section.slug, entry.term)) && (
+                            <span className="ml-1 text-brand-text">★</span>
+                          )}
+                        </button>
+                      </li>
+                    ))}
                   </ul>
                 </article>
               ))}

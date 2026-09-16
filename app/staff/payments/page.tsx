@@ -6,13 +6,13 @@ import { formatCents } from "@/lib/pricing";
 import {
   PAYMENT_METHOD_LABEL,
   paymentsBetween,
-  takingsByMethod,
+  paymentsByMethod,
   unsettledVisits,
 } from "@/lib/ticket";
 import { formatShopDate, formatShopTime, formatStatus, shopDayRange } from "@/lib/utils";
 import { PageShell, PageSection, Panel, StatStrip } from "@/components/ui";
 
-export const metadata = { title: "Takings" };
+export const metadata = { title: "Payments" };
 export const dynamic = "force-dynamic";
 
 /**
@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
  * reconciles the first half against Clover's own batch -- nothing here moves a
  * cent -- and works the second half with the phone.
  */
-export default async function TakingsPage() {
+export default async function PaymentsPage() {
   const config = await getConfig();
   // The page redirects itself: hiding the sidebar link is presentation.
   if (!isEnabled(config, "featureCounterPayments")) redirect("/staff");
@@ -34,7 +34,7 @@ export default async function TakingsPage() {
     unsettledVisits(),
   ]);
 
-  const byMethod = takingsByMethod(payments);
+  const byMethod = paymentsByMethod(payments);
   const takenCents = payments.reduce((total, payment) => total + payment.amountCents, 0);
   const tipsCents = payments.reduce((total, payment) => total + payment.tipCents, 0);
   const owedCents = owing.reduce((total, row) => total + row.ticket.balanceCents, 0);
@@ -57,12 +57,12 @@ export default async function TakingsPage() {
 
   return (
     <PageShell
-      title="Takings"
+      title="Payments"
       subtitle={`${formatShopDate(start)}. What the shop's terminal took today, and every finished visit still owing.`}
     >
       <StatStrip
         stats={[
-          { label: "Taken today", value: formatCents(takenCents) },
+          { label: "Collected today", value: formatCents(takenCents) },
           { label: "In tips", value: formatCents(tipsCents) },
           { label: "Payments", value: payments.length },
           { label: "Still owed", value: formatCents(owedCents) },
@@ -93,7 +93,7 @@ export default async function TakingsPage() {
           )}
           <p className="text-xs text-stone-400 mt-2">
             Reconcile against the terminal&apos;s own batch. These are records of what happened
-            there, not a second till.
+            there, not a second register.
           </p>
         </Panel>
 

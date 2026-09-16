@@ -22,7 +22,7 @@ import SaveToast from "@/components/SaveToast";
 export const metadata = { title: "Scheduling" };
 
 /**
- * The week's rota: staff down the side, days across. Shifts are edited in
+ * The week's schedule: staff down the side, days across. Shifts are edited in
  * place, and a whole week can be laid down from one pattern.
  *
  * Staff read the same week at /staff/schedule; editing is what stays here.

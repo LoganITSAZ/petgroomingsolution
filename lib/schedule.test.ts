@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { formatHours, hoursByStaff, type Shift } from './schedule';
 
 /**
- * The rota's arithmetic. Overtime is read off scheduled hours before the week
+ * The schedule's arithmetic. Overtime is read off scheduled hours before the week
  * is worked, so getting the totals wrong means telling a shop it is fine when
  * it is not — the easiest thing here to get subtly wrong, and the reason these
  * are covered rather than the rendering.

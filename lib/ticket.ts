@@ -211,8 +211,8 @@ export async function paymentsBetween(from: Date, to: Date) {
   });
 }
 
-/** Takings by method, and the tips inside them. */
-export function takingsByMethod(
+/** Payments by method, and the tips inside them. */
+export function paymentsByMethod(
   payments: { method: PaymentMethod; amountCents: number; tipCents: number }[]
 ): { method: PaymentMethod; amountCents: number; tipCents: number; count: number }[] {
   const byMethod = new Map<PaymentMethod, { amountCents: number; tipCents: number; count: number }>();

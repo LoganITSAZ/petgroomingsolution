@@ -10,9 +10,9 @@ import type { JobResult, ScheduledJob } from "./types";
 /**
  * "It has been a while." The second job on the runner.
  *
- * The arithmetic is `lib/rebooking.ts`, the same module `/staff/rebooking`
- * reads, so the list the counter works and the messages that go out can never
- * disagree about who is overdue.
+ * The arithmetic is `lib/rebooking.ts`, the same module the appointments
+ * board's "Due to rebook" group reads, so the list the counter works and the
+ * messages that go out can never disagree about who is overdue.
  */
 
 /** Shop-local hours the nudge may go out in. A rebooking prompt is not urgent. */

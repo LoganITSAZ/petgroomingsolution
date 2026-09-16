@@ -37,7 +37,7 @@ async function requireRoles(allowed: (roles: StaffRole[]) => boolean): Promise<s
 /**
  * Signed-in manager or admin. Returns their id.
  *
- * This is the gate for running the shop — prices, rota, staff, waiver. The
+ * This is the gate for running the shop — prices, schedule, staff, waiver. The
  * technical screens (system status, notification credentials) use
  * `requireAdmin()` instead, and that difference is the only thing separating
  * the two roles.

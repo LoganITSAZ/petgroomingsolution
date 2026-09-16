@@ -47,8 +47,7 @@ const NAV: NavItem[] = [
   { href: "/staff/team", label: "Team" },
   { href: "/staff/schedule", label: "Schedule" },
   { href: "/staff/services", label: "Services" },
-  { href: "/staff/rebooking", label: "Rebooking", feature: "featureRebookingPrompts" },
-  { href: "/staff/takings", label: "Takings", feature: "featureCounterPayments" },
+  { href: "/staff/payments", label: "Payments", feature: "featureCounterPayments" },
   { href: "/staff/resources", label: "Resources" },
 ];
 
@@ -65,7 +64,7 @@ const MANAGE_NAV: NavItem[] = [
   { href: "/admin/schedule", label: "Scheduling" },
   { href: "/admin/stations", label: "Stations" },
   { href: "/admin/marketing", label: "Marketing" },
-  { href: "/admin/vaccinations", label: "Vaccinations", feature: "featureVaccinationGate" },
+  { href: "/admin/testimonials", label: "Testimonials", feature: "featureTestimonials" },
 ];
 
 /** What the shop reads about itself. Nothing here is editable. */

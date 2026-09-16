@@ -23,7 +23,7 @@ describe("resource hub", () => {
       target: { value: "#4f" },
     });
     expect(screen.getByText("1 references · 1 topics")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /#4F 3/ }));
+    fireEvent.click(screen.getByRole("button", { name: "#4F" }));
     const dialog = screen.getByRole("dialog");
     expect(
       within(dialog).getByRole("heading", { level: 2, name: "#4F" }),
@@ -39,17 +39,23 @@ describe("resource hub", () => {
   });
   it("persists saved references and removes them from the saved view", () => {
     const view = renderLibrary();
-    fireEvent.click(screen.getByRole("button", { name: "Save #4F" }));
+    fireEvent.click(screen.getByRole("button", { name: "#4F" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "☆ Save",
+      }),
+    );
     view.unmount();
     renderLibrary();
     fireEvent.click(screen.getByRole("tab", { name: "Saved (1)" }));
+    expect(screen.getByRole("button", { name: "#4F ★" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Unsave #4F" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Save #5F" }),
+      screen.queryByRole("button", { name: "#5F" }),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Unsave #4F" }));
+    fireEvent.click(screen.getByRole("button", { name: "#4F ★" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "★ Saved" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
     expect(
       screen.getByText("Your go-to references, in one place"),
     ).toBeInTheDocument();

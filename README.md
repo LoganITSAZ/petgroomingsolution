@@ -1,7 +1,7 @@
 # Gentle Groomer
 
 Shop management for a pet grooming business — booking, the floor, the kennels,
-the rota and the numbers, in one self-hosted app.
+the schedule and the numbers, in one self-hosted app.
 
 It is built for a single shop that runs its own box. There is no tenancy, no
 billing, and no third-party service to sign up for: Postgres holds everything
@@ -14,7 +14,7 @@ only optional credentials are an email sender and Twilio.
 their history at `/portal`.
 
 **Staff** work the floor at `/staff` — today's appointments, check-in, the
-station a pet is on, kennel assignment, presence, the rota, and analytics with
+station a pet is on, kennel assignment, presence, the schedule, and analytics with
 a groomer leaderboard. It is responsive, because groomers work from their
 phones.
 
@@ -99,6 +99,9 @@ instructions, including TLS and backups, are in [DEPLOY.md](DEPLOY.md).
 ## Working on it
 
 [CLAUDE.md](CLAUDE.md) is the architecture guide — the auth model, the station
-event stream, how pricing and kennels and the rota actually work, and the traps
+event stream, how pricing and kennels and the schedule actually work, and the traps
 (timezones, status changes, the jQuery-owned form rows). Read it before
 changing anything in `lib/`.
+
+[ROADMAP.md](ROADMAP.md) is what the shop has asked for next, and what is
+already built of it.

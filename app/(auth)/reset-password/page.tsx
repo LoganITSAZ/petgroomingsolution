@@ -11,7 +11,7 @@ export const metadata = { title: "Reset Password" };
 export const dynamic = "force-dynamic";
 
 const DEAD_LINK: Record<string, string> = {
-  invalid: "That link is not one we recognise. Ask for a new one.",
+  invalid: "That link is not one we recognize. Ask for a new one.",
   expired: "That link has expired. Ask for a new one and use it within the hour.",
   used: "That link has already been used. If it was not you, ask for another one now.",
 };

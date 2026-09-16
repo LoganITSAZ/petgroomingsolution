@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Insight } from "@/lib/insights";
+import { SNOOZE_OPTIONS } from "@/lib/insight-decisions";
+import { snoozeShopInsight } from "@/app/staff/insight-actions";
 
 /**
  * Observations with their working shown. Every insight states the numbers it
@@ -16,10 +18,17 @@ export default function InsightList({
   insights,
   empty = "Nothing stands out yet — a few more visits and patterns start to show.",
   compact = false,
+  snoozable = false,
 }: {
   insights: Insight[];
   empty?: string;
   compact?: boolean;
+  /**
+   * Show the "dealt with" buttons. Only the shop-wide list takes them: a
+   * customer's or a pet's insights are read on that record's own page, where
+   * hiding one would hide it from whoever opens the profile next.
+   */
+  snoozable?: boolean;
 }) {
   if (insights.length === 0) {
     return <p className="text-sm text-stone-400">{empty}</p>;
@@ -51,6 +60,25 @@ export default function InsightList({
               </Link>
             ) : (
               body
+            )}
+            {snoozable && (
+              /* Plain forms, so this stays a server component and the list
+                 works with no JavaScript on a shop terminal. */
+              <div className="mt-1.5 flex flex-wrap gap-1.5 pl-3.5">
+                {SNOOZE_OPTIONS.map((option) => (
+                  <form key={option.days} action={snoozeShopInsight}>
+                    <input type="hidden" name="insightId" value={insight.id} />
+                    <input type="hidden" name="title" value={insight.title} />
+                    <input type="hidden" name="days" value={option.days} />
+                    <button
+                      type="submit"
+                      className="rounded-md border border-stone-300 bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-stone-600 hover:bg-white"
+                    >
+                      {option.label}
+                    </button>
+                  </form>
+                ))}
+              </div>
             )}
           </li>
         );

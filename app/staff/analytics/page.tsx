@@ -1,7 +1,8 @@
 import { LEADERBOARD_WINDOW_DAYS, getLeaderboard, getShopAnalytics } from "@/lib/analytics";
 import { formatCents } from "@/lib/pricing";
-import { formatRole, formatServiceType } from "@/lib/utils";
+import { formatRole, formatServiceType, formatShopDate } from "@/lib/utils";
 import { shopInsights } from "@/lib/insights";
+import { MIN_COHORT_SIZE, RETURN_WINDOW_DAYS, retention } from "@/lib/retention";
 import InsightList from "@/components/InsightList";
 import Link from "next/link";
 import { Meter, PageShell, PageSection } from "@/components/ui";
@@ -38,6 +39,14 @@ function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
+/** "2026-03" as the shop would say it. Noon keeps the key off a zone boundary. */
+function monthLabel(monthKey: string): string {
+  return formatShopDate(new Date(`${monthKey}-15T12:00:00Z`), {
+    month: "short",
+    year: "numeric",
+  });
+}
+
 interface PageProps {
   searchParams: Promise<{ range?: string }>;
 }
@@ -49,11 +58,14 @@ export default async function AnalyticsPage(props: PageProps) {
   const requested = Number(searchParams.range);
   const rangeDays = (RANGES as readonly number[]).includes(requested) ? requested : 30;
 
-  const [shop, leaderboard, insights, config] = await Promise.all([
+  const [shop, leaderboard, insights, config, comeback] = await Promise.all([
     getShopAnalytics(rangeDays),
     getLeaderboard(),
     shopInsights(),
     getConfig(),
+    // Not bound to the range control above it: a cohort's window is 90 days,
+    // so "the last 7 days" is not a question this one can be asked.
+    retention(),
   ]);
   // Off, and the taken column is a row of zeroes describing a feature the shop
   // does not use.
@@ -147,7 +159,7 @@ export default async function AnalyticsPage(props: PageProps) {
     >
       {/* What the numbers are saying */}
       <PageSection title="Insights">
-        <InsightList insights={insights} />
+        <InsightList insights={insights} snoozable />
       </PageSection>
 
       {/* Headline numbers */}
@@ -311,6 +323,87 @@ export default async function AnalyticsPage(props: PageProps) {
             <p className="mt-1 text-[11px] font-semibold text-stone-500">{label}</p>
           </div>
         ))}
+      </PageSection>
+
+      {/* Do they come back? Everything above this point is throughput. */}
+      <PageSection
+        title="First visits, and who came back"
+        hint={`Within ${RETURN_WINDOW_DAYS} days · all time`}
+      >
+        {comeback.cohorts.length === 0 ? (
+          <p className="mt-3 text-sm text-stone-400">
+            No finished visits yet, so there is nobody to have come back.
+          </p>
+        ) : (
+          <>
+            <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-2">
+              <p className="text-4xl font-black leading-none tracking-tight tabular-nums text-stone-900">
+                {comeback.returnRate == null ? "—" : percent(comeback.returnRate)}
+              </p>
+              <p className="text-sm text-stone-600">
+                {comeback.returnRate == null ? (
+                  <>
+                    Not enough settled history to put a figure on it yet. A month is rated once
+                    every first-timer in it has had {RETURN_WINDOW_DAYS} days and there are at
+                    least {MIN_COHORT_SIZE} of them.
+                  </>
+                ) : (
+                  <>
+                    of first-time customers booked again within {RETURN_WINDOW_DAYS} days —{" "}
+                    <span className="font-bold text-stone-900">
+                      {comeback.ratedReturns} of {comeback.ratedCustomers}
+                    </span>
+                    .
+                    {comeback.trend && Math.abs(comeback.trend.change) >= 0.05 && (
+                      <>
+                        {" "}
+                        {comeback.trend.change > 0 ? "Up" : "Down"}{" "}
+                        <span
+                          className={`font-bold ${comeback.trend.change > 0 ? "text-emerald-700" : "text-rose-700"}`}
+                        >
+                          {percent(Math.abs(comeback.trend.change))}
+                        </span>{" "}
+                        on the month before.
+                      </>
+                    )}
+                  </>
+                )}
+              </p>
+            </div>
+            <ul className="mt-4 space-y-1.5">
+              {comeback.cohorts.map((month) => (
+                <li key={month.monthKey}>
+                  <Meter
+                    label={monthLabel(month.monthKey)}
+                    used={month.returnedInWindow}
+                    total={month.size}
+                    display={
+                      month.rate == null
+                        ? `${month.size} new · ${month.mature ? "too few to rate" : "still early"}`
+                        : `${month.returnedInWindow}/${month.size} · ${percent(month.rate)}`
+                    }
+                    /* High is good here, so the capacity ramp — which paints a
+                       full bar red — would say the opposite of what it means. */
+                    bar={month.rate == null ? "bg-stone-200" : "bg-emerald-400"}
+                  />
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-stone-400">
+              Grouped by the month of a customer&apos;s first finished visit, so each row is a
+              fixed group of people and the months are comparable. A month stays unrated until
+              its newest first-timer has had the full {RETURN_WINDOW_DAYS} days
+              {comeback.cohorts.some((month) => month.loyal > 0) && (
+                <>
+                  {" "}
+                  · {comeback.cohorts.reduce((sum, month) => sum + month.loyal, 0)} of them have
+                  since been in three times or more
+                </>
+              )}
+              .
+            </p>
+          </>
+        )}
       </PageSection>
 
       {/* Leaderboard */}

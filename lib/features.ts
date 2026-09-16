@@ -31,7 +31,10 @@ export type FeatureKey =
   | "featureVaccinationGate"
   | "featureAppointmentReminders"
   | "featureRebookingPrompts"
-  | "featureCounterPayments";
+  | "featureCounterPayments"
+  | "featureDailyDigest"
+  | "featureSlotOffers"
+  | "featureTestimonials";
 
 export type FeatureGroup = "Customers" | "Visits" | "Money" | "Notifications" | "Compliance";
 
@@ -60,6 +63,9 @@ export interface FeatureConfig {
   featureAppointmentReminders: boolean;
   featureRebookingPrompts: boolean;
   featureCounterPayments: boolean;
+  featureDailyDigest: boolean;
+  featureSlotOffers: boolean;
+  featureTestimonials: boolean;
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
   twilioFromNumber: string | null;
@@ -184,6 +190,41 @@ export const FEATURES: Feature[] = [
     blurb:
       "The ticket at the counter: the fees a groomer finds on the table, what was paid, and the tip. The shop's own terminal takes the money — this records it. Off, the books already written stay readable and nothing new is taken.",
     group: "Money",
+    offMeans: "frozen",
+  },
+  {
+    key: "featureDailyDigest",
+    label: "Morning Brief",
+    blurb:
+      "One email before the doors open, to whoever runs the shop: today's alerts, what has changed about the week, and who is due back. Off, nothing is sent and every figure in it is still on the dashboard.",
+    group: "Notifications",
+    offMeans: "silent",
+    // It is mail to staff, so it needs a way to send mail — and nothing else.
+    // The insights it carries are computed whether or not anyone is emailed.
+    needs: (config) =>
+      isEnabled(config, "featureEmailNotify")
+        ? null
+        : "Email is not live, so there is no way to send the brief.",
+  },
+  {
+    key: "featureSlotOffers",
+    label: "Fill Cancelled Slots",
+    blurb:
+      "When a booked visit is cancelled and the slot is still sellable, the households whose own gap between grooms lands near it are told it has opened. They ring the shop to take it — there is no self-service claim. Off, a cancellation is silent.",
+    group: "Customers",
+    offMeans: "silent",
+    requires: ["featureRebookingPrompts"],
+    needs: (config) =>
+      isEnabled(config, "featureEmailNotify") || isEnabled(config, "featureSmsNotify")
+        ? null
+        : "Neither email nor SMS is live, so an opening cannot be offered to anybody.",
+  },
+  {
+    key: "featureTestimonials",
+    label: "Testimonials",
+    blurb:
+      "Customers write up a visit from the portal, and the ones a manager approves appear on the home page. Off, the form goes and the page lists the services instead; what has been written stays in the queue.",
+    group: "Customers",
     offMeans: "frozen",
   },
   {

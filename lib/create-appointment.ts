@@ -14,6 +14,7 @@ import {
   vaccinationRefusalMessage,
 } from "@/lib/vaccinations";
 import { shopDayRange } from "@/lib/utils";
+import { learnedSlotForPet } from "@/lib/visit-duration";
 
 /**
  * The one place an Appointment row is created.
@@ -231,6 +232,17 @@ export async function createAppointment(
 
   const assignment = { staffId, stationId };
 
+  // How long to book for. The catalog's flat sum is the starting point; a pet
+  // with enough history of running over — or finishing early — moves it, which
+  // is the one thing the shop already knew and never acted on. A caller that
+  // named a duration is not second-guessed, and the figure stays editable on
+  // the appointment afterwards.
+  const baseDuration = input.durationMins ?? resolved?.totalDurationMins ?? null;
+  const slot =
+    input.durationMins == null && baseDuration != null
+      ? await learnedSlotForPet(input.petId, baseDuration)
+      : { mins: baseDuration, reason: null };
+
   // Snapshot the customer's negotiated rate onto the visit, so editing the
   // tier later never reprices what was quoted here.
   const rate = await bookingRateSnapshot(input.customerId, lines);
@@ -246,7 +258,7 @@ export async function createAppointment(
         appointmentType: input.appointmentType ?? AppointmentType.APPOINTMENT,
         stationId: assignment.stationId,
         staffId: assignment.staffId,
-        durationMins: input.durationMins ?? resolved?.totalDurationMins ?? null,
+        durationMins: slot.mins,
         visitNotes: input.visitNotes ?? null,
         needsKennel,
         status,
@@ -263,7 +275,9 @@ export async function createAppointment(
         appointmentId: created.id,
         status,
         changedById: input.changedById ?? null,
-        note: input.note ?? "Appointment created",
+        // The adjusted slot explains itself in the audit trail rather than
+        // silently differing from what the price list says.
+        note: [input.note ?? "Appointment created", slot.reason].filter(Boolean).join(" "),
       },
     });
 

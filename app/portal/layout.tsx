@@ -39,6 +39,9 @@ export default async function PortalLayout({ children }: { children: React.React
               <Link href="/portal/pets" className="hover:text-brand-text">My Pets</Link>
               <Link href="/portal/appointments" className="hover:text-brand-text">Appointments</Link>
               <Link href="/portal/profile" className="hover:text-brand-text">Profile</Link>
+              {config.featureTestimonials && (
+                <Link href="/portal/review" className="hover:text-brand-text">Write a Review</Link>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">

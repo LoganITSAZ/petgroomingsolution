@@ -5,6 +5,8 @@ import { pickupWatchlist, formatWait } from "@/lib/pickups";
 import { capacityConflicts } from "@/lib/kennels";
 import { OCCUPYING_STATUSES } from "@/lib/stations";
 import { shopDayRange } from "@/lib/utils";
+import { getConfig } from "@/lib/config";
+import { checksForPets, vaccinationBlockers, worstLevel } from "@/lib/vaccinations";
 
 /**
  * Service-level problems, in one place.
@@ -32,6 +34,9 @@ export const ALERT_DOT: Record<AlertSeverity, string> = {
 };
 
 const SEVERITY_ORDER: Record<AlertSeverity, number> = { critical: 0, warning: 1, info: 2 };
+
+/** How far ahead a lapsed vaccination is worth a phone call. */
+const VACCINATION_LOOKAHEAD_DAYS = 7;
 
 /** Names, trimmed to something readable in a narrow panel. */
 function list(names: string[], limit = 3): string {
@@ -180,6 +185,54 @@ export async function serviceAlerts(): Promise<ServiceAlert[]> {
         })
       ),
       href: "/staff/stations",
+    });
+  }
+
+  // ── Booked soon, not current on what the shop checks ──────
+  // This is the shop-wide view of vaccination status. It lives here rather
+  // than on a page of its own: the only thing to do about a lapsed pet is ring
+  // the owner before it turns up, and a week is how far ahead that is useful.
+  const config = await getConfig();
+  const booked = config.featureVaccinationGate ? await prisma.appointment.findMany({
+    where: {
+      status: AppointmentStatus.SCHEDULED,
+      scheduledAt: { gte: start, lt: new Date(start.getTime() + VACCINATION_LOOKAHEAD_DAYS * 86_400_000) },
+    },
+    select: { petId: true, pet: { select: { name: true } } },
+  }) : [];
+  const checks = await checksForPets(booked.map((visit) => visit.petId), config);
+  // One line per pet, not per booking: a dog in twice this week is one call.
+  const byPet = new Map(booked.map((visit) => [visit.petId, visit.pet.name]));
+  const refused: string[] = [];
+  const due: string[] = [];
+  for (const [petId, petChecks] of checks) {
+    const name = byPet.get(petId);
+    if (!name) continue;
+    const blockers = vaccinationBlockers(petChecks);
+    if (blockers.length > 0) {
+      refused.push(`${name} (${blockers.map((check) => check.name).join(", ")})`);
+      continue;
+    }
+    const worst = worstLevel(petChecks);
+    if (worst !== null && worst !== "current") due.push(name);
+  }
+
+  if (refused.length > 0) {
+    alerts.push({
+      id: "vaccination-blocked",
+      severity: "critical",
+      title: `${refused.length} booked pet${refused.length === 1 ? "" : "s"} not current on vaccinations`,
+      detail: list(refused),
+      href: "/staff/appointments",
+    });
+  }
+  if (due.length > 0) {
+    alerts.push({
+      id: "vaccination-due",
+      severity: "info",
+      title: `${due.length} booked pet${due.length === 1 ? "" : "s"} due a booster`,
+      detail: list(due),
+      href: "/staff/appointments",
     });
   }
 

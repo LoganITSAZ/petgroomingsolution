@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PaymentMethod } from "@prisma/client";
-import { abovePublishedRange, takingsByMethod, ticketFor, type TicketInput } from "./ticket";
+import { abovePublishedRange, paymentsByMethod, ticketFor, type TicketInput } from "./ticket";
 
 function input(overrides: Partial<TicketInput> = {}): TicketInput {
   return {
@@ -108,9 +108,9 @@ describe("abovePublishedRange", () => {
   });
 });
 
-describe("takingsByMethod", () => {
-  it("groups the day's takings and keeps the tips inside them", () => {
-    const rows = takingsByMethod([
+describe("paymentsByMethod", () => {
+  it("groups the day's payments and keeps the tips inside them", () => {
+    const rows = paymentsByMethod([
       { method: PaymentMethod.CARD, amountCents: 8_000, tipCents: 1_500 },
       { method: PaymentMethod.CASH, amountCents: 6_500, tipCents: 0 },
       { method: PaymentMethod.CARD, amountCents: 5_000, tipCents: 500 },
@@ -122,6 +122,6 @@ describe("takingsByMethod", () => {
   });
 
   it("returns nothing for a day with no payments", () => {
-    expect(takingsByMethod([])).toEqual([]);
+    expect(paymentsByMethod([])).toEqual([]);
   });
 });

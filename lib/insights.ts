@@ -1,9 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { AppointmentStatus, AppointmentType } from "@prisma/client";
 import { FINISHED_STATUSES } from "@/lib/analytics";
+import { getConfig } from "@/lib/config";
+import { MIN_VISITS_FOR_PATTERN, customerRhythm, rhythmsFor } from "@/lib/rhythm";
+import { shopAnomalies } from "@/lib/anomalies";
+import { snoozedInsightIds, withoutSnoozed } from "@/lib/insight-decisions";
+import { demandForecast } from "@/lib/demand";
 import { kennelDemand } from "@/lib/kennels";
 import { formatCents } from "@/lib/pricing";
 import { formatServiceType, formatShopDate, SHOP_TIMEZONE, shopDayRange } from "@/lib/utils";
+import { overrunsFrom, typicalOverrunMins } from "@/lib/visit-duration";
 
 /**
  * Observations drawn from the shop's own records.
@@ -13,6 +19,8 @@ import { formatServiceType, formatShopDate, SHOP_TIMEZONE, shopDayRange } from "
  * produced it so staff can judge it, and anything based on too little history
  * is simply not produced.
  */
+
+export { rhythmFrom, rhythmsFor, type CustomerRhythm, type RhythmVisit } from "@/lib/rhythm";
 
 export type InsightTone = "neutral" | "opportunity" | "warning";
 
@@ -27,115 +35,13 @@ export interface Insight {
   href?: string;
 }
 
-/** Below this many visits, a pattern is noise. */
-const MIN_VISITS_FOR_PATTERN = 3;
-
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? Math.round((sorted[middle - 1] + sorted[middle]) / 2)
-    : sorted[middle];
-}
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ─── Customer-level ──────────────────────────────────────────
 
-export interface CustomerRhythm {
-  visits: number;
-  /** Typical days between visits, once there are enough of them. */
-  cadenceDays: number | null;
-  lastVisit: Date | null;
-  daysSinceLastVisit: number | null;
-  hasUpcoming: boolean;
-  /** Past due for their usual rebooking. */
-  dueForRebooking: boolean;
-  /** Well past it — drifting away. */
-  lapsing: boolean;
-  noShows: number;
-  noShowRate: number;
-  averageTicketCents: number | null;
-}
-
-async function customerRhythm(customerId: string): Promise<CustomerRhythm> {
-  const [history, upcoming] = await Promise.all([
-    prisma.appointment.findMany({
-      where: { customerId, status: { in: [...FINISHED_STATUSES, AppointmentStatus.NO_SHOW] } },
-      select: {
-        scheduledAt: true,
-        status: true,
-        pricingDiscountCents: true,
-        services: { select: { priceCents: true } },
-      },
-      orderBy: { scheduledAt: "asc" },
-    }),
-    prisma.appointment.count({
-      where: {
-        customerId,
-        status: AppointmentStatus.SCHEDULED,
-        scheduledAt: { gte: new Date() },
-      },
-    }),
-  ]);
-
-  const finished = history.filter((visit) => visit.status !== AppointmentStatus.NO_SHOW);
-  const noShows = history.length - finished.length;
-
-  const gaps: number[] = [];
-  for (let i = 1; i < finished.length; i++) {
-    const days = Math.round(
-      (finished[i].scheduledAt.getTime() - finished[i - 1].scheduledAt.getTime()) / DAY_MS
-    );
-    if (days > 0) gaps.push(days);
-  }
-
-  const cadenceDays = finished.length >= MIN_VISITS_FOR_PATTERN ? median(gaps) : null;
-  const lastVisit = finished.length > 0 ? finished[finished.length - 1].scheduledAt : null;
-  const daysSinceLastVisit = lastVisit
-    ? Math.floor((Date.now() - lastVisit.getTime()) / DAY_MS)
-    : null;
-
-  // Net of whatever rate this customer was quoted under, otherwise the typical
-  // ticket shown on a legacy customer's page is a price they have never paid.
-  const tickets = finished
-    .map((visit) => {
-      const list = visit.services.reduce<number | null>(
-        (sum, line) => (line.priceCents == null ? sum : (sum ?? 0) + line.priceCents),
-        null
-      );
-      return list == null ? null : Math.max(0, list - (visit.pricingDiscountCents ?? 0));
-    })
-    .filter((cents): cents is number => cents != null);
-
-  return {
-    visits: finished.length,
-    cadenceDays,
-    lastVisit,
-    daysSinceLastVisit,
-    hasUpcoming: upcoming > 0,
-    dueForRebooking:
-      cadenceDays != null &&
-      daysSinceLastVisit != null &&
-      upcoming === 0 &&
-      daysSinceLastVisit >= cadenceDays,
-    lapsing:
-      cadenceDays != null &&
-      daysSinceLastVisit != null &&
-      upcoming === 0 &&
-      daysSinceLastVisit >= cadenceDays * 2,
-    noShows,
-    noShowRate: history.length === 0 ? 0 : noShows / history.length,
-    averageTicketCents:
-      tickets.length === 0
-        ? null
-        : Math.round(tickets.reduce((a, b) => a + b, 0) / tickets.length),
-  };
-}
-
 export async function customerInsights(customerId: string): Promise<Insight[]> {
-  const rhythm = await customerRhythm(customerId);
+  const config = await getConfig();
+  const rhythm = await customerRhythm(customerId, config.rebookingGraceDays);
   const insights: Insight[] = [];
 
   if (rhythm.cadenceDays != null && rhythm.daysSinceLastVisit != null) {
@@ -200,34 +106,37 @@ export async function petInsights(petId: string): Promise<Insight[]> {
 
   const insights: Insight[] = [];
 
-  const overruns = visits
-    .filter((visit) => visit.durationMins != null && visit.checkedInAt)
-    .map((visit) => {
-      const finishedAt = visit.completedAt ?? visit.updatedAt;
-      const actual = Math.round((finishedAt.getTime() - visit.checkedInAt!.getTime()) / 60000);
-      return actual - (visit.durationMins as number);
-    })
-    .filter((difference) => Number.isFinite(difference));
+  // Same arithmetic the booking now runs on, from the same module: an insight
+  // saying "runs 20 min over" beside a slot that was lengthened by 15 would be
+  // two answers to one question.
+  const overruns = overrunsFrom(
+    visits.map((visit) => ({
+      checkedInAt: visit.checkedInAt,
+      finishedAt: visit.completedAt ?? visit.updatedAt,
+      durationMins: visit.durationMins,
+    }))
+  );
+  const typical = typicalOverrunMins(overruns);
 
-  if (overruns.length >= MIN_VISITS_FOR_PATTERN) {
-    const typical = median(overruns) ?? 0;
-    if (typical >= 15) {
-      insights.push({
-        id: "runs-long",
-        tone: "warning",
-        title: `Usually runs ${typical} min over`,
-        detail: "Book extra time, or the day behind it slips.",
-        evidence: `Across the last ${overruns.length} visits with a booked duration.`,
-      });
-    } else if (typical <= -15) {
-      insights.push({
-        id: "runs-short",
-        tone: "opportunity",
-        title: `Usually finishes ${Math.abs(typical)} min early`,
-        detail: "The slot could be shorter, freeing time later in the day.",
-        evidence: `Across the last ${overruns.length} visits with a booked duration.`,
-      });
-    }
+  if (typical != null) {
+    const applied = `Its next booking is slotted for this automatically; the duration stays editable on the visit.`;
+    insights.push(
+      typical > 0
+        ? {
+            id: "runs-long",
+            tone: "warning",
+            title: `Usually runs ${typical} min over`,
+            detail: `Longer slots keep the day behind it from slipping. ${applied}`,
+            evidence: `Across the last ${overruns.length} visits with a booked duration.`,
+          }
+        : {
+            id: "runs-short",
+            tone: "opportunity",
+            title: `Usually finishes ${Math.abs(typical)} min early`,
+            detail: `A shorter slot frees time later in the day. ${applied}`,
+            evidence: `Across the last ${overruns.length} visits with a booked duration.`,
+          }
+    );
   }
 
   const repeated = events.filter((event) => event._count._all >= 2);
@@ -339,8 +248,11 @@ async function kennelForecast(
 export async function shopInsights(): Promise<Insight[]> {
   const { start, end } = shopDayRange();
   const insights: Insight[] = [];
+  const config = await getConfig();
+  const graceDays = config.rebookingGraceDays;
 
-  const [dueCustomers, noShowRisk, forecast, attachments, hours, walkInShare] = await Promise.all([
+  const [dueCustomers, noShowRisk, forecast, attachments, hours, walkInShare, anomalies, demand] =
+    await Promise.all([
     // Customers with history but nothing booked, ordered by how overdue.
     prisma.customer.findMany({
       where: {
@@ -348,6 +260,8 @@ export async function shopInsights(): Promise<Insight[]> {
         appointments: { none: { status: AppointmentStatus.SCHEDULED, scheduledAt: { gte: new Date() } } },
       },
       select: { id: true, firstName: true, lastName: true },
+      // Batched into one rhythm query below, so this is a page of work rather
+      // than a round trip each.
       take: 200,
     }),
     prisma.appointment.findMany({
@@ -362,14 +276,26 @@ export async function shopInsights(): Promise<Insight[]> {
       where: { scheduledAt: { gte: new Date(Date.now() - 30 * DAY_MS) } },
       _count: { _all: true },
     }),
+    // What is unlike the shop's own normal, which no threshold can see.
+    shopAnomalies(),
+    // And what is coming that nobody has booked yet.
+    demandForecast(),
   ]);
 
-  // Who is overdue, checked against each customer's own rhythm.
-  const due: string[] = [];
-  for (const customer of dueCustomers.slice(0, 60)) {
-    const rhythm = await customerRhythm(customer.id);
-    if (rhythm.dueForRebooking) due.push(`${customer.firstName} ${customer.lastName}`);
-  }
+  // A change leads the list: "no-shows have doubled" outranks every standing
+  // pattern below it, because it is the thing that was not true last month.
+  insights.push(...anomalies);
+
+  // Who is overdue, checked against each customer's own rhythm. Two queries
+  // for the whole list: one rhythm at a time was a round trip per household,
+  // and the dashboard got slower every time the shop won a customer.
+  const rhythms = await rhythmsFor(
+    [...dueCustomers.map((customer) => customer.id), ...noShowRisk.map((visit) => visit.customerId)],
+    graceDays
+  );
+  const due = dueCustomers
+    .filter((customer) => rhythms.get(customer.id)?.dueForRebooking)
+    .map((customer) => `${customer.firstName} ${customer.lastName}`);
   if (due.length > 0) {
     insights.push({
       id: "rebooking",
@@ -377,16 +303,21 @@ export async function shopInsights(): Promise<Insight[]> {
       title: `${due.length} customer${due.length === 1 ? " is" : "s are"} due to rebook`,
       detail: "Each is past their own usual interval with nothing on the books.",
       evidence: due.slice(0, 5).join(", ") + (due.length > 5 ? `, +${due.length - 5} more` : ""),
-      href: "/staff/customers",
+      // The call list is behind the flag; without it the customers page is
+      // the only place left to work from.
+      href: config.featureRebookingPrompts
+        ? "/staff/appointments?group=rebook"
+        : "/staff/customers",
     });
   }
 
-  // Today's bookings from people who have missed before.
-  const risky: string[] = [];
-  for (const appointment of noShowRisk) {
-    const rhythm = await customerRhythm(appointment.customerId);
-    if (rhythm.noShows >= 2 && rhythm.noShowRate >= 0.2) risky.push(appointment.pet.name);
-  }
+  // Today's bookings from people who have missed before, off the same batch.
+  const risky = noShowRisk
+    .filter((appointment) => {
+      const rhythm = rhythms.get(appointment.customerId);
+      return rhythm != null && rhythm.noShows >= 2 && rhythm.noShowRate >= 0.2;
+    })
+    .map((appointment) => appointment.pet.name);
   if (risky.length > 0) {
     insights.push({
       id: "no-show-today",
@@ -409,6 +340,28 @@ export async function shopInsights(): Promise<Insight[]> {
         .map((day) => `${formatShopDate(day.day, { weekday: "short" })} ${day.committed}/${day.capacity}`)
         .join(", "),
       href: "/staff/stations",
+    });
+  }
+
+  // Days the diary looks calm on and habit says will not be.
+  const pressured = demand
+    .filter((day) => day.expected >= 3 && day.expected > day.booked)
+    .sort((a, b) => b.expected - a.expected)
+    .slice(0, 3);
+  if (pressured.length > 0) {
+    insights.push({
+      id: "expected-demand",
+      tone: "opportunity",
+      title: `${pressured[0].expected} households are due back ${formatShopDate(pressured[0].day, { weekday: "long" })}`,
+      detail: "Ring them before they ring somebody else — and check the rota covers the day.",
+      evidence:
+        pressured
+          .map(
+            (day) =>
+              `${formatShopDate(day.day, { weekday: "short", month: "short", day: "numeric" })}: ${day.booked} booked, ${day.expected} due by their own usual gap`
+          )
+          .join("; ") + ". Estimated from each household's cadence, not bookings.",
+      href: "/staff/rebooking",
     });
   }
 
@@ -453,5 +406,8 @@ export async function shopInsights(): Promise<Insight[]> {
     }
   }
 
-  return insights;
+  // Last, over everything above: an observation somebody has already acted on
+  // is not news. Applied here rather than at the screen so the dashboard and
+  // the morning brief cannot disagree about what is still outstanding.
+  return withoutSnoozed(insights, await snoozedInsightIds());
 }

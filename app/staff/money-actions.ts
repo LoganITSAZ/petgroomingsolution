@@ -22,7 +22,7 @@ import { abovePublishedRange } from "@/lib/ticket";
 
 function back(returnTo: string, appointmentId: string, params: string): never {
   revalidatePath(`/staff/appointments/${appointmentId}`);
-  revalidatePath("/staff/takings");
+  revalidatePath("/staff/payments");
   // A station board shows the pet, so its page is stale too.
   if (returnTo.startsWith("/staff/stations/")) revalidatePath(returnTo);
   redirect(`${returnTo}${params}`);

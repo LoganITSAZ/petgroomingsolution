@@ -24,31 +24,43 @@ model SystemConfig {
   shopWebsite String?
 
   // Feature flags (toggle per deployment)
-  featureOnlineBooking  Boolean @default(true) // customers can book via portal
-  featureWalkInPortal   Boolean @default(true) // customers can check in walk-ins via portal
-  featureEmailNotify    Boolean @default(true) // send email on booking + ready pickup
-  featureSmsNotify      Boolean @default(false) // send SMS (requires Twilio config)
-  featureWaiverRequired Boolean @default(true) // require liability waiver on first signup
-  featureRewards        Boolean @default(false) // visit punch card for customers
+  featureOnlineBooking        Boolean @default(true) // customers can book via portal
+  featureWalkInPortal         Boolean @default(true) // customers can check in walk-ins via portal
+  featureEmailNotify          Boolean @default(true) // send email on booking + ready pickup
+  featureSmsNotify            Boolean @default(false) // send SMS (requires Twilio config)
+  featureWaiverRequired       Boolean @default(true) // require liability waiver on first signup
+  featureRewards              Boolean @default(false) // visit punch card for customers
   /// Before/after and issue photos on a visit. On by default: a shop that
   /// never uploads sees an empty strip, and photos already taken stay
   /// readable when it is switched off.
-  featureVisitPhotos    Boolean @default(true)
+  featureVisitPhotos          Boolean @default(true)
   /// Per-vaccine records with expiry dates, and the check that reads them.
   /// On by default, but it gates nothing until the shop adds a requirement
   /// row -- no rows means no gate.
-  featureVaccinationGate Boolean @default(true)
+  featureVaccinationGate      Boolean @default(true)
   /// The day-before reminder. On by default: a shop with email switched off
   /// sends nothing anyway, so this decides intent rather than capability.
   featureAppointmentReminders Boolean @default(true)
   /// The nudge for a household that is past its own usual gap between
   /// grooms. Measured from their history, so it says nothing about a
   /// customer with fewer than three visits on file.
-  featureRebookingPrompts Boolean @default(true)
+  featureRebookingPrompts     Boolean @default(true)
   /// The ticket at the counter: surcharges found on the table, what was paid,
   /// the tip, and the day's takings. The shop's own Clover terminal takes the
   /// money -- these rows record it.
-  featureCounterPayments Boolean @default(true)
+  featureCounterPayments      Boolean @default(true)
+  /// The morning brief: what the shop's own records say about today, mailed to
+  /// whoever runs it. Off by default -- it is mail to staff, and a shop that
+  /// has not asked for a daily email should not start receiving one on upgrade.
+  featureDailyDigest          Boolean @default(false)
+  /// The offer that goes out when a booked visit is cancelled and the slot is
+  /// still sellable. Off by default: it texts customers who did not ask to be
+  /// contacted about somebody else's cancellation.
+  featureSlotOffers           Boolean @default(false)
+  /// Testimonials on the public home page, and the form customers write them
+  /// in. Off by default: a shop that has collected nothing should not publish
+  /// an empty section, and nothing is shown until a manager approves it.
+  featureTestimonials         Boolean @default(false)
 
   // Liability waiver
   waiverText    String? @db.Text // full waiver body; null = feature off even if flag is true
@@ -72,11 +84,11 @@ model SystemConfig {
   twilioFromNumber String?
 
   // Public site appearance
-  themePreset       String  @default("default") // id from lib/themes.ts
-  themeAutoSeasonal Boolean @default(false) // follow the calendar instead
+  themePreset        String  @default("default") // id from lib/themes.ts
+  themeAutoSeasonal  Boolean @default(false) // follow the calendar instead
   themeUseShopColors Boolean @default(true)
-  themeBrandColor   String? // legacy base color for shops without a full palette
-  themeShopColors   Json? // hex colors keyed by the 13 template color roles
+  themeBrandColor    String? // legacy base color for shops without a full palette
+  themeShopColors    Json? // hex colors keyed by the 13 template color roles
 
   // How late an arrival may be before the schedule flags it. Green until the
   // first threshold, then amber, orange and finally treated as missed.
@@ -120,6 +132,24 @@ model SystemConfig {
   /// Days past a household's own cadence before the shop says anything. A
   /// customer who books every eight weeks is not overdue on day 57.
   rebookingGraceDays Int @default(7)
+
+  // The morning brief
+  /// Shop-local hour the digest goes out. Before the doors open, so it is read
+  /// with the first coffee rather than found at lunchtime.
+  digestHour       Int     @default(7)
+  /// Shop day key (`YYYY-MM-DD`) the digest last went out for. One column
+  /// rather than a run-state table: the job is once a day and this is the
+  /// whole of what it must remember not to repeat.
+  digestLastSentOn String?
+
+  // Filling a cancelled slot
+  /// How many households one freed slot is offered to. A cancellation is one
+  /// slot; texting forty people about it is how a shop trains its customers to
+  /// ignore its messages.
+  slotOfferMaxRecipients Int @default(5)
+  /// How far either side of the freed slot a household's own due date may fall
+  /// and still be offered it.
+  slotOfferWindowDays    Int @default(10)
 
   // Payroll
   defaultCommissionPercent Float @default(40) // percent of ticket paid to the groomer
@@ -175,10 +205,11 @@ model Staff {
   StaffPresenceEvent   StaffPresenceEvent[]
   StaffShift           StaffShift[]
 
-  rewardRedemptions RewardRedemption[]
+  rewardRedemptions    RewardRedemption[]
   vaccinationsVerified PetVaccination[]
-  surchargesAdded AppointmentSurcharge[]
-  paymentsTaken   Payment[]
+  surchargesAdded      AppointmentSurcharge[]
+  paymentsTaken        Payment[]
+  insightDecisions     InsightDecision[]
 
   @@map("staff")
 }
@@ -243,9 +274,9 @@ model BreedGuide {
   coat    CoatType?
 
   // What to expect from the coat and the groom.
-  summary     String @db.Text
+  summary     String  @db.Text
   // Bullet points, one per line, shown at the station.
-  tips        String @db.Text
+  tips        String  @db.Text
   // Typical time this breed takes, when it differs from the service default.
   typicalMins Int?
   // A stock photo of the breed, by URL. Not a pet's photo, so it is not in the
@@ -257,6 +288,48 @@ model BreedGuide {
   updatedAt DateTime @updatedAt
 
   @@map("breed_guides")
+}
+
+// A customer's own words, shown on the public home page. The shop types these
+// in from what it has been sent or told — there is no review system here, and
+// building one would need moderation, verification and somewhere to dispute a
+// bad one.
+model Testimonial {
+  id String @id @default(cuid())
+
+  quote String @db.Text
+  // How the shop credits it — "Maria R." — not a Customer row: a testimonial
+  // outlives the account, and may come from someone who never had one.
+  author String
+  // The pet, when there is one. Reads as "Maria R. · Bailey".
+  petName String?
+
+  // Out of five, when they gave one. Optional because the shop types older
+  // testimonials in from cards and emails that never carried a number.
+  rating Int?
+
+  // Set when a customer wrote it themselves, so the screen can say who is
+  // being quoted is really them. Null means the shop typed it in.
+  // `SetNull`, not cascade: a published quote outlives a closed account.
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  // Nothing reaches the public site unapproved. The shop's own entries are
+  // approved as they are written; a customer's sit in the queue until a
+  // manager reads them. Clearing this puts one back in the queue.
+  approvedAt DateTime?
+
+  // Approved and still wanted. The pair is three states: unapproved (queued),
+  // approved and active (published), approved and inactive (taken down) --
+  // which is what lets the shop pull a quote without re-reviewing it later.
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([approvedAt, isActive, sortOrder])
+  @@map("testimonials")
 }
 
 // ─────────────────────────────────────────────
@@ -271,9 +344,9 @@ model Photo {
   data      Bytes
   createdAt DateTime @default(now())
 
-  customers Customer[]
-  staff     Staff[]
-  pets      Pet[]
+  customers   Customer[]
+  staff       Staff[]
+  pets        Pet[]
   visitPhotos VisitPhoto[]
 
   @@map("photos")
@@ -308,7 +381,6 @@ model Customer {
   // and geocoding is a lookup on top rather than a set of typed columns.
   address String?
 
-
   // The rate this customer is on. Null means the published catalog price.
   pricingTierId String?
   // Why this customer is priced the way they are — read at the counter.
@@ -325,6 +397,7 @@ model Customer {
   rewardEarnings    RewardEarning[]
   rewardRedemptions RewardRedemption[]
   notifications     NotificationLog[]
+  testimonials      Testimonial[]
 
   @@map("customers")
 }
@@ -360,36 +433,36 @@ enum ThemePreference {
 // PETS (profiles for dogs, cats, etc.)
 // ─────────────────────────────────────────────
 model Pet {
-  id               String    @id @default(cuid())
-  customerId       String
-  name             String
-  species          Species   @default(DOG)
-  sex              PetSex    @default(UNKNOWN)
-  breed            String?
-  dateOfBirth      DateTime?
-  weightLbs        Float?
-  coatType         CoatType?
-  temperamentNotes String? // e.g. "nervous around other animals, loves treats"
-  healthFlags      String[] // e.g. ["elderly", "reactive", "allergy:chicken"]
+  id                      String    @id @default(cuid())
+  customerId              String
+  name                    String
+  species                 Species   @default(DOG)
+  sex                     PetSex    @default(UNKNOWN)
+  breed                   String?
+  dateOfBirth             DateTime?
+  weightLbs               Float?
+  coatType                CoatType?
+  temperamentNotes        String? // e.g. "nervous around other animals, loves treats"
+  healthFlags             String[] // e.g. ["elderly", "reactive", "allergy:chicken"]
   /// When the shop last saw proof of vaccination. Null is "not confirmed" —
   /// a date rather than a flag, because a record seen two years ago is the
   /// question the counter actually asks.
   vaccinationsConfirmedAt DateTime?
-  groomingNotes    String? // standing instructions for every visit
-  hasBiteHistory   Boolean   @default(false) // true if pet has ever bitten a groomer
+  groomingNotes           String? // standing instructions for every visit
+  hasBiteHistory          Boolean   @default(false) // true if pet has ever bitten a groomer
   /// Who to ring when something is wrong with the pet rather than the groom.
   /// Free text like every other contact here: a shop writes down whatever the
   /// owner says, which is often a practice rather than a named vet.
-  vetName          String?
-  vetPhone         String?
-  photoUrl         String? // external image, if the shop uses one
-  photoId          String? // uploaded photo held in the database
-  isActive         Boolean   @default(true)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  vetName                 String?
+  vetPhone                String?
+  photoUrl                String? // external image, if the shop uses one
+  photoId                 String? // uploaded photo held in the database
+  isActive                Boolean   @default(true)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  customer     Customer      @relation(fields: [customerId], references: [id])
-  photo        Photo?        @relation(fields: [photoId], references: [id], onDelete: SetNull)
+  customer     Customer         @relation(fields: [customerId], references: [id])
+  photo        Photo?           @relation(fields: [photoId], references: [id], onDelete: SetNull)
   appointments Appointment[]
   vaccinations PetVaccination[]
 
@@ -488,7 +561,7 @@ model Station {
   // physical rather than a setting, so these are ignored for them. A bank of
   // small crates and a bank of walk-in runs are not the same size, which is
   // why this lives on the unit rather than on SystemConfig.
-  kennelCapacityPerCompartment Int @default(1)
+  kennelCapacityPerCompartment     Int @default(1)
   // Pets from ONE household may share a door beyond the rule above: a family
   // booking several small dogs is kennelled together on purpose. Unrelated
   // pets never exceed kennelCapacityPerCompartment.
@@ -622,7 +695,7 @@ model Surcharge {
 /// charged above it and the row says so, because the counter has to explain the
 /// number to an owner who was quoted something smaller.
 model AppointmentSurcharge {
-  id            String  @id @default(cuid())
+  id            String   @id @default(cuid())
   appointmentId String
   /// The catalog row this came from, kept for reporting. Null once the shop
   /// deletes the published fee; `label` is what the counter reads out.
@@ -631,7 +704,7 @@ model AppointmentSurcharge {
   amountCents   Int
   /// Charged above the published range. A fact on the row rather than something
   /// inferred later from a price list that has since changed.
-  aboveRange    Boolean @default(false)
+  aboveRange    Boolean  @default(false)
   note          String?
   /// Who found it. Same reason.
   addedById     String
@@ -734,11 +807,11 @@ model Appointment {
   // matting found on the table, a coat that has to come off. Snapshotted on
   // the visit, because agreeing once is not agreeing to the next one.
   consentRequestedAt DateTime?
-  consentNote        String? @db.Text // what was put to the owner, and the fee quoted
+  consentNote        String?   @db.Text // what was put to the owner, and the fee quoted
   consentGrantedAt   DateTime?
   consentDeclinedAt  DateTime?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   customer      Customer                   @relation(fields: [customerId], references: [id])
   pet           Pet                        @relation(fields: [petId], references: [id])
@@ -761,13 +834,13 @@ model Appointment {
   // reprice a visit the customer has already been quoted.
   rewardDiscountCents  Int     @default(0)
 
-  kennel        Kennel?        @relation(fields: [kennelId], references: [id])
-  pricingTier   PricingTier?   @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
-  rewardEarning RewardEarning?
-  rewardRedemptions RewardRedemption[]
-  notifications NotificationLog[]
+  kennel                Kennel?                @relation(fields: [kennelId], references: [id])
+  pricingTier           PricingTier?           @relation(fields: [pricingTierId], references: [id], onDelete: SetNull)
+  rewardEarning         RewardEarning?
+  rewardRedemptions     RewardRedemption[]
+  notifications         NotificationLog[]
   appointmentSurcharges AppointmentSurcharge[]
-  payments      Payment[]
+  payments              Payment[]
 
   @@index([scheduledAt, status])
   @@index([stationId, status])
@@ -797,7 +870,10 @@ model NotificationLog {
   appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
   customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
-  @@unique([appointmentId, kind])
+  /// Customer is part of the key because one freed slot is offered to several
+  /// households. For the two kinds that are about the booking's own customer it
+  /// changes nothing -- appointmentId already determines customerId there.
+  @@unique([appointmentId, customerId, kind])
   @@index([customerId, sentAt])
   @@map("notification_logs")
 }
@@ -808,6 +884,9 @@ enum NotificationKind {
   /// so the unique constraint reads "one prompt per completed visit" and there
   /// is no cooldown column to keep correct.
   REBOOKING_PROMPT
+  /// "A slot has opened." Anchored on the CANCELLED visit that freed it, so the
+  /// unique constraint reads "one offer per household per freed slot".
+  SLOT_OFFER
 }
 
 // Services booked on one visit. `Appointment.serviceType` stays the primary
@@ -908,7 +987,7 @@ model VisitEvent {
   /// Tell the owner about this one. Off by default — an equipment fault is the
   /// shop's business — and what is ticked goes out with the ready-for-pickup
   /// message, which is the moment the owner is actually reading.
-  ownerVisible  Boolean @default(false)
+  ownerVisible  Boolean        @default(false)
 
   appointment Appointment @relation(fields: [appointmentId], references: [id])
   loggedBy    Staff?      @relation(fields: [loggedById], references: [id])
@@ -1039,16 +1118,16 @@ model RewardEarning {
 
 // A reward handed over at the counter. Who gave it, and what it was.
 model RewardRedemption {
-  id         String   @id @default(cuid())
-  customerId String
-  staffId    String? // who handed it over
-  label      String // snapshot of the reward on offer at the time
+  id            String   @id @default(cuid())
+  customerId    String
+  staffId       String? // who handed it over
+  label         String // snapshot of the reward on offer at the time
   // What it was worth when it was handed over, and the visit it came off.
   // Both are snapshots: the shop can change the reward's value tomorrow.
-  valueCents    Int     @default(0)
+  valueCents    Int      @default(0)
   appointmentId String?
-  note       String?
-  redeemedAt DateTime @default(now())
+  note          String?
+  redeemedAt    DateTime @default(now())
 
   customer    Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
   staff       Staff?       @relation(fields: [staffId], references: [id])
@@ -1110,4 +1189,33 @@ model GeocodeCache {
   checkedAt DateTime @default(now()) @updatedAt
 
   @@map("geocode_cache")
+}
+
+/// A shop insight somebody has dealt with.
+///
+/// Derived observations have no state of their own -- `shopInsights()` works
+/// them out from the diary every time it is asked -- so "we know, we have
+/// handled it" had nowhere to live and the same line sat on the dashboard for
+/// a fortnight being scrolled past. This is that acknowledgement.
+///
+/// Deliberately a snooze and never a permanent dismissal: the insight is a live
+/// reading, so if the condition comes back the shop wants to hear about it
+/// again. A "never show me this" on a derived signal is how a dashboard becomes
+/// decoration.
+model InsightDecision {
+  id           String   @id @default(cuid())
+  /// The insight's stable id from lib/insights.ts, e.g. "anomaly-no-shows".
+  insightId    String   @unique
+  /// Shop-local instant the observation comes back into view.
+  snoozedUntil DateTime
+  /// What the insight said when it was snoozed, so the audit reads on its own
+  /// once the underlying numbers have moved.
+  title        String
+  decidedById  String?
+  decidedAt    DateTime @default(now())
+
+  decidedBy Staff? @relation(fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([snoozedUntil])
+  @@map("insight_decisions")
 }

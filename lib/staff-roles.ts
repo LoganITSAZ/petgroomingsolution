@@ -39,7 +39,7 @@ export async function currentStaffIsAdmin(): Promise<boolean> {
  * Roles that run the shop.
  *
  * A manager does everything in the admin panel a shop owner does — prices,
- * rota, staff, waiver, promotions — and none of the technical screens: system
+ * schedule, staff, waiver, promotions — and none of the technical screens: system
  * status and the notification credentials stay with ADMIN. ADMIN is a superset
  * of MANAGER, so an owner never needs both.
  */

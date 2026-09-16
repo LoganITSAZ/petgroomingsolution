@@ -34,6 +34,9 @@ import DriveFromShop from "@/components/DriveFromShop";
 import AddressLink from "@/components/AddressLink";
 import { photoUrl } from "@/lib/photos";
 import { PetForm, healthFlagOptions } from "../PetForm";
+import { getConfig } from "@/lib/config";
+import { checksForPets } from "@/lib/vaccinations";
+import { VaccinationWarning } from "@/components/Vaccinations";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -156,6 +159,13 @@ export default async function CustomerDetailPage(props: PageProps) {
   }
 
   const insights = await customerInsights(params.id);
+
+  // Vaccination status reads here rather than on a screen of its own: the
+  // question is always "is this pet current", and this is where the pets are.
+  const vaccinationChecks = await checksForPets(
+    customer.pets.map((pet) => pet.id),
+    await getConfig()
+  );
 
   const [tiers, card, redemptions, flagOptions] = await Promise.all([
     listPricingTiers(),
@@ -351,6 +361,7 @@ export default async function CustomerDetailPage(props: PageProps) {
                   </span>
                 )}
               </div>
+              <VaccinationWarning checks={vaccinationChecks.get(pet.id) ?? []} petName={pet.name} />
               <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-line pt-3">
                 <Link href={`/staff/pets/${pet.id}`} className="mr-auto text-sm font-semibold text-brand-text hover:underline underline-offset-4">View profile →</Link>
                 <ModalButton

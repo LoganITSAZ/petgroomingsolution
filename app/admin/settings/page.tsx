@@ -11,6 +11,7 @@ import ThresholdLiveWarning from "@/components/admin/ThresholdLiveWarning";
 import { PageShell, PageSection } from "@/components/ui";
 import BrandColorField from "@/components/admin/BrandColorField";
 import WaiverSettings from "./WaiverSettings";
+import VaccineRequirements from "./VaccineRequirements";
 import SaveToast from "@/components/SaveToast";
 
 // Screen readers announce the title first; without one every page in the
@@ -102,6 +103,25 @@ async function saveSettings(formData: FormData) {
     Math.max(0, parseInt((formData.get("rebookingGraceDays") as string) ?? "7", 10) || 0)
   );
 
+  // Shop-local hour the morning brief goes out. Clamped to a real hour rather
+  // than rejected: a mis-typed 25 should send late, never go silent.
+  const digestHour = Math.min(
+    23,
+    Math.max(0, parseInt((formData.get("digestHour") as string) ?? "7", 10) || 0)
+  );
+
+  // How many households hear about one cancelled slot, and how far either side
+  // of their own date it still counts as theirs. Both floor at 1: zero of
+  // either is the feature switched off, which is what the flag is for.
+  const slotOfferMaxRecipients = Math.min(
+    25,
+    Math.max(1, parseInt((formData.get("slotOfferMaxRecipients") as string) ?? "5", 10) || 5)
+  );
+  const slotOfferWindowDays = Math.min(
+    60,
+    Math.max(1, parseInt((formData.get("slotOfferWindowDays") as string) ?? "10", 10) || 10)
+  );
+
   // A zero-hour week would mark every shift overtime.
   const overtimeWeeklyHours = Math.min(
     168,
@@ -131,6 +151,9 @@ async function saveSettings(formData: FormData) {
       vaccinationGraceDays,
       reminderHoursBefore,
       rebookingGraceDays,
+      digestHour,
+      slotOfferMaxRecipients,
+      slotOfferWindowDays,
       overtimeWeeklyHours,
       bookingLeadHours,
       bookingWindowDays,
@@ -235,7 +258,7 @@ function FeatureToggle({
 }
 
 interface PageProps {
-  searchParams: Promise<{ saved?: string; error?: string; waiverSaved?: string; waiverError?: string; version?: string; bumped?: string; restored?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; vaccineSaved?: string; vaccineRetired?: string; vaccineRestored?: string; vaccineError?: string; waiverSaved?: string; waiverError?: string; version?: string; bumped?: string; restored?: string }>;
 }
 
 export default async function SettingsPage(props: PageProps) {
@@ -391,7 +414,7 @@ export default async function SettingsPage(props: PageProps) {
 
         <Section
           title="Vaccinations"
-          hint="What the shop checks is a list of requirements, edited on Vaccinations. These two decide what happens to a pet that is not current."
+          hint="What the shop checks is a list of requirements, edited below. These two decide what happens to a pet that is not current."
         >
           <FeatureToggle
             name="vaccinationGateBlocks"
@@ -410,11 +433,11 @@ export default async function SettingsPage(props: PageProps) {
 
           <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
             A pet with nothing on file is refused outright when the switch above is on — there is no
-            lapse to forgive. Add or retire what the shop checks on{" "}
-            <Link href="/admin/vaccinations" className="text-amber-700 hover:text-amber-900 underline">
-              Vaccinations
+            lapse to forgive. Add or retire what the shop checks in{" "}
+            <Link href="#vaccinations" className="text-amber-700 hover:text-amber-900 underline">
+              What The Shop Checks
             </Link>
-            .
+            , below. Each pet’s own certificates and expiry dates live on its profile.
           </p>
         </Section>
 
@@ -448,19 +471,54 @@ export default async function SettingsPage(props: PageProps) {
             <input type="number" id="rebookingGraceDays" name="rebookingGraceDays" defaultValue={config?.rebookingGraceDays ?? 7} min={0} max={120} className={FIELD} />
           </Field>
 
+          <Field
+            name="slotOfferWindowDays"
+            label="Offer a cancelled slot this far from their own date (days)"
+            hint="A cancellation is only worth mentioning to a household the slot roughly suits. Measured either side of the date their own cadence points at, so a customer already a week overdue is as good a match as one due next week."
+          >
+            <input type="number" id="slotOfferWindowDays" name="slotOfferWindowDays" defaultValue={config?.slotOfferWindowDays ?? 10} min={1} max={60} className={FIELD} />
+          </Field>
+
+          <Field
+            name="slotOfferMaxRecipients"
+            label="Tell this many households about one free slot"
+            hint="First come, first served — the message says so. Too few and the slot stays empty; too many and most of them are told about something that has gone."
+          >
+            <input type="number" id="slotOfferMaxRecipients" name="slotOfferMaxRecipients" defaultValue={config?.slotOfferMaxRecipients ?? 5} min={1} max={25} className={FIELD} />
+          </Field>
+
           <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
-            The call list is at{" "}
-            <Link href="/staff/rebooking" className="text-amber-700 hover:text-amber-900 underline">
-              Rebooking
-            </Link>
-            . A nudge goes out once per finished visit, between 9am and 5pm shop time, on whichever
+            The call list is{" "}
+            <Link href="/staff/appointments?group=rebook" className="text-amber-700 hover:text-amber-900 underline">
+              Due to rebook
+            </Link>{" "}
+            on the appointments board. A nudge goes out once per finished visit, between 9am and 5pm shop time, on whichever
             channels are live — a shop with none still works the list by phone.
           </p>
         </Section>
 
         <Section
+          title="Morning Brief"
+          hint="The day's alerts and the shop's patterns, mailed to whoever runs the shop before they open the dashboard."
+        >
+          <Field
+            name="digestHour"
+            label="Send at (shop time, 0–23)"
+            hint="Sent once per shop day, on the first run at or after this hour. A brief that is late still arrives; it never arrives twice."
+          >
+            <input type="number" id="digestHour" name="digestHour" defaultValue={config?.digestHour ?? 7} min={0} max={23} className={FIELD} />
+          </Field>
+
+          <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
+            It carries exactly what the dashboard carries, snoozed insights included — an
+            observation put away yesterday does not arrive by email today. Switch the brief itself
+            off in Features above.
+          </p>
+        </Section>
+
+        <Section
           title="Scheduling"
-          hint="Used by the rota to flag a week before it is worked, while it can still be changed."
+          hint="Used by the schedule to flag a week before it is worked, while it can still be changed."
         >
           <Field
             name="overtimeWeeklyHours"
@@ -560,6 +618,7 @@ export default async function SettingsPage(props: PageProps) {
           </button>
         </PageSection>
       </form>
+      <VaccineRequirements searchParams={props.searchParams} />
       <WaiverSettings searchParams={props.searchParams} />
     </PageShell>
   );

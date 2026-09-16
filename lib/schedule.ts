@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { expectedReturnsByDay } from "@/lib/demand";
 import { StaffPresence } from "@prisma/client";
 import { SHOP_TIMEZONE, formatShopDate, formatShopTime, shopDayKey, shopDayRange } from "@/lib/utils";
 import { shopMoment } from "@/lib/shop-time";
@@ -134,7 +135,7 @@ export { shopDayKey };
 /* ────────────────────────────────────────────────────────────────────────────
  * Hours, overtime and coverage
  *
- * A rota is easy to fill and hard to read: nobody notices the sixth day in a
+ * A schedule is easy to fill and hard to read: nobody notices the sixth day in a
  * row, or that Tuesday opens with nobody on. These derive what an admin would
  * otherwise have to add up by hand, and every line carries the numbers behind
  * it so the reader can check the claim rather than trust it.
@@ -171,7 +172,7 @@ export function formatHours(minutes: number): string {
  * Scheduled hours per person for the window, with an overtime reading.
  *
  * Overtime is scheduled hours, not worked hours — the point is to see it
- * before the week happens, while the rota can still be changed. Presence
+ * before the week happens, while the schedule can still be changed. Presence
  * events are what actually happened.
  */
 export function hoursByStaff(
@@ -268,7 +269,7 @@ function hoursFor(businessHours: BusinessHours, day: Date): DayHours {
 /**
  * What an admin should look at before publishing the week: overtime, days the
  * shop opens with nobody on, thin cover against what is actually booked, runs
- * of days without a break, and anyone left off the rota entirely.
+ * of days without a break, and anyone left off the schedule entirely.
  */
 export async function scheduleAdvice({
   days,
@@ -341,7 +342,7 @@ export async function scheduleAdvice({
         day: dayKey,
         tone: "warn",
         title: `Nobody is scheduled ${label}`,
-        evidence: `The shop is open ${open.open}–${open.close} with no shifts on the rota.`,
+        evidence: `The shop is open ${open.open}–${open.close} with no shifts on the schedule.`,
       });
       continue;
     }
@@ -371,12 +372,19 @@ export async function scheduleAdvice({
     }
   }
 
-  // ── Cover against what is actually booked ─────────────────
-  const booked = await prisma.appointment.groupBy({
-    by: ["scheduledAt"],
-    where: { scheduledAt: { gte: weekStart, lt: weekEnd } },
-    _count: { _all: true },
-  });
+  // ── Cover against what is booked, and what is likely ──────
+  //
+  // The diary alone staffs the week for its quietest possible version: the
+  // households whose own gap between grooms lands on Thursday have not rung
+  // yet, and every one of them is a pet somebody has to hold.
+  const [booked, expectedPerDay] = await Promise.all([
+    prisma.appointment.groupBy({
+      by: ["scheduledAt"],
+      where: { scheduledAt: { gte: weekStart, lt: weekEnd } },
+      _count: { _all: true },
+    }),
+    expectedReturnsByDay(days),
+  ]);
 
   const bookedPerDay = new Map<string, number>();
   for (const row of booked) {
@@ -387,29 +395,42 @@ export async function scheduleAdvice({
   for (const day of days) {
     const dayKey = shopDayKey(day);
     const pets = bookedPerDay.get(dayKey) ?? 0;
-    if (pets === 0) continue;
+    const expected = expectedPerDay.get(dayKey) ?? 0;
+    const likely = pets + expected;
+    if (likely === 0) continue;
 
     const people = new Set(
       shifts.filter((shift) => shopDayKey(shift.startsAt) === dayKey).map((shift) => shift.staffId)
     ).size;
 
     // Six pets per person in a day is a full day's work for one groomer.
-    if (people === 0 || pets / people > 6) {
+    if (people === 0 || likely / people > 6) {
+      const weekday = formatShopDate(day, { weekday: "long" });
+      // Nobody on a day with real bookings is a different problem from nobody
+      // on a day that is only forecast to get busy.
+      const hardEmpty = people === 0 && pets > 0;
       advice.push({
         id: `thin-${dayKey}`,
         scope: "days",
         day: dayKey,
         tone: people === 0 ? "warn" : "info",
-        title:
-          people === 0
-            ? `${pets} booked ${formatShopDate(day, { weekday: "long" })} with nobody scheduled`
-            : `${formatShopDate(day, { weekday: "long" })} looks thin`,
-        evidence: `${pets} pet${pets === 1 ? "" : "s"} booked against ${people} scheduled ${people === 1 ? "person" : "people"}.`,
+        title: hardEmpty
+          ? `${pets} booked ${weekday} with nobody scheduled`
+          : people === 0
+            ? `${weekday} has nobody scheduled and ${expected} likely to ring`
+            : `${weekday} looks thin`,
+        evidence:
+          `${pets} pet${pets === 1 ? "" : "s"} booked` +
+          (expected > 0
+            ? ` and ${expected} more household${expected === 1 ? "" : "s"} due back by their own usual gap`
+            : "") +
+          ` against ${people} scheduled ${people === 1 ? "person" : "people"}.` +
+          (expected > 0 ? " The second figure is an estimate, not a booking." : ""),
       });
     }
   }
 
-  // ── Left off the rota entirely ────────────────────────────
+  // ── Left off the schedule entirely ────────────────────────────
   const idle = hours.filter((row) => row.level === "none");
   if (idle.length > 0 && idle.length < staff.length) {
     advice.push({

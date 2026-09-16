@@ -21,7 +21,7 @@ import { formatShopDate, formatShopTime, shopDayKey } from "@/lib/utils";
 export const metadata = { title: "Schedule" };
 
 /**
- * The rota, readable by anyone on the staff.
+ * The schedule, readable by anyone on the staff.
  *
  * A groomer needs to know when they are on and who they are on with; that is
  * not an admin question. Editing still is — this screen has no controls, and
@@ -142,7 +142,7 @@ export default async function StaffSchedulePage(props: PageProps) {
 
       {staff.length === 0 ? (
         <PageSection grow className="text-center text-stone-400 text-sm">
-          Nobody is on the rota yet.
+          Nobody is on the schedule yet.
         </PageSection>
       ) : (
         <PageSection grow scroll padded={false} bodyClassName="overflow-x-auto">

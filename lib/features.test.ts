@@ -23,6 +23,9 @@ function configured(overrides: Partial<FeatureConfig> = {}): FeatureConfig {
     featureAppointmentReminders: true,
     featureRebookingPrompts: true,
     featureCounterPayments: true,
+    featureDailyDigest: true,
+    featureSlotOffers: true,
+    featureTestimonials: true,
     twilioAccountSid: "AC_test",
     twilioAuthToken: "token",
     twilioFromNumber: "+15550000000",
@@ -35,7 +38,7 @@ describe("registry integrity", () => {
   it("declares every key exactly once", () => {
     const keys = FEATURES.map((feature) => feature.key);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(keys).toHaveLength(11);
+    expect(keys).toHaveLength(14);
   });
 
   it("only names declared keys in requires", () => {
@@ -126,10 +129,34 @@ describe("appointment reminders", () => {
   });
 });
 
+describe("the morning brief", () => {
+  it("needs a way to send mail and nothing else", () => {
+    const noMail = configured({ featureEmailNotify: false });
+    expect(isEnabled(noMail, "featureDailyDigest")).toBe(false);
+    // Texts do not carry it: a brief is a page of reading, not a segment.
+    expect(featureBlockers(noMail, "featureDailyDigest")).toHaveLength(1);
+  });
+});
+
+describe("filling a cancelled slot", () => {
+  it("goes off with the rebooking list it draws its candidates from", () => {
+    const config = configured({ featureRebookingPrompts: false });
+    expect(isEnabled(config, "featureSlotOffers")).toBe(false);
+    expect(featureBlockers(config, "featureSlotOffers")[0]).toMatch(/Rebooking Prompts/);
+  });
+
+  it("is not live with no channel to offer down", () => {
+    const config = configured({ featureEmailNotify: false, featureSmsNotify: false });
+    expect(isEnabled(config, "featureSlotOffers")).toBe(false);
+  });
+});
+
 describe("dependents", () => {
-  it("returns nothing while no feature depends on another", () => {
-    for (const feature of FEATURES) {
-      expect(dependents(feature.key)).toEqual([]);
-    }
+  it("names the features that go off with one that is switched off", () => {
+    expect(dependents("featureRebookingPrompts")).toEqual(["featureSlotOffers"]);
+  });
+
+  it("returns nothing for a feature nothing is built on", () => {
+    expect(dependents("featureVisitPhotos")).toEqual([]);
   });
 });

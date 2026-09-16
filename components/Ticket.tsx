@@ -362,8 +362,8 @@ export function TicketPanel({
 
       <p className="text-xs text-stone-400 mt-3">
         Payment is taken on the shop&apos;s terminal. What is written here is the record of it —{" "}
-        <Link href="/staff/takings" className="underline">
-          the day&apos;s takings
+        <Link href="/staff/payments" className="underline">
+          the day&apos;s payments
         </Link>
         .
       </p>

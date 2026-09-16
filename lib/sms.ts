@@ -186,3 +186,29 @@ export async function smsConsentRequest({
       ` Reply STOP to opt out.`
   );
 }
+
+/**
+ * The same offer in one segment. No link: the shop takes the booking by phone,
+ * so the message only has to say what is free and who to ring.
+ */
+export async function smsSlotOffer({
+  to,
+  petNames,
+  shopName,
+  when,
+  phone,
+}: {
+  to: string | null | undefined;
+  petNames: string[];
+  shopName: string;
+  when: string;
+  phone?: string | null;
+}): Promise<boolean> {
+  const pets = petNames.length > 0 ? petNames.join(" and ") : "your pet";
+  return sendSms(
+    to,
+    `${shopName}: opening ${when} — about right for ${pets}. Call to take it.` +
+      (phone ? ` ${phone}` : "") +
+      ` Reply STOP opt out.`
+  );
+}

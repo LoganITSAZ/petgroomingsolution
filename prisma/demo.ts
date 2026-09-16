@@ -230,7 +230,7 @@ async function main() {
     );
   }
 
-  // A rota for this week, so /staff/schedule has something on it.
+  // A schedule for this week, so /staff/schedule has something on it.
   for (const staff of groomers) {
     for (let d = -2; d <= 4; d++) {
       if (chance(0.15)) continue; // a day off
@@ -519,7 +519,7 @@ async function main() {
         /*
          * The counter. A fee on the coats that needed one, then what the
          * terminal took -- mostly the lot, now and then a part payment so the
-         * "still owing" list on /staff/takings is not empty on a demo.
+         * "still owing" list on /staff/payments is not empty on a demo.
          */
         if (finished(status) && surcharges.length > 0) {
           const listCents = lines.reduce((sum, line) => sum + (line.priceCents ?? 0), 0);
@@ -613,6 +613,66 @@ async function main() {
         startsAt: shopTime(-7, 0),
         endsAt: shopTime(21, 0),
         sortOrder: (i + 1) * 10,
+      },
+    });
+  }
+
+  // The home page shows testimonials in place of the service list, so the
+  // demo shop needs a few or it falls back to the menu. Turning the flag on
+  // here is the point of a demo: a switched-off feature demonstrates nothing.
+  await prisma.systemConfig.update({
+    where: { id: "global" },
+    data: { featureTestimonials: true },
+  });
+
+  const approvedAt = shopTime(-30, 12);
+  await prisma.testimonial.createMany({
+    data: [
+      {
+        quote:
+          "They took their time with a dog who hates being handled. She walked out looking brand new and she was not shaking.",
+        author: "Maria R.",
+        petName: "Bailey",
+        rating: 5,
+        sortOrder: 10,
+        approvedAt,
+      },
+      {
+        quote:
+          "Ten years of matted winter coat and they sorted it without shaving him to the skin. They rang me first to ask.",
+        author: "Dan K.",
+        petName: "Rufus",
+        rating: 5,
+        sortOrder: 20,
+        approvedAt,
+      },
+      {
+        quote: "Booked online at nine, picked her up at two, and they texted the moment she was ready.",
+        author: "Priya S.",
+        petName: "Mochi",
+        rating: 4,
+        sortOrder: 30,
+        approvedAt,
+      },
+    ],
+  });
+
+  // One waiting to be read, so the queue on /admin/testimonials is not empty
+  // on a fresh demo — that band is the half of the screen worth seeing.
+  const reviewer = await prisma.customer.findFirst({
+    orderBy: { createdAt: "asc" },
+    select: { id: true, firstName: true, lastName: true, pets: { select: { name: true }, take: 1 } },
+  });
+  if (reviewer) {
+    await prisma.testimonial.create({
+      data: {
+        quote:
+          "Second time here and they remembered how he likes the dryer kept off his face. Small thing, but it is why we keep coming back.",
+        author: `${reviewer.firstName} ${reviewer.lastName.charAt(0)}.`,
+        petName: reviewer.pets[0]?.name ?? null,
+        rating: 5,
+        customerId: reviewer.id,
+        // approvedAt null: this is the one a manager has not read.
       },
     });
   }
