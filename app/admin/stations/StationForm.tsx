@@ -27,6 +27,10 @@ const ROLE_COPY: Record<StationRole, { label: string; description: string }> = {
     description:
       "A bank of kennels laid out as a grid. Staff assign each dog to a numbered door instead of the station itself.",
   },
+  REGISTER: {
+    label: "Register",
+    description: "A card payment register for charging customers.",
+  },
 };
 
 // ADMIN and MANAGER are access roles, not floor roles, so neither is offered here.

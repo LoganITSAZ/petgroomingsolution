@@ -125,6 +125,7 @@ const STATION_NAME_PREFIX: Record<StationRole, string> = {
   BATHING: "Bath",
   DRYING: "Dryer",
   KENNEL: "Kennel Bank",
+  REGISTER: "Register",
 };
 
 /**

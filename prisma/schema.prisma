@@ -160,6 +160,11 @@ model SystemConfig {
   walkInWindowStart String @default("09:00") // walk-in services available from
   walkInWindowEnd   String @default("15:00") // walk-in services available until
 
+  // Payment processing
+  /// Which processor takes card payments. The key itself is an environment
+  /// variable -- see docs/superpowers/specs/2026-09-15-card-payments-at-the-register-design.md
+  paymentProvider PaymentProvider?
+
   updatedAt DateTime @updatedAt
 
   @@map("system_config")
@@ -210,6 +215,7 @@ model Staff {
   surchargesAdded      AppointmentSurcharge[]
   paymentsTaken        Payment[]
   insightDecisions     InsightDecision[]
+  paymentAttempts      PaymentAttempt[]
 
   @@map("staff")
 }
@@ -567,9 +573,17 @@ model Station {
   // pets never exceed kennelCapacityPerCompartment.
   kennelHouseholdMaxPerCompartment Int @default(5)
 
+  /// The paired reader's opaque device id. Stripe's `tmr_...`, Square's
+  /// device_id and Clover's device id are all just strings.
+  readerRef        String?
+  /// Which mode it was paired in. A test reader is invisible to a live key,
+  /// and `resource_missing` is not a message for somebody at a counter.
+  readerLivemode   Boolean?
+
   appointments Appointment[]
   kennels      Kennel[]
   homeStaff    Staff[]       @relation("HomeStation")
+  paymentAttempts  PaymentAttempt[]
 
   @@map("stations")
 }
@@ -579,6 +593,7 @@ enum StationRole {
   BATHING // wash / bathing station
   DRYING // dryer or drying table — the step between the bath and the table
   KENNEL // a bank of kennels, laid out as a grid
+  REGISTER
 }
 
 // ─────────────────────────────────────────────
@@ -737,6 +752,9 @@ model Payment {
   note          String?
   takenById     String
   takenAt       DateTime      @default(now())
+  /// Null for the cash and checks the counter still types in.
+  provider      PaymentProvider?
+  attempt       PaymentAttempt?
 
   appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
   takenBy     Staff       @relation(fields: [takenById], references: [id])
@@ -751,6 +769,55 @@ enum PaymentMethod {
   CASH
   CHECK
   OTHER
+}
+
+enum PaymentProvider {
+  STRIPE
+  CLOVER
+}
+
+enum PaymentAttemptStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+model PaymentAttempt {
+  id             String   @id @default(cuid())
+  appointmentId  String
+  /// The register it was sent to. Kept as null rather than deleted if the
+  /// station goes away -- the money still happened.
+  stationId      String?
+  provider       PaymentProvider
+  /// The provider's id for the charge -- a Stripe PaymentIntent. Unique, so a
+  /// retry can never produce a second attempt against one charge.
+  providerRef    String   @unique
+  /// Generated before the first call and reused on every retry of this
+  /// attempt. Stripe replays the first response for 24 hours, so a timeout
+  /// during "create intent" cannot charge a customer twice.
+  idempotencyKey String   @unique
+  /// What was asked for, before any tip the reader collects.
+  amountCents    Int
+  status         PaymentAttemptStatus @default(PENDING)
+  /// From the provider. Only a card error is safe to read out to a customer;
+  /// `customerSafe` is decided at settle time and is not stored.
+  failureCode    String?
+  failureMessage String?
+  /// The row it became. Unique -- one attempt settles at most once.
+  paymentId      String?  @unique
+  startedById    String
+  createdAt      DateTime @default(now())
+  settledAt      DateTime?
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  station     Station?    @relation(fields: [stationId], references: [id], onDelete: SetNull)
+  payment     Payment?    @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  startedBy   Staff       @relation(fields: [startedById], references: [id])
+
+  @@index([appointmentId])
+  @@index([status, createdAt])
+  @@map("payment_attempts")
 }
 
 // ─────────────────────────────────────────────
@@ -841,6 +908,7 @@ model Appointment {
   notifications         NotificationLog[]
   appointmentSurcharges AppointmentSurcharge[]
   payments              Payment[]
+  paymentAttempts       PaymentAttempt[]
 
   @@index([scheduledAt, status])
   @@index([stationId, status])
