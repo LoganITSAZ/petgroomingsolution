@@ -41,7 +41,15 @@ describe("outcomeFromIntent", () => {
   });
 
   it("is pending while the customer is still holding their wallet", () => {
-    for (const status of ["requires_confirmation", "requires_capture", "processing"]) {
+    for (const status of [
+      "requires_confirmation",
+      "requires_capture",
+      "requires_action",
+      "processing",
+      // A status Stripe has not shipped yet. Anything unrecognised has to read
+      // as pending: a charge mistaken for settled sends a pet home unpaid.
+      "a_status_stripe_has_not_shipped_yet",
+    ]) {
       expect(outcomeFromIntent({ status, amount: 9_000 })).toEqual({ status: "PENDING" });
     }
   });
@@ -83,8 +91,11 @@ describe("outcomeFromIntent", () => {
   });
 
   it("reports a cancellation as its own thing", () => {
-    expect(outcomeFromIntent({ status: "canceled", amount: 9_000 })).toMatchObject({
+    expect(outcomeFromIntent({ status: "canceled", amount: 9_000 })).toEqual({
       status: "CANCELED",
+      code: "canceled",
+      message: "The payment was cancelled.",
+      customerSafe: true,
     });
   });
 });
