@@ -303,10 +303,10 @@ model BreedGuide {
 model Testimonial {
   id String @id @default(cuid())
 
-  quote String @db.Text
+  quote   String  @db.Text
   // How the shop credits it — "Maria R." — not a Customer row: a testimonial
   // outlives the account, and may come from someone who never had one.
-  author String
+  author  String
   // The pet, when there is one. Reads as "Maria R. · Bailey".
   petName String?
 
@@ -575,15 +575,15 @@ model Station {
 
   /// The paired reader's opaque device id. Stripe's `tmr_...`, Square's
   /// device_id and Clover's device id are all just strings.
-  readerRef        String?
+  readerRef      String?
   /// Which mode it was paired in. A test reader is invisible to a live key,
   /// and `resource_missing` is not a message for somebody at a counter.
-  readerLivemode   Boolean?
+  readerLivemode Boolean?
 
-  appointments Appointment[]
-  kennels      Kennel[]
-  homeStaff    Staff[]       @relation("HomeStation")
-  paymentAttempts  PaymentAttempt[]
+  appointments    Appointment[]
+  kennels         Kennel[]
+  homeStaff       Staff[]          @relation("HomeStation")
+  paymentAttempts PaymentAttempt[]
 
   @@map("stations")
 }
@@ -741,17 +741,17 @@ model AppointmentSurcharge {
 /// transaction id, which is what a dispute is traced by and the only seam a
 /// future integration would need.
 model Payment {
-  id            String        @id @default(cuid())
+  id            String           @id @default(cuid())
   appointmentId String
   method        PaymentMethod
   /// What was handed over, tip included -- the terminal's own total, so it
   /// reconciles against Clover's batch without arithmetic.
   amountCents   Int
-  tipCents      Int           @default(0)
+  tipCents      Int              @default(0)
   reference     String?
   note          String?
   takenById     String
-  takenAt       DateTime      @default(now())
+  takenAt       DateTime         @default(now())
   /// Null for the cash and checks the counter still types in.
   provider      PaymentProvider?
   attempt       PaymentAttempt?
@@ -784,7 +784,7 @@ enum PaymentAttemptStatus {
 }
 
 model PaymentAttempt {
-  id             String   @id @default(cuid())
+  id             String               @id @default(cuid())
   appointmentId  String
   /// The register it was sent to. Kept as null rather than deleted if the
   /// station goes away -- the money still happened.
@@ -792,11 +792,11 @@ model PaymentAttempt {
   provider       PaymentProvider
   /// The provider's id for the charge -- a Stripe PaymentIntent. Unique, so a
   /// retry can never produce a second attempt against one charge.
-  providerRef    String   @unique
+  providerRef    String               @unique
   /// Generated before the first call and reused on every retry of this
   /// attempt. Stripe replays the first response for 24 hours, so a timeout
   /// during "create intent" cannot charge a customer twice.
-  idempotencyKey String   @unique
+  idempotencyKey String               @unique
   /// What was asked for, before any tip the reader collects.
   amountCents    Int
   status         PaymentAttemptStatus @default(PENDING)
@@ -805,9 +805,9 @@ model PaymentAttempt {
   failureCode    String?
   failureMessage String?
   /// The row it became. Unique -- one attempt settles at most once.
-  paymentId      String?  @unique
+  paymentId      String?              @unique
   startedById    String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime             @default(now())
   settledAt      DateTime?
 
   appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
