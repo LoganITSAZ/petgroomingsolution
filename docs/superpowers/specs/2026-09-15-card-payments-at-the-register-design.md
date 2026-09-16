@@ -156,6 +156,35 @@ it: `STRIPE_SECRET_KEY` is read from the environment, and the shop is told to
 use a **restricted** key (`rk_live_`) scoped to PaymentIntents write and
 Terminal write.
 
+## Other processors
+
+The question this design will be asked in six months is "can we use X". One
+property decides it: whether a **server** can push a charge to the reader over
+the internet. That line does not follow brand names — Square sells hardware on
+both sides of it.
+
+| Processor | Fits | Why |
+|---|---|---|
+| Stripe Terminal | yes | Implemented here. |
+| Square Terminal | yes | Server creates a checkout, Square forwards it to the paired device, the result is polled or pushed. Tip screens are configured per request rather than per account. |
+| Clover | yes, gated | REST Pay Display, behind a published Clover app and merchant OAuth. |
+| Adyen | yes | Cloud Terminal API is the same shape; the cost is onboarding, not code. |
+| Zettle, SumUp, Square Reader and Stand, Stripe's Bluetooth readers | **no** | Bluetooth to a phone, driven by a mobile SDK. No server call wakes them. Supporting one means shipping a native app. |
+| Fiserv, Worldpay, Dejavoo, standalone PAX | **no** | Semi-integrate over the shop's LAN with proprietary protocols. Needs a bridge on the shop network, not a cloud adapter. |
+
+Nothing about a register is Stripe-shaped: `readerRef` is an opaque device id,
+and Stripe's `tmr_…`, Square's `device_id` and Clover's device id are all just
+strings.
+
+Checking Square against the interface changed two things. Its tipping is
+per-request where Stripe's is an account-level Configuration object, which is
+why `ChargeRequest` carries `tipEligibleCents` and leaves *how to prompt* to
+the adapter — the seam survived contact with a second real API rather than
+being Stripe's API with a coat on. And Square warns of significant delay
+between requesting a checkout and completing it, so a 90-second page poll will
+time out there more often than on Stripe. The sweep job is therefore
+load-bearing for the second provider, not insurance for the first.
+
 ## A register is a station, and not a work station
 
 `StationRole` gains `REGISTER`; `Station.readerRef` holds the paired reader and
