@@ -8,9 +8,14 @@ import type { ChargeOutcome } from "./types";
  *
  * The page poll and the sweep job both land here, which is the point: a
  * charge that succeeded while the counter's tab was closed is settled by the
- * job through the same code that would have settled it on screen. Idempotent
- * on two unique columns -- `PaymentAttempt.paymentId` and
- * `PaymentAttempt.providerRef` -- so settling twice writes one Payment.
+ * job through the same code that would have settled it on screen.
+ *
+ * Settling twice writes one Payment, and the thing that makes that true is the
+ * conditional claim below -- `WHERE id = ? AND status = 'PENDING'` -- so of two
+ * racing settles only the one that flips the row goes on to write. The unique
+ * index on `PaymentAttempt.paymentId` does **not** cover this: two inserts
+ * would produce two distinct ids and satisfy it, leaving a duplicate Payment
+ * and an orphan. Never drop that predicate believing the schema has your back.
  */
 
 export function attemptStatusFor(outcome: ChargeOutcome): PaymentAttemptStatus {

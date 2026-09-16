@@ -23,6 +23,9 @@ describe("paymentFromOutcome", () => {
     expect(
       paymentFromOutcome({ status: "FAILED", code: "c", message: "m", customerSafe: true })
     ).toBeNull();
+    expect(
+      paymentFromOutcome({ status: "CANCELED", code: "c", message: "m", customerSafe: true })
+    ).toBeNull();
   });
 
   it("carries the total and the tip across unchanged", () => {
