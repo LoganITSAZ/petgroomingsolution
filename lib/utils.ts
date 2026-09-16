@@ -243,6 +243,7 @@ export function formatStationRole(role: string): string {
     BATHING: "Bathing",
     DRYING: "Drying",
     KENNEL: "Kennels",
+    REGISTER: "Register",
   };
   return map[role] ?? role;
 }
@@ -254,6 +255,7 @@ export function stationRoleBadgeClass(role: string): string {
     BATHING: "bg-sky-100 text-sky-700",
     DRYING: "bg-violet-100 text-violet-700",
     KENNEL: "bg-emerald-100 text-emerald-700",
+    REGISTER: "bg-stone-200 text-stone-700",
   };
   return map[role] ?? "bg-stone-100 text-stone-600";
 }

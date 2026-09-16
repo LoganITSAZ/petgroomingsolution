@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
-import { AppointmentStatus, StaffRole, StationRole, VisitEventType, VisitPhotoKind } from "@prisma/client";
+import { AppointmentStatus, StaffRole, VisitEventType, VisitPhotoKind } from "@prisma/client";
+import { WORK_STATION_ROLES } from "@/lib/stations";
 import { nextStatus } from "@/lib/appointment-flow";
 import { getServiceOptions } from "@/lib/appointment-services";
 import {
@@ -176,7 +177,7 @@ export default async function AppointmentDetailPage(props: PageProps) {
 
   const [stations, groomers, serviceOptions, allKennels, surchargeOptions] = await Promise.all([
     prisma.station.findMany({
-      where: { isActive: true, role: { not: StationRole.KENNEL } },
+      where: { isActive: true, role: { in: WORK_STATION_ROLES } },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     }),
     // Only people who work pets can be assigned to a visit.

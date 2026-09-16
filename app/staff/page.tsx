@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { formatShopDate, formatShopTime, shopDayRange } from "@/lib/utils";
-import { AppointmentStatus, StationRole } from "@prisma/client";
+import { AppointmentStatus } from "@prisma/client";
+import { isWorkStation } from "@/lib/stations";
 import { floorRoster } from "@/lib/presence";
 import { BOARD_COLUMNS, boardColumnFor } from "@/lib/appointment-flow";
 import FloorBoard, { type ColumnCapacity } from "@/components/FloorBoard";
@@ -71,7 +72,7 @@ export default async function StaffDashboard(props: {
   // ── Today at a glance ─────────────────────────────────────────
   const scheduled = todayAppointments.filter((a) => a.status === AppointmentStatus.SCHEDULED);
   // ── The board ─────────────────────────────────────────────────
-  const workStations = stations.filter((s) => s.role !== StationRole.KENNEL);
+  const workStations = stations.filter((s) => isWorkStation(s.role));
 
   /*
    * The board's chips: every pet actually in the shop, wherever it is standing.

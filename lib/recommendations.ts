@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { AppointmentStatus, StationRole } from "@prisma/client";
 import { floorRoster, availableStaff, type FloorMember } from "@/lib/presence";
-import { OCCUPYING_STATUSES } from "@/lib/stations";
+import { OCCUPYING_STATUSES, WORK_STATION_ROLES } from "@/lib/stations";
 
 /**
  * What to do with the next open station.
@@ -71,7 +71,7 @@ function allowedAtStation(member: FloorMember, allowedRoles: string[]): boolean 
 export async function assignmentSuggestions(): Promise<Suggestion[]> {
   const [stations, occupied, roster, waiting] = await Promise.all([
     prisma.station.findMany({
-      where: { isActive: true, role: { not: StationRole.KENNEL } },
+      where: { isActive: true, role: { in: WORK_STATION_ROLES } },
       select: { id: true, name: true, role: true, allowedRoles: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     }),
@@ -178,7 +178,7 @@ export interface FloorBlockers {
 /** Reads the floor and explains a standstill rather than showing nothing. */
 export async function floorBlockers(): Promise<FloorBlockers> {
   const [stations, occupied, roster, waiting] = await Promise.all([
-    prisma.station.count({ where: { isActive: true, role: { not: StationRole.KENNEL } } }),
+    prisma.station.count({ where: { isActive: true, role: { in: WORK_STATION_ROLES } } }),
     prisma.appointment.findMany({
       where: { status: { in: OCCUPYING_STATUSES }, stationId: { not: null } },
       select: { stationId: true },

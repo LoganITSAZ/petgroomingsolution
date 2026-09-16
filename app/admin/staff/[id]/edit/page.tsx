@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { StationRole } from "@prisma/client";
 import { getConfig } from "@/lib/config";
+import { WORK_STATION_ROLES } from "@/lib/stations";
 import { formatShopDate } from "@/lib/utils";
 import StaffForm from "../../StaffForm";
 import { updateStaff } from "../../actions";
@@ -34,7 +34,7 @@ export default async function EditStaffPage(props: {
     }),
     getConfig(),
     prisma.station.findMany({
-      where: { isActive: true, role: { not: StationRole.KENNEL } },
+      where: { isActive: true, role: { in: WORK_STATION_ROLES } },
       select: { id: true, name: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     }),

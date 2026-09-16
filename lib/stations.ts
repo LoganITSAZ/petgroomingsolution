@@ -24,11 +24,30 @@ export interface CapacityInput {
 }
 
 /**
+ * Where a pet can physically stand.
+ *
+ * Several screens used to spell this `role !== KENNEL`, which quietly became
+ * wrong the day a register joined the enum. Naming it once means a new role
+ * has to be considered rather than inherited.
+ */
+export const WORK_STATION_ROLES: StationRole[] = [
+  StationRole.GROOMER,
+  StationRole.BATHING,
+  StationRole.DRYING,
+];
+
+export function isWorkStation(role: StationRole): boolean {
+  return WORK_STATION_ROLES.includes(role);
+}
+
+/**
  * A groom table or a bathing station holds exactly one pet — that is physical,
  * not a setting. A kennel unit holds its doors in service, each of which takes
- * however many pets the shop's rule allows.
+ * however many pets the shop's rule allows. A register holds none.
  */
 export function stationCapacity(station: CapacityInput, perCompartment = 1): number {
+  // A register is a place a card is tapped, not a place a pet stands.
+  if (station.role === StationRole.REGISTER) return 0;
   if (station.role === StationRole.KENNEL) {
     return (station.kennels ?? []).filter((kennel) => kennel.isActive).length * perCompartment;
   }
@@ -63,8 +82,9 @@ export async function stationHasRoom(
   });
   if (!station) return false;
 
-  // Kennel units are filled door by door, not by assigning the station itself.
-  if (station.role === StationRole.KENNEL) return false;
+  // Kennel units are filled door by door, not by assigning the station itself,
+  // and a register is not a place a pet stands at all.
+  if (!isWorkStation(station.role)) return false;
 
   // A groom table or bathing station holds exactly one pet.
   const occupancy = await stationOccupancy(stationId, exceptAppointmentId);
@@ -102,7 +122,7 @@ export async function defaultAssignment(customerId: string): Promise<{
   if (!staff || !staff.isActive) return { staffId: null, stationId: null };
 
   const station = staff.defaultStation;
-  if (!station || !station.isActive || station.role === StationRole.KENNEL) {
+  if (!station || !station.isActive || !isWorkStation(station.role)) {
     return { staffId: staff.id, stationId: null };
   }
   if (

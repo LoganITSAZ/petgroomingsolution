@@ -1,6 +1,7 @@
-import { StaffRole, StationRole } from "@prisma/client";
+import { StaffRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
+import { WORK_STATION_ROLES } from "@/lib/stations";
 import StaffForm from "../StaffForm";
 import { createStaff } from "../actions";
 import { PageShell } from "@/components/ui";
@@ -25,7 +26,7 @@ export default async function NewStaffPage(props: {
   const [config, stations] = await Promise.all([
     getConfig(),
     prisma.station.findMany({
-      where: { isActive: true, role: { not: StationRole.KENNEL } },
+      where: { isActive: true, role: { in: WORK_STATION_ROLES } },
       select: { id: true, name: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
     }),
