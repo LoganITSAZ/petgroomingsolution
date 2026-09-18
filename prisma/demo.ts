@@ -21,7 +21,9 @@ import {
   type VaccineRequirement,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { boardColumnFor } from "../lib/appointment-flow";
 import { DEFAULT_ADMIN_EMAIL } from "../lib/branding";
+import { shopDayKey } from "../lib/utils";
 
 // ── refuse to run against a real shop ────────────────────────────────────────
 // This file writes hundreds of fake customers and never cleans up. The only
@@ -97,10 +99,12 @@ const HEALTH_FLAGS = [["elderly"], ["allergy:chicken"], ["reactive"], ["arthriti
 // else this would need a real timezone conversion.
 const SHOP_UTC_OFFSET = 7;
 function shopTime(daysFromToday: number, hour: number, minute = 0): Date {
-  const day = new Date();
-  day.setUTCDate(day.getUTCDate() + daysFromToday);
-  return new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(),
-    hour + SHOP_UTC_OFFSET, minute));
+  // Counted from the **shop's** date, not the server's. `getUTCDate()` rolls
+  // over at 5pm Phoenix, so a demo generated in the evening put "today's" floor
+  // on tomorrow -- and the dashboard, which asks `shopDayRange()` for today,
+  // showed an empty shop for the rest of the night.
+  const [year, month, day] = shopDayKey().split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + daysFromToday, hour + SHOP_UTC_OFFSET, minute));
 }
 
 /**
@@ -305,18 +309,31 @@ async function main() {
    * Stand the pet at a station that matches the stage it is at. A pet waiting
    * to be started or waiting for its owner holds no station, same rule the
    * floor board applies on a drop.
+   *
+   * Each station is handed out **once**. A groom table physically holds one pet
+   * -- `stationCapacity()` says so and every assignment path in the app
+   * enforces it -- so picking one at random stacked ten pets onto Table 1 and
+   * showed a floor the app itself would refuse to create.
    */
-  const stationFor = (status: AppointmentStatus) => {
-    const role =
-      status === "IN_PROGRESS" || status === "FINISHING"
-        ? "GROOMER"
-        : status === "DRYING"
-          ? "DRYING"
-          : null;
+  const freeWork = new Map<string, string[]>();
+  for (const station of workStations) {
+    freeWork.set(station.role, [...(freeWork.get(station.role) ?? []), station.id]);
+  }
+
+  /**
+   * Which station a stage stands at is `BOARD_COLUMNS`' answer, not a second
+   * copy of it. The copy that used to live here disagreed with the board --
+   * it put a pet `IN_PROGRESS` on a groom table, where the board calls that
+   * stage Bath -- so the demo shop never used its bathing station at all.
+   */
+  const atStation = (status: AppointmentStatus) =>
+    boardColumnFor(status)?.stationRole ?? null;
+
+  const claimStation = (status: AppointmentStatus) => {
+    const role = atStation(status);
     if (!role) return null;
-    const fit = workStations.filter((s) => s.role === role);
-    // A shop with no drying station dries on the groom table.
-    return (fit.length > 0 ? pick(fit) : pick(workStations)).id;
+    // A shop with no station for the stage does that work at the groom table.
+    return freeWork.get(role)?.pop() ?? freeWork.get("GROOMER")?.pop() ?? null;
   };
 
   /** Hand out a door to a pet that is in the shop, while doors last. */
@@ -401,8 +418,13 @@ async function main() {
       // Visit history: roughly every 6-10 weeks back through the last nine
       // months, plus bookings on the books ahead. Every pet spans well over 90
       // days, so cadence, rebooking and no-show patterns have something to read.
+      // One gap per pet rather than a fresh one per step: a household that
+      // comes in every seven weeks comes in every seven weeks. Re-rolling it
+      // each time makes a cadence nothing can be read off, and the rebooking
+      // list, the demand forecast and the slot offers all key off that number.
+      const gap = int(42, 70);
       const days: number[] = [];
-      for (let d = -int(3, 20); d > -270; d -= int(42, 70)) days.push(d);
+      for (let d = -int(3, 20); d > -270; d -= gap) days.push(d);
       if (chance(0.7)) days.push(int(1, 21));
       if (chance(0.35)) days.push(int(22, 60));
       if (c < 40 && p === 0) days.push(0);
@@ -425,7 +447,11 @@ async function main() {
           }));
         const duration = chosen.reduce((sum, s) => sum + (s.durationMins ?? 60), 0);
         const groomer = preferred ?? pick(groomers);
-        const status = statusFor(day);
+        let status = statusFor(day);
+        // Every table is taken. The pet is waiting for one rather than sharing
+        // it -- which is what a genuinely busy morning looks like.
+        const stationId = claimStation(status);
+        if (stationId === null && atStation(status)) status = "CHECKED_IN";
         const kennelId = kennelFor(status);
         const scheduledAt = shopTime(day, int(8, 15), pick([0, 30]));
 
@@ -440,7 +466,7 @@ async function main() {
             durationMins: duration,
             needsKennel: chance(0.5),
             staffId: status === "SCHEDULED" ? (chance(0.5) ? groomer.id : null) : groomer.id,
-            stationId: stationFor(status),
+            stationId,
             checkedInAt: status === "SCHEDULED" ? null : scheduledAt,
             completedAt: finished(status) ? new Date(+scheduledAt + duration * 60_000) : null,
             visitNotes: chance(0.2) ? "Owner called ahead — running late." : null,
@@ -683,7 +709,10 @@ async function main() {
 
 /** Past visits are done, today's are mid-groom, future ones are on the books. */
 function statusFor(day: number): AppointmentStatus {
-  if (day > 0) return "SCHEDULED";
+  // A few of next week's bookings have been called off. That hole in the diary
+  // is what the slot-offer job exists to fill, and with every future visit
+  // SCHEDULED the demo shop never had one to show.
+  if (day > 0) return chance(0.04) ? "CANCELLED" : "SCHEDULED";
   if (day === 0) {
     // Weighted towards a busy floor: most of today's pets are already in.
     return pick(["CHECKED_IN", "CHECKED_IN", "IN_PROGRESS", "IN_PROGRESS", "IN_PROGRESS",

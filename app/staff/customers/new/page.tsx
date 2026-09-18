@@ -27,7 +27,7 @@ export default async function NewCustomerPage(props: {
 }) {
   const searchParams = await props.searchParams;
   const groomers = await prisma.staff.findMany({
-    where: { isActive: true, roles: { hasSome: [StaffRole.GROOMER, StaffRole.BATHER] } },
+    where: { isActive: true, roles: { has: StaffRole.GROOMER } },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

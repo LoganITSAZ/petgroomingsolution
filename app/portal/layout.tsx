@@ -31,10 +31,10 @@ export default async function PortalLayout({ children }: { children: React.React
       </a>
 
       <header className="bg-white border-b border-stone-200 sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="portal-header-inner max-w-5xl mx-auto px-4 flex items-center justify-between">
+          <div className="portal-brand-navigation flex items-center gap-3">
             <Link href="/" className="font-display text-lg font-extrabold tracking-[-0.02em] text-brand-text"><span aria-hidden="true">🐾</span> {config.shopName}</Link>
-            <nav className="hidden md:flex gap-3 text-sm text-stone-600">
+            <nav aria-label="Your account" className="portal-navigation flex gap-3 text-sm text-stone-600">
               <Link href="/portal" className="hover:text-brand-text">Dashboard</Link>
               <Link href="/portal/pets" className="hover:text-brand-text">My Pets</Link>
               <Link href="/portal/appointments" className="hover:text-brand-text">Appointments</Link>

@@ -1,0 +1,56 @@
+/* Customer-facing screens share the public site's editorial hierarchy. */
+.auth-shell { padding: clamp(1.5rem, 6vw, 4rem) 1rem; }
+.auth-shell > div > .text-center a,
+.auth-shell h1,
+#portal-root .page-heading h1,
+#portal-root > header .font-display {
+  font-family: var(--font-editorial);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+.auth-shell h1 { margin-bottom: 1.5rem; font-size: 2rem; }
+.auth-shell form { line-height: 1.6; }
+.auth-shell form > div + div { margin-top: 1.125rem; }
+.auth-shell :is(input[type="email"], input[type="password"], input[type="text"], input[type="tel"]) {
+  min-height: 2.875rem;
+}
+.auth-shell button[type="submit"] { min-height: 2.875rem; }
+#portal-root { color: rgb(var(--ink)); }
+#portal-root .portal-header-inner { min-height: 5rem; gap: 1.25rem; padding-block: 1rem; }
+#portal-root .portal-brand-navigation { min-width: 0; flex-wrap: wrap; gap: 0.75rem 1.5rem; }
+#portal-root .portal-brand-navigation > a { overflow-wrap: anywhere; }
+#portal-root .portal-navigation { flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+#portal-root .portal-navigation a { padding-block: 0.375rem; }
+#portal-root .portal-header-inner > div:last-child { flex-shrink: 0; }
+#portal-root .page-heading { padding: 1.75rem; gap: 1rem; }
+#portal-root .page-heading h1 { font-size: clamp(1.875rem, 4vw, 2.5rem); }
+#portal-root .page-heading > div:first-child { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+#portal-root .section-heading { padding: 0.875rem 1.5rem; }
+#portal-root .section-heading h2 {
+  font-family: var(--font-sans), sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+#portal-root [data-page-section] > .section-heading + div { padding: 1.25rem 1.5rem; }
+@media (max-width: 767px) {
+  #portal-root .portal-header-inner { align-items: flex-start; flex-wrap: wrap; gap: 0.75rem; }
+  #portal-root .portal-brand-navigation { width: 100%; }
+  #portal-root .portal-navigation { width: 100%; gap: 0.25rem 1rem; font-size: 0.8125rem; }
+  #portal-root .portal-header-inner > div:last-child { width: 100%; justify-content: space-between; }
+  #portal-root .page-heading { padding: 1.25rem; }
+  #portal-root .section-heading,
+  #portal-root [data-page-section] > .section-heading + div { padding: 1rem; }
+}
+
+.auth-shell h1, #portal-root .page-heading h1 { font-family: var(--font-display), sans-serif; font-weight: 600; }
+#portal-root .page-card { border-radius: 1.25rem; }
+#portal-root .portal-navigation a { display: inline-flex; align-items: center; min-height: 2.75rem; border-radius: 0.5rem; }
+#portal-root :is(a, button, summary, input, select, textarea):focus-visible,
+.auth-shell :is(a, button, input):focus-visible { outline: 2px solid rgb(var(--brand-text)); outline-offset: 3px; }
+@media (max-width: 767px) {
+  .auth-shell :is(input, select, textarea), #portal-root :is(input, select, textarea) { font-size: 1rem; }
+  #portal-root :is(button, select, input:not([type="checkbox"]):not([type="radio"])) { min-height: 2.75rem; }
+}

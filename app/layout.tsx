@@ -4,6 +4,7 @@ import { getConfig } from "@/lib/config";
 import "./globals.css";
 import "./liquid-glass.css";
 import "./workspace.css";
+import "./customer.css";
 
 /**
  * One face, carried on a CSS variable so Tailwind's `font-sans` resolves to it

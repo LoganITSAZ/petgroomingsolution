@@ -7,7 +7,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
   const config = await getConfig();
 
   return (
-    <div className="liquid-shell min-h-screen bg-stone-100 flex items-center justify-center p-4">
+    <div className="auth-shell liquid-shell min-h-screen bg-stone-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="text-2xl font-black text-stone-900">

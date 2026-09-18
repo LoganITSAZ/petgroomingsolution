@@ -175,7 +175,7 @@ export default async function CustomerDetailPage(props: PageProps) {
   ]);
 
   const groomers = await prisma.staff.findMany({
-    where: { isActive: true, roles: { hasSome: ["GROOMER", "BATHER"] } },
+    where: { isActive: true, roles: { has: "GROOMER" } },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

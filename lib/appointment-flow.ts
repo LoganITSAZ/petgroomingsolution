@@ -134,3 +134,24 @@ export function boardColumnFor(status: AppointmentStatus | string): BoardColumn 
     ) ?? null
   );
 }
+
+/** Start of the current uninterrupted board stage, independent of record edits. */
+export function boardWaitingSince(appointment: {
+  status: AppointmentStatus;
+  scheduledAt: Date;
+  checkedInAt: Date | null;
+  completedAt: Date | null;
+  statusHistory: { status: AppointmentStatus; changedAt: Date }[];
+}): number {
+  const column = boardColumnFor(appointment.status);
+  let since: Date | undefined;
+  const history = [...appointment.statusHistory].sort((a, b) => b.changedAt.getTime() - a.changedAt.getTime());
+  for (const entry of history) {
+    if (boardColumnFor(entry.status)?.key !== column?.key) break;
+    since = entry.changedAt;
+  }
+  return (since
+    ?? (column?.key === "pickup" ? appointment.completedAt : null)
+    ?? appointment.checkedInAt
+    ?? appointment.scheduledAt).getTime();
+}

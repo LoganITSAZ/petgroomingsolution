@@ -1,3 +1,4 @@
+import styles from "@/components/services.module.css";
 import { prisma } from "@/lib/prisma";
 import { Species } from "@prisma/client";
 import { SERVICE_CATEGORY_LABEL, formatCents, isSizePriced, servicePriceLabel } from "@/lib/pricing";
@@ -59,8 +60,10 @@ export default async function StaffServicesPage() {
 
   return (
     <PageShell
+      className={styles.catalog}
       columns={false}
       title="Services"
+      subtitle="Your quick reference for care, pricing, and current offers."
       actions={
         isAdmin ? (
           <Link
@@ -72,13 +75,14 @@ export default async function StaffServicesPage() {
         ) : null
       }
     >
-      {services.length === 0 ? (
-        <PageSection grow className="text-center text-stone-400 text-sm">
-          No services are listed yet.
-        </PageSection>
-      ) : (
-        <PageSection grow scroll padded={false}>
-          <table className="w-full text-sm">
+      <PageSection grow scroll padded={false}>
+        {services.length === 0 ? (
+          <div className="px-3 py-3 text-center text-stone-400 text-sm">
+            No services are listed yet.
+          </div>
+        ) : (
+          <table className={`w-full text-sm ${styles.pricingTable}`}>
+            <caption className="sr-only">Service prices by pet size, appointment duration, and bookings in the last 90 days</caption>
             {/* The column names are the same for every species, so they are
                 written once at the top and each group is a labelled tbody. */}
             <thead className="sticky top-0 z-10">
@@ -98,13 +102,14 @@ export default async function StaffServicesPage() {
             </thead>
             {groups.map((group) => (
               <tbody key={group.heading} className="divide-y divide-stone-100">
-                <tr className="service-group-heading" data-pet-group={group.heading}>
+                <tr className={styles.groupHeading}>
                   <th
-                    scope="colgroup"
+                    scope="rowgroup"
                     colSpan={9}
                     className="border-y px-3 py-2 text-left font-display text-[0.75rem] font-bold uppercase tracking-[0.09em]"
                   >
                     {group.heading}
+                    <span className={styles.count}>{group.items.length} services</span>
                   </th>
                 </tr>
                   {group.items.map((service) => {
@@ -164,7 +169,7 @@ export default async function StaffServicesPage() {
                         )}
                         <td className="px-3 py-2.5 whitespace-nowrap">
                           {service.walkInEligible ? (
-                            <span className="font-bold text-emerald-700">Yes</span>
+                            <span className={styles.badge}>Available</span>
                           ) : (
                             <span className="text-stone-400">Appointment</span>
                           )}
@@ -178,32 +183,32 @@ export default async function StaffServicesPage() {
               </tbody>
             ))}
           </table>
-        </PageSection>
-      )}
+        )}
 
-      {surcharges.length > 0 && (
-        <PageSection
-          title="Additional fees"
-          padded={false}
-          bodyClassName="divide-y divide-stone-100 border-t border-stone-100 mt-2"
-        >
-            {surcharges.map((surcharge) => (
-              <div key={surcharge.id} className="px-3 py-2 flex items-center justify-between gap-3">
-                <span className="text-stone-700">
-                  {surcharge.label}
-                  {surcharge.note && (
-                    <span className="block text-xs text-stone-400">{surcharge.note}</span>
-                  )}
-                </span>
-                <span className="font-semibold text-stone-900 whitespace-nowrap">
-                  {surcharge.minCents != null && surcharge.maxCents != null
-                    ? `${formatCents(surcharge.minCents)}–${formatCents(surcharge.maxCents)}`
-                    : formatCents(surcharge.minCents ?? surcharge.maxCents)}
-                </span>
-              </div>
-            ))}
-        </PageSection>
-      )}
+        {surcharges.length > 0 && (
+          <PageSection
+            title="Additional fees"
+            padded={false}
+            bodyClassName="divide-y divide-stone-100 border-t border-stone-100 mt-2"
+          >
+              {surcharges.map((surcharge) => (
+                <div key={surcharge.id} className="px-3 py-2 flex items-center justify-between gap-3">
+                  <span className="text-stone-700">
+                    {surcharge.label}
+                    {surcharge.note && (
+                      <span className="block text-xs text-stone-400">{surcharge.note}</span>
+                    )}
+                  </span>
+                  <span className="font-semibold text-stone-900 whitespace-nowrap">
+                    {surcharge.minCents != null && surcharge.maxCents != null
+                      ? `${formatCents(surcharge.minCents)}–${formatCents(surcharge.maxCents)}`
+                      : formatCents(surcharge.minCents ?? surcharge.maxCents)}
+                  </span>
+                </div>
+              ))}
+          </PageSection>
+        )}
+      </PageSection>
     </PageShell>
   );
 }

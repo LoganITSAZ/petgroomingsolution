@@ -1,4 +1,6 @@
 import Link from "next/link";
+import "./public.css";
+import OfficeIcon from "@/components/OfficeIcon";
 import MobileMenu from "@/components/MobileMenu";
 import { getConfig } from "@/lib/config";
 import { headers } from "next/headers";
@@ -86,11 +88,11 @@ export default async function PublicLayout({ children }: { children: React.React
         </p>
       )}
 
-      <header className="sticky top-0 z-50 px-3 pt-3">
+      <header className="public-header sticky top-0 z-50 px-3 pt-3">
         <div className="glass-panel max-w-6xl mx-auto flex h-14 items-center justify-between rounded-2xl px-4">
           <div className="flex min-w-0 items-center gap-3">
-            <Link href="/" className="font-display shrink-0 truncate text-lg font-extrabold tracking-[-0.02em] text-brand-text">
-            <span className="mr-1.5" aria-hidden="true">{theme.preset.motif ?? "🐾"}</span>{config.shopName}
+            <Link href="/" className="public-wordmark font-display min-w-0 truncate text-lg font-extrabold tracking-[-0.02em] text-brand-text">
+            <span className="public-brand-icon" aria-hidden="true">{theme.preset.motif ?? <OfficeIcon name="paw" />}</span><span className="truncate">{config.shopName}</span>
           </Link>
             {state && (
               <span className="hidden items-center gap-1.5 text-sm text-muted sm:flex">
@@ -139,7 +141,7 @@ export default async function PublicLayout({ children }: { children: React.React
 
       <main id="main-content" className="flex-1">{children}</main>
 
-      <footer className="mt-8 bg-footer-bg text-footer-ink py-10">
+      <footer className="public-footer mt-8 bg-footer-bg text-footer-ink py-10">
         <div className="max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
           <div>
             <p className="font-display text-lg font-extrabold text-white mb-1">

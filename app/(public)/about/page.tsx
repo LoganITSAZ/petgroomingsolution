@@ -15,7 +15,7 @@ export default async function AboutPage() {
   return (
     <div className="public-shell min-h-screen">
       {/* Hero */}
-      <section className="relative overflow-hidden px-6 py-24 text-brand-on-700">
+      <section className="public-about-hero relative overflow-hidden px-6 py-24 text-brand-on-700">
         <div className="absolute inset-0 bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900" />
         <div className="absolute -right-20 top-0 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute -bottom-24 -left-12 text-[13rem] leading-none text-white/[0.07]" aria-hidden="true">🐾</div>
@@ -78,7 +78,7 @@ export default async function AboutPage() {
           </div>
 
           {/* The way out, as the panel's last band rather than a card of its own. */}
-          <div className="relative overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900 px-6 py-12 text-center text-brand-on-700">
+          <div className="public-about-cta relative overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900 px-6 py-12 text-center text-brand-on-700">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.22),transparent_48%)]" />
             <div className="relative">
               <p className="mb-3 text-xs font-bold tracking-tight text-brand-on-700">A calm visit starts here</p>

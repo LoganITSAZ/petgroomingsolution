@@ -1,3 +1,4 @@
+import styles from "@/components/services.module.css";
 import { prisma } from "@/lib/prisma";
 import {
   PricingMode,
@@ -247,9 +248,10 @@ export default async function AdminServicesPage(props: PageProps) {
 
   return (
     <PageShell
+      className={styles.catalog}
       columns={false}
       title="Services & Pricing"
-      subtitle="Edited here, shown on the public pricing page, offered in booking forms, and used for revenue estimates in analytics."
+      subtitle="Manage your service menu, pricing, and availability."
       actions={
         <ModalButton
           label="Add a service"
@@ -302,7 +304,7 @@ export default async function AdminServicesPage(props: PageProps) {
       {/* Move every base price at once */}
       <form
         action={adjustBasePrices}
-        className="border-t border-stone-100 bg-stone-50 px-3 py-2 flex flex-wrap items-center gap-3"
+        className={styles.toolbar}
       >
         <span className="text-sm font-semibold text-stone-800">Adjust all base prices</span>
         <span className="flex items-center gap-2">
@@ -336,15 +338,16 @@ export default async function AdminServicesPage(props: PageProps) {
           <PageSection
             key={group.heading}
             title={group.heading}
-            className={`service-group service-group-${group.heading.toLowerCase().replaceAll(" ", "-")}`}
+            className={styles.group}
+            hint={`${group.items.length} services`}
             padded={false}
-            bodyClassName="divide-y divide-stone-100 border-t border-stone-100 mt-2"
+            bodyClassName="divide-y divide-line"
           >
               {group.items.map((service) => {
                 const booked = bookedByService.get(service.id) ?? 0;
                 return (
-                  <details key={service.id}>
-                    <summary className="px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3">
+                  <details key={service.id} className={styles.service}>
+                    <summary className={styles.summary}>
                       <span className="min-w-0">
                         <span className="font-semibold text-stone-900">{service.name}</span>
                         {!service.isActive && (
@@ -366,7 +369,7 @@ export default async function AdminServicesPage(props: PageProps) {
                           {booked > 0 ? ` · booked ${booked}×` : ""}
                         </span>
                       </span>
-                      <span className="text-sm font-medium text-stone-700 whitespace-nowrap">
+                      <span className={`text-sm font-semibold text-ink whitespace-nowrap ${styles.price}`}>
                         {servicePriceLabel(service)}
                       </span>
                     </summary>

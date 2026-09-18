@@ -1,7 +1,7 @@
 /* Dedicated screen typography and spacing stay independent of office density. */
 .station-hud {
   padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
-  background-image: radial-gradient(ellipse at 0 0, rgb(var(--brand-500) / 0.12), transparent 55rem);
+  background-image: none;
   background-attachment: scroll;
   line-height: 1.55;
 }
@@ -73,3 +73,14 @@
   .station-empty { min-height: 55vh; }
 }
 @media (prefers-reduced-motion: reduce) { .station-hud .station-control { transition: none; } }
+
+.station-hud :is(.station-title, .station-pet-name) {
+  font-family: var(--font-sans), sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+.station-hud .station-section-title { font-weight: 600; }
+.station-hud :is(.station-panel, .station-header) {
+  border-radius: 1rem;
+  box-shadow: none;
+}

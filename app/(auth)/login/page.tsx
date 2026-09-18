@@ -38,7 +38,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="liquid-shell min-h-screen bg-stone-50 flex items-center justify-center p-4">
+    <div className="w-full">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
         <h1 className="text-2xl font-black text-stone-900 mb-1">Sign in</h1>
         {justReset && (
@@ -53,6 +53,7 @@ function LoginForm() {
               key={t}
               type="button"
               onClick={() => setUserType(t)}
+              aria-pressed={userType === t}
               className={`flex-1 py-2 rounded-md text-sm font-semibold transition-colors capitalize ${
                 userType === t
                   ? "bg-brand-600 text-brand-on-600"
@@ -135,7 +136,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="liquid-shell min-h-screen bg-stone-50 flex items-center justify-center p-4">
+        <div className="w-full">
           <div className="text-stone-400 text-sm">Loading…</div>
         </div>
       }

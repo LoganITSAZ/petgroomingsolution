@@ -3,10 +3,11 @@ import { formatShopDate, formatShopTime, shopDayRange } from "@/lib/utils";
 import { AppointmentStatus } from "@prisma/client";
 import { isWorkStation } from "@/lib/stations";
 import { floorRoster } from "@/lib/presence";
-import { BOARD_COLUMNS, boardColumnFor } from "@/lib/appointment-flow";
+import { BOARD_COLUMNS, boardColumnFor, boardWaitingSince } from "@/lib/appointment-flow";
 import FloorBoard, { type ColumnCapacity } from "@/components/FloorBoard";
 import { moveToColumn } from "@/app/staff/appointments/actions";
-import { ALERT_DOT, serviceAlerts } from "@/lib/alerts";
+import { serviceAlerts } from "@/lib/alerts";
+import { photoUrl } from "@/lib/photos";
 import styles from "./dashboard.module.css";
 import { DashboardRefresh } from "@/components/DashboardRefresh";
 import { PICKUP_LEVEL_LABEL, PICKUP_LEVEL_CLASS, pickupWatchlist } from "@/lib/pickups";
@@ -50,8 +51,12 @@ export default async function StaffDashboard(props: {
         status: true,
         staffId: true,
         scheduledAt: true,
+        checkedInAt: true,
+        completedAt: true,
+        statusHistory: { select: { status: true, changedAt: true }, orderBy: { changedAt: "desc" } },
         stationId: true,
-        pet: { select: { name: true, hasBiteHistory: true } },
+        kennel: { select: { label: true, station: { select: { name: true } } } },
+        pet: { select: { name: true, hasBiteHistory: true, photoId: true, photoUrl: true } },
         customer: { select: { firstName: true, lastName: true } },
       },
       orderBy: { scheduledAt: "asc" },
@@ -83,9 +88,14 @@ export default async function StaffDashboard(props: {
   const pickupsById = new Map(pickups.pets.map((pet) => [pet.appointmentId, pet]));
   const boardPets = todayAppointments
     .filter((appointment) => boardColumnFor(appointment.status) !== null)
+    .sort((a, b) => boardWaitingSince(a) - boardWaitingSince(b) || a.id.localeCompare(b.id))
     .map((appointment) => ({
       id: appointment.id,
       petName: appointment.pet.name,
+      petPhotoUrl: photoUrl(appointment.pet.photoId) ?? appointment.pet.photoUrl,
+      kennelName: appointment.kennel
+        ? `${appointment.kennel.station.name} · ${appointment.kennel.label}`
+        : null,
       ownerName: `${appointment.customer.firstName} ${appointment.customer.lastName}`,
       columnKey: boardColumnFor(appointment.status)?.key ?? BOARD_COLUMNS[0].key,
       stationName: appointment.stationId
@@ -169,32 +179,41 @@ export default async function StaffDashboard(props: {
       )}
 
       {alerts.length > 0 && (
-        <div
-          role="alert"
-          className={`border-t px-3 py-2 ${
-            criticalCount > 0
-              ? "border-red-100 bg-red-50 text-red-900"
-              : "border-amber-100 bg-amber-50 text-amber-900"
-          }`}
-        >
-          <p className="text-sm font-black">
-            {alerts.length === 1 ? "1 thing needs" : `${alerts.length} things need`} attention
-            {criticalCount > 0 && ` — ${criticalCount} critical`}
-          </p>
-          <ul className="mt-1 space-y-0.5">
+        <details className={`${styles.attention} ${styles[criticalCount > 0 ? "critical" : alerts.some((alert) => alert.severity === "warning") ? "warning" : "info"]}`}>
+          <summary className={styles.attentionHeader}>
+            <span className={styles.attentionHeading}>
+              <svg className={styles.attentionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <path d="M10.3 4.1 2.5 17.5A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.5L13.7 4.1a2 2 0 0 0-3.4 0Z" />
+                <path d="M12 9v4" strokeLinecap="round" />
+                <circle cx="12" cy="16.5" r=".8" fill="currentColor" stroke="none" />
+              </svg>
+              <span className={styles.attentionLabel}>{alerts.length === 1 ? "1 item needs" : `${alerts.length} items need`} attention</span>
+            </span>
+            <span className={styles.attentionSummary}>
+              {criticalCount > 0 && <span className={styles.attentionCritical}>{criticalCount} critical</span>}
+              <span className={styles.attentionExpand}>View issues</span>
+              <span className={styles.attentionCollapse}>Hide issues</span>
+              <span className={styles.attentionChevron} aria-hidden="true">⌄</span>
+            </span>
+          </summary>
+          <ul className={styles.attentionList}>
             {alerts.map((alert) => (
-              <li key={alert.id} className="flex items-baseline gap-2 text-sm">
-                <span
-                  className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${ALERT_DOT[alert.severity]}`}
-                />
-                <Link href={alert.href} className="min-w-0 hover:underline">
-                  <span className="font-bold">{alert.title}</span>{" "}
-                  <span className="opacity-80">{alert.detail}</span>
+              <li key={alert.id}>
+                <Link href={alert.href} className={styles.attentionRow}>
+                  <span className={`${styles.attentionPriority} ${styles[alert.severity]}`}>
+                    <span className={styles.attentionDot} aria-hidden="true" />
+                    {{ critical: "Critical", warning: "Follow up", info: "Notice" }[alert.severity]}
+                  </span>
+                  <span className={styles.attentionCopy}>
+                    <span className={styles.attentionTitle}>{alert.title}</span>
+                    <span className={styles.attentionDetail}>{alert.detail}</span>
+                  </span>
+                  <span className={styles.attentionArrow} aria-hidden="true">→</span>
                 </Link>
               </li>
             ))}
           </ul>
-        </div>
+        </details>
       )}
 
         <div id="arrivals" className={`${styles.panel} ${styles.blue}`}>
@@ -220,7 +239,7 @@ export default async function StaffDashboard(props: {
         </div>
 
         {workStations.length > 0 && (
-          <div className={`${styles.panel} ${styles.amber} ${styles.grow}`}>
+          <div className={`${styles.panel} ${styles.amber}`}>
             <PageSection
               title="Service lifecycle"
               hint={
@@ -231,7 +250,6 @@ export default async function StaffDashboard(props: {
                   Drag a pet to a stage, or tap it and choose
                 </span>
               }
-              grow
             >
               <FloorBoard pets={boardPets} capacity={boardCapacity} move={moveToColumn} />
             </PageSection>

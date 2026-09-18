@@ -4,6 +4,7 @@ import { getConfig } from "@/lib/config";
 import { clock, shopState, summariseHours, todayLabel, type BusinessHours } from "@/lib/shop-hours";
 import { formatSpecies, isWithinWalkInWindow } from "@/lib/utils";
 import { isEnabled } from "@/lib/features";
+import OfficeIcon from "@/components/OfficeIcon";
 import Stars from "@/components/Stars";
 
 // Screen readers announce the title first; without one every page in the
@@ -56,8 +57,9 @@ export default async function HomePage() {
         tiles of something nobody can check. Figures stay off this page: the
         price of a groom depends on the pet, so /services answers it.
       */}
-      <section className="mx-auto grid max-w-6xl gap-8 px-4 pb-16 pt-16 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] md:items-end md:gap-12 md:pb-20 md:pt-24">
+      <section className="public-hero mx-auto grid max-w-6xl gap-8 px-4 pb-16 pt-16 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] md:items-end md:gap-12 md:pb-20 md:pt-24">
         <div>
+          <p className="public-eyebrow mb-5">Care at a gentler pace</p>
           <h1 className="font-display text-[clamp(3rem,9vw,5.5rem)] font-extrabold leading-[0.92] tracking-[-0.035em] text-ink">
           {config.shopName}
         </h1>
@@ -87,7 +89,8 @@ export default async function HomePage() {
           same at 2am as at noon — phone and address under "Today 8am – 5pm"
           with nothing saying the shop was shut.
         */}
-        <div className="glass-panel glass-feature overflow-hidden rounded-3xl">
+        <div className="glass-panel glass-feature public-visit-card overflow-hidden rounded-3xl">
+          <div className="public-visit-heading"><span className="public-visit-icon"><OfficeIcon name="paw" /></span><div><p className="public-eyebrow">A little planning, a gentler visit</p><p className="public-visit-title">Come on in.</p></div></div>
           <div className="p-6 md:p-7">
             {/* An <h2>, not a <p>: this is the panel's heading, and a styled
                 paragraph leaves the page with nothing under the <h1> to
@@ -184,51 +187,52 @@ export default async function HomePage() {
       */}
       {testimonials.length > 0 && (
         <section className="mx-auto max-w-6xl px-4 pb-24">
-          {/* The rule above the list is what a sighted reader takes as the
-              break. Nothing carries it to a screen reader, so the heading is
-              off-screen rather than absent. */}
-          <h2 className="sr-only">What our customers say</h2>
+          <h2 className="public-section-title mb-8">Kind words from our customers</h2>
           <div className="border-t border-line pt-9">
-            <ul className="grid gap-x-10 gap-y-9 md:grid-cols-3">
+            <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {testimonials.map((testimonial) => (
-                <li key={testimonial.id}>
+                // Each quote gets its own card in the site's glass. The
+                // section is bare rather than a panel, so these are the
+                // panel — not a second one nested inside somebody else's.
+                <li
+                  key={testimonial.id}
+                  className="glass-panel-subtle flex h-full flex-col rounded-3xl p-6 md:p-7"
+                >
                   {/* A <blockquote>, not a styled <p>: the quote marks are
                       decoration, and the element is what says these are
                       somebody else's words. */}
-                  <blockquote className="font-display text-lg leading-relaxed text-ink md:text-xl">
+                  <blockquote className="flex-1 font-display text-lg leading-relaxed text-ink">
                     &ldquo;{testimonial.quote}&rdquo;
                   </blockquote>
-                  <p className="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-muted">
-                    {testimonial.rating !== null && <Stars rating={testimonial.rating} />}
-                    <span>
-                      {testimonial.author}
-                      {testimonial.petName ? ` · ${testimonial.petName}` : ""}
-                    </span>
-                  </p>
+                  <footer className="mt-6 flex items-end justify-between gap-3 border-t border-line/70 pt-4">
+                    <p className="min-w-0 text-sm">
+                      <span className="block truncate font-semibold text-ink">
+                        {testimonial.author}
+                      </span>
+                      {testimonial.petName && (
+                        <span className="block truncate text-muted">{testimonial.petName}</span>
+                      )}
+                    </p>
+                    {testimonial.rating !== null && (
+                      <Stars rating={testimonial.rating} className="shrink-0 text-sm" />
+                    )}
+                  </footer>
                 </li>
               ))}
             </ul>
           </div>
-          <p className="mt-9 px-1 text-sm text-muted">
-            <Link href="/services" className="text-brand-text underline underline-offset-2">
-              See all services
-            </Link>
-          </p>
         </section>
       )}
 
-      {/* The menu is the fallback until the shop has written a testimonial
-          down, so a fresh install is not a hero and nothing else. */}
-      {testimonials.length === 0 && services.length > 0 && (
-        <section className="mx-auto max-w-6xl px-4 pb-24">
-          {/* The rule above the list is what a sighted reader takes as the
-              break. Nothing carries it to a screen reader, so the heading is
-              off-screen rather than absent. */}
-          <h2 className="sr-only">Services</h2>
+      {/* Keep service discovery available alongside customer reviews. */}
+      {services.length > 0 && (
+        <section className="public-services mx-auto max-w-6xl px-4 pb-24">
+          <div className="public-section-intro"><div><p className="public-eyebrow mb-3">Care for every coat</p><h2 className="public-section-title mb-8">A little care. A lovely difference.</h2></div><Link href="/services" className="public-text-link">Explore services <span aria-hidden="true">↗</span></Link></div>
           <div className="border-t border-line pt-1">
-            <ul className="divide-y divide-line/70">
+            <ul className="public-service-grid">
               {services.map((service) => (
-                <li key={service.id}>
+                <li key={service.id} className="public-service-card">
+                  <span className="public-service-icon"><OfficeIcon name="paw" /></span>
                   {/* A row that has more to say opens; one that does not stays a
                       row, rather than a chevron that reveals nothing. */}
                   {service.description ? (
