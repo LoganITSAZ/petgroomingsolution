@@ -25,7 +25,7 @@ gets cheaper in, not a promise.
 
 On `feat/scheduled-jobs`, not merged.
 
-- **Immunization & vaccine tracking.** `VaccineRequirement` / `PetVaccination`, requirements edited in Shop Settings, `featureVaccinationGate` to block a check-in on an expired certificate. Finish: the check-in refusal path and the "bring the certificate" message.
+- **Immunization & vaccine tracking.** `VaccineRequirement` / `PetVaccination`, requirements edited in Shop Settings, `featureVaccinationGate` plus `vaccinationGateBlocks` to refuse a customer-facing booking or walk-in on an expired certificate ([lib/vaccinations.ts](lib/vaccinations.ts)). Staff are never refused; the arrival card on the dashboard carries the pet's own "bring proof of vaccination" line instead. Complete — merges with the branch.
 - **Breed- & weight-based time logic.** [lib/visit-duration.ts](lib/visit-duration.ts) suggests a duration from the pet's own measured visits (`MIN_VISITS_FOR_DURATION`), overriding the flat sum of service durations. It is per *pet*, not per breed — a pet with three visits beats any breed average. Breed/coat/weight is the fallback for a first visit and is not built.
 - **Automated pickup and reminder messages.** `reminderJob`, `digestJob`, `slotOfferJob` on the runner; `NotificationLog` keeps what went out.
 
