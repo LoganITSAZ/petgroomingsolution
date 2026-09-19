@@ -22,6 +22,8 @@ export interface BoardArrival {
   arrivalTime: string;
   assignedTo: string;
   overdue: boolean;
+  /** What to ask the owner for at the door — the vaccination refusal line. */
+  warning?: string | null;
 }
 
 export interface BoardPet {
@@ -284,6 +286,12 @@ export default function FloorBoard({
             $("<span>", { class: styles.petName, text: arrival.petName }),
             $("<span>", { class: styles.owner, text: `Assigned to ${arrival.assignedTo}` }),
             $("<span>", { class: arrival.overdue ? "mt-2 block text-xs font-semibold text-amber-700" : "mt-2 block text-xs text-muted", text: arrival.overdue ? "Past arrival time" : "Expected" }),
+            // The shop-wide alert above names every pet due a booster; this is
+            // the same fact on the card the counter is about to check in, which
+            // is the moment somebody can actually ask for the certificate.
+            arrival.warning
+              ? $("<span>", { class: `mt-2 block rounded border px-1.5 py-0.5 text-xs font-semibold ${FLAG_CLASSES.critical}`, text: arrival.warning })
+              : [],
             $("<span>", { class: styles.location, text: "Open appointment →" }),
           ),
           ...(assign ? [assignmentForm(arrival.id, arrival.petName, true)] : []),

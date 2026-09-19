@@ -86,7 +86,13 @@ export async function POST(req: Request) {
     // A walk-in is already here: it gets a groomer and a station like any
     // other visit, which it never did before.
     status: AppointmentStatus.CHECKED_IN,
-    enforceCustomerRules: false,
+    // A customer checking themselves in through the portal is held to the
+    // customer-facing rules — including the vaccination gate, which the spec
+    // puts on the walk-in portal as much as on portal booking. Staff posting
+    // for somebody at the counter are not: that is the shop's call to make.
+    // The booking window is not one of these rules either way; createAppointment()
+    // already exempts a walk-in from it, which is why this was false.
+    enforceCustomerRules: session.user.userType === "customer",
     changedById: session.user.userType === "staff" ? session.user.id : null,
     note: "Walk-in check-in via portal",
   });

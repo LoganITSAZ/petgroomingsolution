@@ -123,6 +123,18 @@ describe("FloorBoard", () => {
     expect(move).not.toHaveBeenCalled();
   });
 
+  /* The shop-wide alert names every pet due a booster; this is the same fact on
+     the card somebody is about to check in, which is the only moment a
+     certificate can still be asked for. */
+  it("carries a vaccination warning on the arrival it belongs to", () => {
+    render(<FloorBoard pets={PETS} capacity={{}} move={vi.fn()} arrivals={[
+      { id: "next1", petName: "Luna", arrivalTime: "10:00 AM", assignedTo: "Alex", overdue: false, warning: "Luna is not current on Rabies." },
+      { id: "next2", petName: "Pip", arrivalTime: "11:00 AM", assignedTo: "Alex", overdue: false },
+    ]} />);
+    expect(screen.getByText("Luna is not current on Rabies.")).toBeVisible();
+    expect(screen.getByRole("link", { name: /Pip/ })).not.toHaveTextContent("not current");
+  });
+
   it("shows an empty arrivals tab and opens it from the dashboard shortcut", () => {
     render(<><a href="#arrivals">Arrivals left today</a><FloorBoard pets={PETS} arrivals={[]} capacity={{}} move={vi.fn()} /></>);
     expect(screen.getByText("No more arrivals scheduled today.")).toBeVisible();

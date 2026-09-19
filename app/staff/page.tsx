@@ -8,6 +8,8 @@ import FloorBoard, { type ColumnCapacity } from "@/components/FloorBoard";
 import { assignLifecycleDestination } from "./lifecycle-actions";
 import { moveToColumn } from "@/app/staff/appointments/actions";
 import { serviceAlerts } from "@/lib/alerts";
+import { getConfig } from "@/lib/config";
+import { checksForPets, vaccinationBlockers, vaccinationRefusalMessage } from "@/lib/vaccinations";
 import { photoUrl } from "@/lib/photos";
 import styles from "./dashboard.module.css";
 import { DashboardRefresh } from "@/components/DashboardRefresh";
@@ -57,6 +59,7 @@ export default async function StaffDashboard(props: {
         completedAt: true,
         statusHistory: { select: { status: true, changedAt: true }, orderBy: { changedAt: "desc" } },
         stationId: true,
+        petId: true,
         kennel: { select: { label: true, station: { select: { name: true } } } },
         pet: { select: { name: true, hasBiteHistory: true, photoId: true, photoUrl: true } },
         customer: { select: { firstName: true, lastName: true } },
@@ -83,6 +86,12 @@ export default async function StaffDashboard(props: {
 
   // ── Today at a glance ─────────────────────────────────────────
   const scheduled = todayAppointments.filter((a) => a.status === AppointmentStatus.SCHEDULED);
+
+  // What to ask for at the door. `checksForPets()` is two queries and returns
+  // nothing at all when the gate is off or the shop checks nothing, so a shop
+  // that asks for no certificates pays for an empty map.
+  const config = await getConfig();
+  const arrivalChecks = await checksForPets(scheduled.map((appointment) => appointment.petId), config);
   // ── The board ─────────────────────────────────────────────────
   const workStations = stations.filter((s) => isWorkStation(s.role));
 
@@ -211,13 +220,17 @@ export default async function StaffDashboard(props: {
                 ...stations.filter((station) => station.role === "BATHING" || station.role === "GROOMER").map((station) => ({
                   value: `station:${station.id}`, label: station.name, kind: station.role === "BATHING" ? "bath" as const : "grooming" as const,
                 })),
-              ]} arrivals={scheduled.map((appointment) => ({
-                id: appointment.id,
-                petName: appointment.pet.name,
-                arrivalTime: formatShopTime(appointment.scheduledAt),
-                assignedTo: roster.find((member) => member.id === appointment.staffId)?.name ?? "Unassigned",
-                overdue: appointment.scheduledAt < now,
-              }))} arrivalAlerts={arrivalAlerts} pets={boardPets} capacity={boardCapacity} columnAlerts={columnAlerts} move={moveToColumn} />
+              ]} arrivals={scheduled.map((appointment) => {
+                const blockers = vaccinationBlockers(arrivalChecks.get(appointment.petId) ?? []);
+                return {
+                  id: appointment.id,
+                  petName: appointment.pet.name,
+                  arrivalTime: formatShopTime(appointment.scheduledAt),
+                  assignedTo: roster.find((member) => member.id === appointment.staffId)?.name ?? "Unassigned",
+                  overdue: appointment.scheduledAt < now,
+                  warning: blockers.length > 0 ? vaccinationRefusalMessage(blockers, appointment.pet.name) : null,
+                };
+              })} arrivalAlerts={arrivalAlerts} pets={boardPets} capacity={boardCapacity} columnAlerts={columnAlerts} move={moveToColumn} />
             </PageSection>
         </div>
       </div>
