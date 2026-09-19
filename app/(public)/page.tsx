@@ -129,7 +129,7 @@ export default async function HomePage() {
             steady across the swap; browsers without `name` (pre-2024) simply
             let both open, which degrades to the old growing panel.
           */}
-          <div className="border-t border-line/70 sm:min-h-[13.5rem]">
+          <div className={`border-t border-line/70 ${config.shopPhone || config.shopAddress ? "sm:min-h-[13.5rem]" : ""}`}>
             {(config.shopPhone || config.shopAddress) && (
               <details name="home-hours" open className="disclosure px-6 py-3 md:px-7">
                 <summary className="text-sm font-semibold text-brand-text">Phone and address</summary>
@@ -263,11 +263,6 @@ export default async function HomePage() {
               ))}
             </ul>
           </div>
-          <p className="mt-3 px-1 text-sm text-muted">
-            <Link href="/services" className="text-brand-text underline underline-offset-2">
-              See all services
-            </Link>
-          </p>
       </section>
       )}
     </div>

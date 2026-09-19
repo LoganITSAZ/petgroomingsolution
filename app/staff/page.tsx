@@ -5,6 +5,7 @@ import { isWorkStation } from "@/lib/stations";
 import { floorRoster } from "@/lib/presence";
 import { BOARD_COLUMNS, boardColumnFor, boardWaitingSince } from "@/lib/appointment-flow";
 import FloorBoard, { type ColumnCapacity } from "@/components/FloorBoard";
+import { assignLifecycleDestination } from "./lifecycle-actions";
 import { moveToColumn } from "@/app/staff/appointments/actions";
 import { serviceAlerts } from "@/lib/alerts";
 import { photoUrl } from "@/lib/photos";
@@ -43,9 +44,10 @@ export default async function StaffDashboard(props: {
     stations,
     roster,
     alerts,
+    kennels,
   ] = await Promise.all([
     prisma.appointment.findMany({
-      where: { scheduledAt: { gte: start, lt: end } },
+      where: { OR: [{ scheduledAt: { gte: start, lt: end } }, { status: { in: [...ON_FLOOR, AppointmentStatus.READY_PICKUP] } }] },
       select: {
         id: true,
         status: true,
@@ -72,6 +74,11 @@ export default async function StaffDashboard(props: {
     }),
     floorRoster(),
     serviceAlerts(),
+    prisma.kennel.findMany({
+      where: { isActive: true, station: { isActive: true, role: "KENNEL" } },
+      include: { station: { select: { name: true } } },
+      orderBy: [{ stationId: "asc" }, { row: "asc" }, { column: "asc" }],
+    }),
   ]);
 
   // ── Today at a glance ─────────────────────────────────────────
@@ -102,6 +109,10 @@ export default async function StaffDashboard(props: {
         ? (stationsById.get(appointment.stationId)?.name ?? null)
         : null,
       hasBiteHistory: appointment.pet.hasBiteHistory,
+      flags: alerts.filter((alert) => alert.appointmentIds?.includes(appointment.id)).map((alert) => ({
+        label: alert.id === "no-groomer" ? "No groomer assigned" : "Over booked time",
+        severity: alert.severity,
+      })),
       pickupNote: appointment.status === AppointmentStatus.COMPLETE
         ? { label: "Notify owner", className: "bg-amber-100 text-amber-800" }
         : (() => {
@@ -131,7 +142,11 @@ export default async function StaffDashboard(props: {
   }
 
   const onShift = roster.filter((member) => member.state !== "OFF_SHIFT");
-  const criticalCount = alerts.filter((alert) => alert.severity === "critical").length;
+  const arrivalAlerts = alerts.filter((alert) => alert.id.startsWith("arrival-") || alert.id.startsWith("vaccination-"));
+  const columnAlerts = {
+    waiting: alerts.filter((alert) => ["waiting-unstarted", "kennel-shortfall"].includes(alert.id)),
+    pickup: alerts.filter((alert) => alert.id.startsWith("pickup-")),
+  };
 
   return (
     <PageShell
@@ -178,83 +193,33 @@ export default async function StaffDashboard(props: {
         </p>
       )}
 
-      {alerts.length > 0 && (
-        <details className={`${styles.attention} ${styles[criticalCount > 0 ? "critical" : alerts.some((alert) => alert.severity === "warning") ? "warning" : "info"]}`}>
-          <summary className={styles.attentionHeader}>
-            <span className={styles.attentionHeading}>
-              <svg className={styles.attentionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                <path d="M10.3 4.1 2.5 17.5A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.5L13.7 4.1a2 2 0 0 0-3.4 0Z" />
-                <path d="M12 9v4" strokeLinecap="round" />
-                <circle cx="12" cy="16.5" r=".8" fill="currentColor" stroke="none" />
-              </svg>
-              <span className={styles.attentionLabel}>{alerts.length === 1 ? "1 item needs" : `${alerts.length} items need`} attention</span>
-            </span>
-            <span className={styles.attentionSummary}>
-              {criticalCount > 0 && <span className={styles.attentionCritical}>{criticalCount} critical</span>}
-              <span className={styles.attentionExpand}>View issues</span>
-              <span className={styles.attentionCollapse}>Hide issues</span>
-              <span className={styles.attentionChevron} aria-hidden="true">⌄</span>
-            </span>
-          </summary>
-          <ul className={styles.attentionList}>
-            {alerts.map((alert) => (
-              <li key={alert.id}>
-                <Link href={alert.href} className={styles.attentionRow}>
-                  <span className={`${styles.attentionPriority} ${styles[alert.severity]}`}>
-                    <span className={styles.attentionDot} aria-hidden="true" />
-                    {{ critical: "Critical", warning: "Follow up", info: "Notice" }[alert.severity]}
-                  </span>
-                  <span className={styles.attentionCopy}>
-                    <span className={styles.attentionTitle}>{alert.title}</span>
-                    <span className={styles.attentionDetail}>{alert.detail}</span>
-                  </span>
-                  <span className={styles.attentionArrow} aria-hidden="true">→</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-
-        <div id="arrivals" className={`${styles.panel} ${styles.blue}`}>
-      <PageSection title="Arriving next" hint={`${scheduled.length} remaining today`}>
-        {scheduled.length === 0 ? <p className="text-sm text-muted">No more arrivals scheduled today.</p> : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">Next four scheduled arrivals, including overdue check-ins</caption>
-              <thead className="text-xs text-muted"><tr><th scope="col" className="py-2">Arrival</th><th scope="col">Pet</th><th scope="col">Assigned to</th><th scope="col">Check-in</th></tr></thead>
-              <tbody className="divide-y divide-stone-100">{scheduled.slice(0, 4).map((appointment) => (
-                <tr key={appointment.id}>
-                  <td className="py-3 whitespace-nowrap pr-3 tabular-nums">{formatShopTime(appointment.scheduledAt)}</td>
-                  <th scope="row" className="pr-3"><Link className="underline" href={`/staff/appointments/${appointment.id}`}>{appointment.pet.name}</Link></th>
-                  <td className="pr-3">{roster.find((member) => member.id === appointment.staffId)?.name ?? "Unassigned"}</td>
-                  <td className={appointment.scheduledAt < now ? "text-amber-700 font-semibold" : "text-muted"}>{appointment.scheduledAt < now ? "Past arrival time" : "Expected"}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-            {scheduled.length > 4 && <Link href="/staff/appointments" className="text-sm underline">View all {scheduled.length} expected arrivals</Link>}
-          </div>
-        )}
-      </PageSection>
-        </div>
-
-        {workStations.length > 0 && (
-          <div className={`${styles.panel} ${styles.amber}`}>
+        <div className={`${styles.panel} ${styles.lifecycle}`}>
             <PageSection
               title="Service lifecycle"
+              actions={<span className={styles.floorCount}>{boardPets.length} {boardPets.length === 1 ? "pet" : "pets"} on the floor</span>}
               hint={
                 <span>
                   {waitingOnFloor.length > 0 && (
                     <span className="font-bold text-amber-700">{waitingOnFloor.length} waiting · </span>
                   )}
-                  Drag a pet to a stage, or tap it and choose
+                  From arrival to a happy homecoming
                 </span>
               }
             >
-              <FloorBoard pets={boardPets} capacity={boardCapacity} move={moveToColumn} />
+              <FloorBoard assign={assignLifecycleDestination} destinations={[
+                ...kennels.map((kennel) => ({ value: `kennel:${kennel.id}`, label: `${kennel.station.name} · ${kennel.label}`, kind: "kennel" as const })),
+                ...stations.filter((station) => station.role === "BATHING" || station.role === "GROOMER").map((station) => ({
+                  value: `station:${station.id}`, label: station.name, kind: station.role === "BATHING" ? "bath" as const : "grooming" as const,
+                })),
+              ]} arrivals={scheduled.map((appointment) => ({
+                id: appointment.id,
+                petName: appointment.pet.name,
+                arrivalTime: formatShopTime(appointment.scheduledAt),
+                assignedTo: roster.find((member) => member.id === appointment.staffId)?.name ?? "Unassigned",
+                overdue: appointment.scheduledAt < now,
+              }))} arrivalAlerts={arrivalAlerts} pets={boardPets} capacity={boardCapacity} columnAlerts={columnAlerts} move={moveToColumn} />
             </PageSection>
-          </div>
-        )}
+        </div>
       </div>
     </PageShell>
   );

@@ -21,6 +21,7 @@ export type AlertSeverity = "info" | "warning" | "critical";
 export interface ServiceAlert {
   id: string;
   severity: AlertSeverity;
+  appointmentIds?: string[];
   title: string;
   /** The pets or people it concerns. */
   detail: string;
@@ -160,6 +161,7 @@ export async function serviceAlerts(): Promise<ServiceAlert[]> {
   if (unstaffed.length > 0) {
     alerts.push({
       id: "no-groomer",
+      appointmentIds: unstaffed.map((visit) => visit.id),
       severity: "info",
       title: `${unstaffed.length} pet${unstaffed.length === 1 ? "" : "s"} with no groomer`,
       detail: list(unstaffed.map((visit) => visit.pet.name)),
@@ -176,6 +178,7 @@ export async function serviceAlerts(): Promise<ServiceAlert[]> {
   if (overrunning.length > 0) {
     alerts.push({
       id: "overrunning",
+      appointmentIds: overrunning.map((visit) => visit.id),
       severity: "warning",
       title: `${overrunning.length} groom${overrunning.length === 1 ? "" : "s"} over the booked time`,
       detail: list(

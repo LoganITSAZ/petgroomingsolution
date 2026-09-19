@@ -33,70 +33,27 @@
 .metric:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .panel[id] { scroll-margin-top: 12px; }
 
-.attention {
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--priority-color) 45%, rgb(var(--well-line)));
-  border-left: 4px solid var(--priority-color);
-  border-radius: 12px;
-  background: rgb(var(--surface));
-  color: rgb(var(--ink));
-}
-.attentionHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  padding: 14px 16px;
-  background: color-mix(in srgb, var(--priority-color) 9%, rgb(var(--surface)));
-}
-.attentionHeading { display: flex; align-items: center; gap: 8px; }
-.attentionLabel { font-size: 14px; font-weight: 750; }
-.attentionIcon { width: 22px; height: 22px; flex-shrink: 0; color: var(--priority-color); }
-.attentionHeader { cursor: pointer; list-style: none; }
-.attentionHeader::-webkit-details-marker { display: none; }
-.attentionHeader:hover { background: color-mix(in srgb, var(--priority-color) 15%, rgb(var(--surface))); }
-.attentionHeader:focus-visible { outline: 2px solid rgb(var(--ink)); outline-offset: -3px; }
-.attentionSummary { display: flex; align-items: center; gap: 12px; color: rgb(var(--muted)); font-size: 12px; }
-.attentionCritical { color: rgb(var(--ink)); font-weight: 650; }
-.attentionCritical::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: rgb(var(--signal-alert)); }
-.attentionChevron { display: inline-block; font-size: 18px; line-height: 1; }
-.attentionCollapse { display: none; }
-.attention[open] .attentionExpand { display: none; }
-.attention[open] .attentionCollapse { display: inline; }
-.attention[open] .attentionChevron { transform: rotate(180deg); }
-.attentionList { list-style: none; margin: 0; padding: 0; }
-.attentionList li { border-top: 1px solid rgb(var(--well-line)); }
-.attentionRow {
-  display: grid;
-  grid-template-columns: 100px minmax(0, 1fr) 20px;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 16px;
-  color: inherit;
-  text-decoration: none;
-}
-.attentionRow:hover { background: rgb(var(--band)); }
-.attentionRow:focus-visible { outline: 2px solid rgb(var(--ink)); outline-offset: -3px; }
-.attentionPriority {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12px;
-  font-weight: 650;
-}
+.noticeChips { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0 0 12px; padding: 0; }
+.noticeChip { display: flex; flex-direction: column; gap: 3px; padding: 7px 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--priority-color) 35%, rgb(var(--well-line))); background: color-mix(in srgb, var(--priority-color) 7%, rgb(var(--surface))); color: rgb(var(--ink)); overflow-wrap: anywhere; }
+.noticeChip:hover { background: color-mix(in srgb, var(--priority-color) 14%, rgb(var(--surface))); }
+.noticeChip:focus-visible { outline: 2px solid rgb(var(--ink)); outline-offset: 2px; }
+.noticeTitle { font-size: 12px; font-weight: 650; }
+.noticeDetail { font-size: 11px; color: rgb(var(--muted)); }
 .critical { --priority-color: rgb(var(--signal-alert)); }
 .warning { --priority-color: var(--dashboard-amber); }
 .info { --priority-color: rgb(var(--muted)); }
-.attentionDot { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--priority-color); }
-.attentionCopy { display: flex; min-width: 0; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
-.attentionTitle { font-size: 13px; font-weight: 650; }
-.attentionDetail { color: rgb(var(--muted)); font-size: 12px; }
-.attentionArrow { color: rgb(var(--muted)); text-align: right; }
+
+.dashboard .lifecycle :global(.section-heading) {
+  padding: 20px; gap: 6px 16px; background: rgb(var(--surface)); border-bottom-color: rgb(var(--line));
+}
+.dashboard .lifecycle :global(.section-heading) h2 {
+  font-size: 20px; font-weight: 600; letter-spacing: -0.035em; text-transform: none;
+}
+.dashboard .lifecycle :global(.section-heading) > span { order: 3; flex-basis: 100%; font-size: 13px; }
+.lifecycle > [data-page-section] > :last-child { padding: 20px; }
+.floorCount { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid rgb(var(--line)); border-radius: 999px; color: rgb(var(--muted)); font-size: 12px; }
+.floorCount::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: rgb(var(--brand-600)); }
 @media (max-width: 640px) {
-  .attentionRow { grid-template-columns: minmax(0, 1fr) 20px; gap: 6px 12px; padding: 12px 14px; }
-  .attentionPriority { grid-column: 1; }
-  .attentionCopy { grid-column: 1; }
-  .attentionArrow { grid-column: 2; grid-row: 1 / 3; }
-  .attentionHeader { padding: 12px 14px; }
+  .dashboard .lifecycle :global(.section-heading) { padding: 16px; }
+  .lifecycle > [data-page-section] > :last-child { padding: 12px; }
 }
