@@ -11,6 +11,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { acceptWaiver, waiverOutstanding } from "@/lib/waiver-status";
+import { missedVisitMessage, recentMissedVisits } from "@/lib/no-show";
 import Link from "next/link";
 
 // Screen readers announce the title first; without one every page in the
@@ -28,13 +29,16 @@ export default async function PortalNewAppointmentPage(props: {
 
   const customerId = session.user.id;
 
-  const [pets, config, serviceOptions] = await Promise.all([
+  const [pets, config, serviceOptions, missed] = await Promise.all([
     prisma.pet.findMany({
       where: { customerId, isActive: true },
       orderBy: { name: "asc" },
     }),
     getConfig(),
     getServiceOptions(),
+    // The deterrent half of the missed-appointment fee: said before the
+    // booking is made, to the person who can still ring instead.
+    recentMissedVisits(customerId),
   ]);
 
   // A waiver version bump has to re-prompt: booking is the moment it matters.
@@ -181,6 +185,12 @@ now.getTime() + (config.bookingWindowDays ?? 30) * 24 * 60 * 60 * 1000
         </div>
       ) : (
         <form action={createPortalAppointment} className="space-y-3">
+            {missed && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {missedVisitMessage(missed, true)}
+              </p>
+            )}
+
             {/* Pet */}
             <div>
               <label htmlFor="petId" className="block text-sm font-semibold text-stone-700 mb-1.5">

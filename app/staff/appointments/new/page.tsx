@@ -14,6 +14,7 @@ import { getServiceOptions } from "@/lib/appointment-services";
 import { createAppointment } from "@/lib/create-appointment";
 import { getConfig } from "@/lib/config";
 import { checksForPet } from "@/lib/vaccinations";
+import { missedVisitMessage, recentMissedVisits } from "@/lib/no-show";
 import { VaccinationWarning } from "@/components/Vaccinations";
 
 // Screen readers announce the title first; without one every page in the
@@ -56,6 +57,14 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
   const bookingConfig = await getConfig();
   const vaccinationChecks = petId ? await checksForPet(petId, bookingConfig) : [];
   const vaccinationPet = petId ? pets.find((pet) => pet.id === petId)?.name : undefined;
+
+  /*
+   * Misses, for a booking started from a customer's own page. Same slot and
+   * same bargain as the shots above: the counter is told what it may charge,
+   * never stopped from booking. A customer picked from the dropdown below is
+   * client-side, so there is nobody to check until the visit exists.
+   */
+  const missed = customerId ? await recentMissedVisits(customerId) : null;
 
   // Default datetime: next full hour, at least 1 hour from now. The input is
   // shop wall clock, so it is formatted in SHOP_TIMEZONE — getTimezoneOffset()
@@ -219,6 +228,12 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
         <form action={createStaffAppointment} className="space-y-3">
           {vaccinationChecks.some((check) => check.level !== "current") && (
             <VaccinationWarning checks={vaccinationChecks} petName={vaccinationPet} />
+          )}
+
+          {missed && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {missedVisitMessage(missed, false)}
+            </p>
           )}
 
           <CustomerPetFields

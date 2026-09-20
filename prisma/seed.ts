@@ -192,6 +192,10 @@ async function main() {
     { label: "Matted coat", minCents: 1500, maxCents: 5500, sortOrder: 10 },
     { label: "Difficult or aggressive handling", minCents: 1500, maxCents: 5500, sortOrder: 20 },
     { label: "Late pickup (after close)", minCents: 2500, sortOrder: 30 },
+    // Charged on the next visit, not taken up front: the shop holds no cards.
+    // `MISSED_APPOINTMENT_LABEL` in lib/no-show.ts matches this label; a shop
+    // that does not charge one deactivates the row.
+    { label: "Missed appointment", minCents: 2500, note: "Added to the next visit after a no-show.", sortOrder: 40 },
   ];
   for (const surcharge of surcharges) {
     const existing = await prisma.surcharge.findFirst({ where: { label: surcharge.label } });
