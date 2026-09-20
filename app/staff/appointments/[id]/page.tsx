@@ -44,6 +44,7 @@ import { isEnabled } from "@/lib/features";
 import { ticketFromRow } from "@/lib/ticket";
 import { TicketPanel } from "@/components/Ticket";
 import { checksForPet } from "@/lib/vaccinations";
+import { addOnPromptsFor } from "@/lib/add-ons";
 import { VaccinationWarning } from "@/components/Vaccinations";
 import { BLADE_TERMS } from "@/lib/resources";
 import { redeemCustomerReward } from "@/app/staff/customers/actions";
@@ -257,6 +258,17 @@ export default async function AppointmentDetailPage(props: PageProps) {
   // The ticket is the counter's arithmetic, not this page's.
   const ticket = ticketFromRow(appointment);
   const counterPayments = isEnabled(config, "featureCounterPayments");
+
+  const bookedServiceIds = appointment.services
+    .map((line) => line.serviceId)
+    .filter((id): id is string => id != null);
+  /*
+   * What this pet usually gets and is not getting today. Asked at the counter
+   * and nowhere else: a suggestion on the booking form shapes what the shop
+   * sells before anybody has seen the dog. Here it is as often a line somebody
+   * forgot to add as it is a sale.
+   */
+  const addOns = counterPayments ? await addOnPromptsFor(appointment.id) : [];
 
   const priced = appointment.services.filter((line) => line.priceCents != null);
   const total = priced.reduce((sum, line) => sum + (line.priceCents ?? 0), 0);
@@ -716,9 +728,7 @@ export default async function AppointmentDetailPage(props: PageProps) {
               <input type="hidden" name="appointmentId" value={appointment.id} />
               <ServicePicker
                 services={serviceOptions}
-                initialServiceIds={appointment.services
-                  .map((line) => line.serviceId)
-                  .filter((id): id is string => id != null)}
+                initialServiceIds={bookedServiceIds}
               />
               <div className="flex justify-end">
                 <button
@@ -735,6 +745,36 @@ export default async function AppointmentDetailPage(props: PageProps) {
 
       {counterPayments && (
         <PageSection>
+          {addOns.length > 0 && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <p className="font-semibold">Usually on this pet&apos;s ticket</p>
+              <ul className="mt-1 space-y-1">
+                {addOns.map((addOn) => (
+                  <li key={addOn.serviceId} className="flex flex-wrap items-center justify-between gap-2">
+                    {/* The count is the evidence: never a claim the counter cannot check. */}
+                    <span>
+                      {addOn.name} — on {addOn.seen} of the last {addOn.of} visits
+                    </span>
+                    {/* Reuses the services form's own action, so adding a line
+                        here and editing the list below are one code path. */}
+                    <form action={updateServices}>
+                      <input type="hidden" name="appointmentId" value={appointment.id} />
+                      {bookedServiceIds.map((id) => (
+                        <input key={id} type="hidden" name="serviceIds" value={id} />
+                      ))}
+                      <input type="hidden" name="serviceIds" value={addOn.serviceId} />
+                      <button
+                        type="submit"
+                        className="rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                      >
+                        Add to ticket
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <TicketPanel
             appointmentId={appointment.id}
             ticket={ticket}
