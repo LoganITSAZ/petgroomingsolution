@@ -21,6 +21,7 @@ gets cheaper in, not a promise.
 | Commission payroll (the simple half) | `Staff.commissionPercent` over `SystemConfig.defaultCommissionPercent`, on the list price of services finished; `/staff/analytics` |
 | Tips | `Payment.tipCents` — recorded off the Clover terminal, in the day's takings |
 | No-show protection (the fee, not a deposit) | A seeded `Missed appointment` `Surcharge` the counter adds to the next visit, and the notice both booking forms carry ([lib/no-show.ts](lib/no-show.ts)). No card is stored |
+| Add-on prompting at checkout | The pet's own last ten visits against today's lines ([lib/add-ons.ts](lib/add-ons.ts)), on the ticket only, with the count as evidence |
 
 ## In flight
 
@@ -34,11 +35,10 @@ On `feat/scheduled-jobs`, not merged.
 
 Fits the model as it stands.
 
-1. **Add-on prompting at checkout.** The ticket screen already knows the booked lines and the catalog; the missing piece is "which services this pet usually gets and did not today". Reuse `rhythmsFor()` ([lib/rhythm.ts](lib/rhythm.ts)) rather than a new table, and put the prompt on the payments screen only — a suggestion on the booking form is a different feature.
-2. **Automated voice alerts.** Twilio again, a `<Say>` TwiML call instead of a message body. `lib/sms.ts` is a single authenticated POST with no SDK; the call endpoint is the same shape. Gate it behind its own flag, not `featureSmsNotify` — a shop that texts has not agreed to ring people.
-3. **E-signatures on the waiver.** The acceptance row exists; what is missing is the drawn signature and the second and third documents (matting release, emergency medical). Store the signature as a `Photo` row, same as everything else — one volume to back up.
-4. **Variable commission.** Today it is one percentage per groomer. A real split needs rate *per service or per category* and an hourly floor, both on `Staff`. Keep it an estimate, never payroll.
-5. **Calendar month/week grid.** `/admin/schedule` is a week of staff rows; a booked-appointments grid is a second view over data already queried.
+1. **Automated voice alerts.** Twilio again, a `<Say>` TwiML call instead of a message body. `lib/sms.ts` is a single authenticated POST with no SDK; the call endpoint is the same shape. Gate it behind its own flag, not `featureSmsNotify` — a shop that texts has not agreed to ring people.
+2. **E-signatures on the waiver.** The acceptance row exists; what is missing is the drawn signature and the second and third documents (matting release, emergency medical). Store the signature as a `Photo` row, same as everything else — one volume to back up.
+3. **Variable commission.** Today it is one percentage per groomer. A real split needs rate *per service or per category* and an hourly floor, both on `Staff`. Keep it an estimate, never payroll.
+4. **Calendar month/week grid.** `/admin/schedule` is a week of staff rows; a booked-appointments grid is a second view over data already queried.
 
 ## Needs a decision
 
@@ -138,7 +138,7 @@ sizes hold; only the calendar moves.
 |---|---|---|---|
 | ~~1~~ | ~~Finish the vaccination gate~~ | S | Shipped; merged to main |
 | ~~2~~ | ~~No-show fee line~~ | S | Shipped |
-| 3 | Add-on prompting at checkout | S | `rhythmsFor()` already knows what the pet usually gets |
+| ~~3~~ | ~~Add-on prompting at checkout~~ | S | Shipped |
 | 4 | Consent reply webhook | M | Narrow two-way SMS; signature verification is not optional |
 | 5 | Automated voice alerts | M | Same Twilio POST shape as `lib/sms.ts`, own flag |
 | 6 | E-signatures, second and third documents | M | `WaiverAcceptance` exists; signature is a `Photo` row |
