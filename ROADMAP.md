@@ -20,6 +20,7 @@ gets cheaper in, not a promise.
 | Automated rebooking triggers | `rebookingJob` on the scheduled runner, cadence per customer from their own history ([lib/rebooking.ts](lib/rebooking.ts)), `featureRebookingPrompts` |
 | Commission payroll (the simple half) | `Staff.commissionPercent` over `SystemConfig.defaultCommissionPercent`, on the list price of services finished; `/staff/analytics` |
 | Tips | `Payment.tipCents` — recorded off the Clover terminal, in the day's takings |
+| No-show protection (the fee, not a deposit) | A seeded `Missed appointment` `Surcharge` the counter adds to the next visit, and the notice both booking forms carry ([lib/no-show.ts](lib/no-show.ts)). No card is stored |
 
 ## In flight
 
@@ -67,21 +68,13 @@ writes consent.
 
 Revisit the general inbox when somebody is at a desk all day.
 
-### No-show and deposit protection
+### No-show and deposit protection — settled
 
-**The choice:** card-on-file, or a fee the counter charges next time?
-
-Card-on-file means a payment processor, a vault and PCI scope this app does
-not carry. The shop takes money on its own Clover terminal; nothing here
-stores a card and the app never moves a cent.
-
-**Recommendation: the fee line, and stop there.** `Surcharge` /
-`AppointmentSurcharge` already exist and already attach an extra fee to a
-visit with a note explaining the number. A "Missed appointment" surcharge plus
-a prompt on the booking form when the customer has a `NO_SHOW` in recent
-history is most of the deterrent at none of the scope. It collects late — but
-it collects from exactly the people who come back, which is everyone worth
-collecting from.
+**Decided: the fee line.** Built, and in Shipped above. Card-on-file was
+turned down for the scope it drags in — a processor, a vault and PCI reach
+this app does not have. The fee is a published `Surcharge` the counter adds to
+the next visit; [lib/no-show.ts](lib/no-show.ts) is what names it on the
+booking forms beforehand.
 
 Only reopen card-on-file if the shop measures a no-show rate the fee does not
 move.
@@ -143,8 +136,8 @@ sizes hold; only the calendar moves.
 
 | # | Item | Size | Why here |
 |---|---|---|---|
-| 1 | Finish the vaccination gate | S | Already on the branch; unmerged work is the most expensive kind |
-| 2 | No-show fee line | S | Reuses `AppointmentSurcharge` whole; revenue on day one |
+| ~~1~~ | ~~Finish the vaccination gate~~ | S | Shipped; merged to main |
+| ~~2~~ | ~~No-show fee line~~ | S | Shipped |
 | 3 | Add-on prompting at checkout | S | `rhythmsFor()` already knows what the pet usually gets |
 | 4 | Consent reply webhook | M | Narrow two-way SMS; signature verification is not optional |
 | 5 | Automated voice alerts | M | Same Twilio POST shape as `lib/sms.ts`, own flag |
