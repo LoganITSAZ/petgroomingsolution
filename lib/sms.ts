@@ -167,6 +167,9 @@ export async function smsRebookingPrompt({
  * The text that goes with the consent email. Deliberately does not carry the
  * detail: what is being asked needs a conversation, and a fee quoted in a text
  * message is the kind of thing a shop ends up arguing about at the counter.
+ *
+ * It offers YES and NO because /api/sms/inbound reads exactly those — one
+ * answer, recorded against this visit. Anything else still gets a phone call.
  */
 export async function smsConsentRequest({
   to,
@@ -182,7 +185,8 @@ export async function smsConsentRequest({
   return sendSms(
     to,
     `${shopName}: we need a quick word about ${petName}'s groom before we carry on.` +
-      (phone ? ` Please call ${phone}.` : " Please call the shop.") +
+      ` Reply YES to go ahead or NO to leave it as booked` +
+      (phone ? `, or call ${phone}.` : ".") +
       ` Reply STOP to opt out.`
   );
 }

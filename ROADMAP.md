@@ -22,6 +22,7 @@ gets cheaper in, not a promise.
 | Tips | `Payment.tipCents` — recorded off the Clover terminal, in the day's takings |
 | No-show protection (the fee, not a deposit) | A seeded `Missed appointment` `Surcharge` the counter adds to the next visit, and the notice both booking forms carry ([lib/no-show.ts](lib/no-show.ts)). No card is stored |
 | Add-on prompting at checkout | The pet's own last ten visits against today's lines ([lib/add-ons.ts](lib/add-ons.ts)), on the ticket only, with the count as evidence |
+| Two-way SMS, one question wide | `/api/sms/inbound` — Twilio signature verified, the sending number matched to that customer's open consent request, YES/NO written to the same two columns the counter writes ([lib/sms-inbound.ts](lib/sms-inbound.ts)) |
 
 ## In flight
 
@@ -46,27 +47,22 @@ Each of these is blocked on a choice rather than on effort. A recommendation
 comes with each one so none of them sits here indefinitely — pick the
 recommendation or overrule it, but the bucket is meant to empty.
 
-### Two-way SMS
+### Two-way SMS — settled
 
-**The choice:** does the shop want a text inbox somebody watches?
+**Decided: one question wide, built.** In Shipped above. The choice was never
+the webhook; it was that an inbox nobody reads is worse than no inbox, because
+the owner believes they have replied.
 
-Outbound is done. Inbound is deliberately absent — a reply needs a public
-callback URL and Twilio signature verification, and the consent flow was built
-around a phone call instead ([CLAUDE.md](CLAUDE.md)). The cost is not the
-webhook; it is that an inbox nobody reads is worse than no inbox, because the
-owner believes they have replied.
+So inbound resolves exactly one question — yes or no to a change in a groom the
+shop has already asked about. `/api/sms/inbound` verifies Twilio's signature
+(required on day one: the endpoint is public and it writes consent), matches the
+sending number to that customer's own open request inside three days, and writes
+the same `consentGrantedAt` / `consentDeclinedAt` the counter's form writes.
+`readInboundReply()` refuses to guess — negation beats agreement, `STOP` is an
+opt-out rather than a refusal, and anything else is answered with the shop's
+phone number. No threads, no inbox, no staffing.
 
-**Recommendation: no, not yet — build the narrow half instead.** One reply
-that resolves one question: yes or no to a shave-down. `consentState()`
-([lib/appointment-status.ts](lib/appointment-status.ts)) already models the
-four columns and already expects the answer to arrive out of band. A webhook
-that matches the sending number to the open consent request and writes
-`consentGrantedAt` / `consentDeclinedAt` needs no threads, no inbox and no
-staffing, and it is the one message the shop is already waiting on. Signature
-verification is required on day one, not later — the endpoint is public and it
-writes consent.
-
-Revisit the general inbox when somebody is at a desk all day.
+Revisit a general inbox when somebody is at a desk all day.
 
 ### No-show and deposit protection — settled
 
@@ -139,7 +135,7 @@ sizes hold; only the calendar moves.
 | ~~1~~ | ~~Finish the vaccination gate~~ | S | Shipped; merged to main |
 | ~~2~~ | ~~No-show fee line~~ | S | Shipped |
 | ~~3~~ | ~~Add-on prompting at checkout~~ | S | Shipped |
-| 4 | Consent reply webhook | M | Narrow two-way SMS; signature verification is not optional |
+| ~~4~~ | ~~Consent reply webhook~~ | M | Shipped; signature verification was not optional |
 | 5 | Automated voice alerts | M | Same Twilio POST shape as `lib/sms.ts`, own flag |
 | 6 | E-signatures, second and third documents | M | `WaiverAcceptance` exists; signature is a `Photo` row |
 | 7 | Calendar month/week grid | M | A second view over data already queried |

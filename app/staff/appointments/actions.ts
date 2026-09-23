@@ -498,10 +498,10 @@ export async function saveGroomRecord(formData: FormData): Promise<void> {
  * Ask the owner to approve a change to the groom they booked — matting that
  * has to come off, a coat that cannot be brushed out.
  *
- * The answer comes back by phone or at the door, and staff record it below.
- * There is no inbound message handling: a reply webhook needs a public
- * callback URL and signature verification, which is its own piece of work, and
- * a shave-down is a conversation the shop wants to have anyway.
+ * The answer comes back three ways and all of them land on the same two
+ * columns: the owner rings, they say so at the door, or they reply YES/NO to
+ * the text and /api/sms/inbound records it. That webhook is the whole of
+ * inbound SMS — there is no inbox.
  */
 export async function requestConsent(formData: FormData): Promise<void> {
   await requireStaff();

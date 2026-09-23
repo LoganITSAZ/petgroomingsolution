@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-guards";
 import { currentStaffIsAdmin } from "@/lib/staff-roles";
 import { PageShell, PageSection } from "@/components/ui";
+import { siteUrl } from "@/lib/seo";
 import SaveToast from "@/components/SaveToast";
 
 // Screen readers announce the title first; without one every page in the
@@ -72,6 +73,10 @@ export default async function NotificationsPage(props: PageProps) {
   if (!(await currentStaffIsAdmin())) redirect("/staff");
 
   const config = await getConfig();
+  // The address the shop pastes into Twilio, built from the origin every other
+  // public URL in the app is built from rather than asked for a second time.
+  const origin = siteUrl(config);
+  const inboundWebhook = origin ? new URL("/api/sms/inbound", origin).href : null;
 
   return (
     <PageShell
@@ -212,6 +217,31 @@ export default async function NotificationsPage(props: PageProps) {
               </p>
             </div>
           </div>
+        </PageSection>
+
+        <PageSection bodyClassName="space-y-3">
+          <div className="border-b border-stone-100 pb-3">
+            <h2 className="text-base font-semibold text-stone-800">Consent Replies</h2>
+            <p className="text-xs text-stone-400 mt-0.5">
+              Paste this into the Twilio number&rsquo;s <strong>A message comes in</strong> webhook
+              (HTTP POST). It reads one answer — yes or no to a change in a groom the shop has asked
+              about — and tells anybody else to ring. Twilio&rsquo;s signature is checked on every
+              request, so the URL is safe to publish but useless to anybody else.
+            </p>
+          </div>
+          {inboundWebhook ? (
+            <code className="block bg-well border border-well-line rounded-lg px-3 py-2 text-sm font-mono break-all">
+              {inboundWebhook}
+            </code>
+          ) : (
+            <p className="text-xs text-stone-500">
+              Save the shop&rsquo;s website address in{" "}
+              <Link href="/admin/settings" className="underline hover:text-stone-700">
+                Shop Settings
+              </Link>{" "}
+              and the address to paste appears here.
+            </p>
+          )}
         </PageSection>
 
         <PageSection tone="muted" bodyClassName="flex justify-end">
