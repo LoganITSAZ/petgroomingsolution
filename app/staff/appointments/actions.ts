@@ -15,6 +15,7 @@ import { deletePhotoIfUnused, storePhoto } from "@/lib/photos";
 import { readKind } from "@/lib/visit-photos";
 import { sendConsentRequest } from "@/lib/email";
 import { smsConsentRequest } from "@/lib/sms";
+import { voiceConsentRequest } from "@/lib/voice";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -522,7 +523,9 @@ export async function requestConsent(formData: FormData): Promise<void> {
     },
     include: {
       pet: { select: { name: true } },
-      customer: { select: { firstName: true, email: true, phone: true, smsOptOut: true } },
+      customer: {
+        select: { firstName: true, email: true, phone: true, smsOptOut: true, voiceOptOut: true },
+      },
     },
   });
 
@@ -545,6 +548,16 @@ export async function requestConsent(formData: FormData): Promise<void> {
       petName: appointment.pet.name,
       shopName: config.shopName,
       phone: config.shopPhone,
+    }).catch(console.error);
+  }
+  // A groom stopped halfway is the other thing a shop rings about. The call says
+  // there is a question and asks for a call back — what is being asked is a
+  // conversation, not a recording.
+  if (appointment.customer.phone && !appointment.customer.voiceOptOut) {
+    await voiceConsentRequest({
+      to: appointment.customer.phone,
+      petName: appointment.pet.name,
+      shopName: config.shopName,
     }).catch(console.error);
   }
 

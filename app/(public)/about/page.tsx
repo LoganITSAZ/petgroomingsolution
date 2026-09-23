@@ -16,7 +16,7 @@ export default async function AboutPage() {
   return (
     <div className="public-shell min-h-screen">
       {/* Hero */}
-      <section className="public-about-hero relative overflow-hidden px-6 py-24 text-brand-on-700">
+      <section className="public-about-hero relative overflow-hidden px-6 pb-12 pt-16 text-brand-on-700">
         <div className="absolute inset-0 bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900" />
         <div className="absolute -right-20 top-0 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute -bottom-24 -left-12 text-[13rem] leading-none text-white/[0.07]" aria-hidden="true">🐾</div>
@@ -30,7 +30,6 @@ export default async function AboutPage() {
           <p className="mt-3 text-brand-on-700 text-lg max-w-2xl mx-auto leading-relaxed">
             Where every pet is treated with patience, care, and a whole lot of love.
           </p>
-          <div className="mx-auto mt-8 h-px w-20 bg-white/40" />
         </div>
       </section>
 
@@ -40,7 +39,7 @@ export default async function AboutPage() {
         out to the services were three surfaces stacked down the page; they are
         bands of one panel now.
       */}
-      <section className="px-6 py-16">
+      <section className="px-6 pb-16 pt-8">
         <div className="glass-panel mx-auto max-w-3xl overflow-hidden rounded-3xl">
           <div className="p-7 md:p-10">
           <p className="public-eyebrow mb-4">The Gentle Groomer way</p>

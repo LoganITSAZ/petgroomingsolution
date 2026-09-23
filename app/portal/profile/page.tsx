@@ -8,6 +8,8 @@ import ThemeSwitch from "@/components/ThemeSwitch";
 import { readTheme } from "@/lib/theme-preference";
 import { deletePhotoIfUnused, photoUrl, storePhoto } from "@/lib/photos";
 import { PageShell, PageSection } from "@/components/ui";
+import { getConfig } from "@/lib/config";
+import { isEnabled } from "@/lib/features";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -24,6 +26,9 @@ export default async function PortalProfilePage() {
   });
 
   if (!customer) redirect("/login?type=customer");
+
+  // Off is silence: a shop that does not ring people does not ask about it.
+  const callsLive = isEnabled(await getConfig(), "featureVoiceCalls");
 
   // Server action: update profile info
   async function updateProfile(formData: FormData) {
@@ -63,7 +68,10 @@ export default async function PortalProfilePage() {
         ...(namesPosted && { firstName, lastName }),
         ...(phone !== undefined && { phone: phone || null }),
         ...(address !== undefined && { address: address || null }),
-        ...(smsPosted && { smsOptOut: formData.get("smsNotify") === null }),
+        ...(smsPosted && {
+          smsOptOut: formData.get("smsNotify") === null,
+          voiceOptOut: formData.get("voiceNotify") === null,
+        }),
         // A form that does not carry the theme is not editing it.
         ...(themePreference !== null && { themePreference: readTheme(themePreference) }),
       },
@@ -219,6 +227,22 @@ export default async function PortalProfilePage() {
                 </span>
               </span>
             </label>
+            {callsLive && (
+              <label className="mt-2 flex items-start gap-2 text-sm text-stone-700">
+                <input
+                  type="checkbox"
+                  name="voiceNotify"
+                  defaultChecked={!customer.voiceOptOut}
+                  className="mt-0.5 accent-amber-700"
+                />
+                <span>
+                  Call me when my pet is ready
+                  <span className="block text-xs text-stone-400">
+                    An automated call, separate from texts — switch off either one.
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
 
           <div>

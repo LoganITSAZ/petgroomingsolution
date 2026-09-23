@@ -35,6 +35,7 @@ import AddressLink from "@/components/AddressLink";
 import { photoUrl } from "@/lib/photos";
 import { PetForm, healthFlagOptions } from "../PetForm";
 import { getConfig } from "@/lib/config";
+import { isEnabled } from "@/lib/features";
 import { checksForPets } from "@/lib/vaccinations";
 import { VaccinationWarning } from "@/components/Vaccinations";
 
@@ -162,10 +163,11 @@ export default async function CustomerDetailPage(props: PageProps) {
 
   // Vaccination status reads here rather than on a screen of its own: the
   // question is always "is this pet current", and this is where the pets are.
-  const vaccinationChecks = await checksForPets(
-    customer.pets.map((pet) => pet.id),
-    await getConfig()
-  );
+  const config = await getConfig();
+  const vaccinationChecks = await checksForPets(customer.pets.map((pet) => pet.id), config);
+  // Off is silence: a shop that does not ring people is not asked whether this
+  // household minds being rung.
+  const callsLive = isEnabled(config, "featureVoiceCalls");
 
   const [tiers, card, redemptions, flagOptions] = await Promise.all([
     listPricingTiers(),
@@ -261,6 +263,18 @@ export default async function CustomerDetailPage(props: PageProps) {
                   </span>
                 </span>
               </label>
+              {callsLive && (
+                <label className="text-sm sm:col-span-2 flex items-start gap-2">
+                  <input type="checkbox" name="voiceNotify" defaultChecked={!customer.voiceOptOut}
+                    className="mt-0.5 accent-amber-700" />
+                  <span>
+                    Call this customer when their pet is ready
+                    <span className="block text-xs text-stone-500">
+                      An automated call, separate from texts.
+                    </span>
+                  </span>
+                </label>
+              )}
               <label className="text-sm sm:col-span-2">
                 <span className="block text-stone-500 mb-1">Address</span>
                 <textarea name="address" rows={3} defaultValue={customer.address ?? ""}
@@ -293,6 +307,9 @@ export default async function CustomerDetailPage(props: PageProps) {
                 ? `${customer.preferredStaff.name}${customer.preferredStaff.defaultStation ? ` · ${customer.preferredStaff.defaultStation.name}` : ""}`
                 : "Assigned at check-in" },
               { label: "Visit texts", value: customer.smsOptOut ? "Opted out" : "Opted in" },
+              ...(callsLive
+                ? [{ label: "Visit calls", value: customer.voiceOptOut ? "Opted out" : "Opted in" }]
+                : []),
             ]} />
             </div>
           </div>

@@ -130,6 +130,7 @@ export async function saveCustomerProfile(formData: FormData): Promise<void> {
         // because an unchecked box posts nothing.
         ...(formData.get("smsPrefPosted") !== null && {
           smsOptOut: formData.get("smsNotify") === null,
+          voiceOptOut: formData.get("voiceNotify") === null,
         }),
       },
     });

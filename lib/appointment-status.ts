@@ -3,6 +3,7 @@ import { STATION_APPOINTMENT_SELECT, broadcastToStation } from "@/lib/station-ev
 import { broadcastKennelBoard, releaseKennelForAppointment } from "@/lib/kennels";
 import { sendReadyForPickup } from "@/lib/email";
 import { smsReadyForPickup } from "@/lib/sms";
+import { voiceReadyForPickup } from "@/lib/voice";
 import { getConfig } from "@/lib/config";
 import { AppointmentStatus } from "@prisma/client";
 import { formatVisitEvent } from "@/lib/utils";
@@ -85,7 +86,10 @@ export async function changeAppointmentStatus({
     include: {
       pet: true,
       customer: {
-        select: { firstName: true, lastName: true, phone: true, email: true, smsOptOut: true },
+        select: {
+          firstName: true, lastName: true, phone: true, email: true,
+          smsOptOut: true, voiceOptOut: true,
+        },
       },
       staff: { select: { name: true } },
       station: true,
@@ -132,6 +136,18 @@ export async function changeAppointmentStatus({
         shopName: config.shopName,
         phone: config.shopPhone,
         hasFindings: findings.length > 0,
+      }).catch(console.error);
+    }
+
+    // The oldest notification a grooming shop has: the phone rings and somebody
+    // says the dog is done. Its own flag and its own opt-out, so a household
+    // that only wants a text still only gets one.
+    if (updated.customer.phone && !updated.customer.voiceOptOut) {
+      const config = await getConfig();
+      await voiceReadyForPickup({
+        to: updated.customer.phone,
+        petName: updated.pet.name,
+        shopName: config.shopName,
       }).catch(console.error);
     }
   }

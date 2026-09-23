@@ -34,7 +34,8 @@ export type FeatureKey =
   | "featureCounterPayments"
   | "featureDailyDigest"
   | "featureSlotOffers"
-  | "featureTestimonials";
+  | "featureTestimonials"
+  | "featureVoiceCalls";
 
 export type FeatureGroup = "Customers" | "Visits" | "Money" | "Notifications" | "Compliance";
 
@@ -66,6 +67,7 @@ export interface FeatureConfig {
   featureDailyDigest: boolean;
   featureSlotOffers: boolean;
   featureTestimonials: boolean;
+  featureVoiceCalls: boolean;
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
   twilioFromNumber: string | null;
@@ -226,6 +228,20 @@ export const FEATURES: Feature[] = [
       "Customers write up a visit from the portal, and the ones a manager approves appear on the home page. Off, the form goes and the page lists the services instead; what has been written stays in the queue.",
     group: "Customers",
     offMeans: "frozen",
+  },
+  {
+    key: "featureVoiceCalls",
+    label: "Voice Calls",
+    blurb:
+      "An automated call — the dog is ready, or a groom has to change before it can be finished. Its own switch rather than part of SMS: a shop that texts has not agreed to ring people, and customers opt out of calls separately. Off, the phone never rings and the email and text are unchanged.",
+    group: "Notifications",
+    offMeans: "silent",
+    needs: (config) =>
+      filled(config.twilioAccountSid) &&
+      filled(config.twilioAuthToken) &&
+      filled(config.twilioFromNumber)
+        ? null
+        : "Twilio credentials are missing — add them on the Notifications page.",
   },
   {
     key: "featureWaiverRequired",

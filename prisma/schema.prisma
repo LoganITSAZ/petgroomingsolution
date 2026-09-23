@@ -67,6 +67,11 @@ model SystemConfig {
   /// in. Off by default: a shop that has collected nothing should not publish
   /// an empty section, and nothing is shown until a manager approves it.
   featureTestimonials         Boolean @default(false)
+  /// The phone rings instead of buzzing: an automated call, spoken by Twilio,
+  /// for the two things a shop actually rings about -- the dog is ready, and a
+  /// groom has to change. Its own flag, not `featureSmsNotify`: a shop that
+  /// texts has not agreed to ring people.
+  featureVoiceCalls           Boolean @default(false)
 
   // Liability waiver
   waiverText    String? @db.Text // full waiver body; null = feature off even if flag is true
@@ -398,6 +403,10 @@ model Customer {
   /// start silenced under an opt-in column, which is not what either side
   /// expects. Every message carries the STOP line that sets this.
   smsOptOut       Boolean         @default(false)
+  /// Voice is its own consent. A household that is happy to be texted is not
+  /// necessarily happy to be rung, and a STOP sent to a text must not silence
+  /// the call that says the dog is ready -- so the two columns never share.
+  voiceOptOut     Boolean         @default(false)
   passwordHash    String
   isActive        Boolean         @default(true)
   themePreference ThemePreference @default(SYSTEM)
