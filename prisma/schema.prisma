@@ -22,6 +22,12 @@ model SystemConfig {
   shopEmail   String?
   shopAddress String?
   shopWebsite String?
+  /// The address in parts, for the structured data a search engine reads.
+  /// Blank is normal: `postalAddress()` in lib/seo.ts parses them out of
+  /// `shopAddress`, and these exist only to correct a bad parse.
+  shopCity       String?
+  shopRegion     String?
+  shopPostalCode String?
 
   // Feature flags (toggle per deployment)
   featureOnlineBooking        Boolean @default(true) // customers can book via portal
@@ -69,6 +75,12 @@ model SystemConfig {
   // Business hours (JSON: { monday: { open: "08:00", close: "15:00" } | null, ... })
   businessHours Json?
 
+  // Public contact form
+  contactFormEnabled Boolean @default(true)
+  contactRecipient String?
+  contactRequirePhone Boolean @default(false)
+  contactSuccessMessage String @default("Thanks for reaching out! We will get back to you soon.")
+
   // Notification settings
   // No sender-name column: emails go out as the shop name (SystemConfig.shopName).
   emailFromAddress String? // e.g. "no-reply@gentlegroomer.net"
@@ -82,6 +94,19 @@ model SystemConfig {
   twilioAccountSid String?
   twilioAuthToken  String?
   twilioFromNumber String?
+
+  // Search and sharing, edited at /admin/marketing. Everything else the search
+  // engines are told is derived from shop identity, hours and the catalog.
+  /// How far around the shop the public copy says it serves.
+  serviceAreaMiles      Int     @default(20)
+  /// The `google-site-verification` token, for a shop that cannot edit DNS.
+  seoGoogleVerification String?
+  /// Shop words for the keywords tag. Not a ranking signal at any engine --
+  /// it is here because the shop asked to be able to set it.
+  seoKeywords           String?
+  /// The line under the shop name on the generated social card. Falls back to
+  /// `shopTagline`, which is the same sentence the public site already shows.
+  seoSocialTagline      String?
 
   // Public site appearance
   themePreset        String  @default("default") // id from lib/themes.ts
@@ -354,6 +379,7 @@ model Photo {
   staff       Staff[]
   pets        Pet[]
   visitPhotos VisitPhoto[]
+  seoPages    SeoPage[]
 
   @@map("photos")
 }
@@ -1254,6 +1280,13 @@ model GeocodeCache {
   lat       Float?
   lon       Float?
   label     String? // what Nominatim called the place
+  /// The place's own parts, from `addressdetails`. A shop's address line does
+  /// not reliably separate its city, and this is the map's answer rather than
+  /// a guess at one. Null on a row written before these existed, which
+  /// `geocode()` refreshes once.
+  city       String?
+  region     String?
+  postalCode String?
   checkedAt DateTime @default(now()) @updatedAt
 
   @@map("geocode_cache")
@@ -1286,4 +1319,32 @@ model InsightDecision {
 
   @@index([snoozedUntil])
   @@map("insight_decisions")
+}
+
+/// A public page's own title, description and share image. One row per path in
+/// `PUBLIC_PATHS`, created only when the shop overrides something -- a missing
+/// row, or a blank column, means the copy lib/seo.ts writes from shop identity.
+model SeoPage {
+  path        String   @id
+  title       String?
+  description String?
+  keywords    String?
+  photoId     String?
+  photo       Photo?   @relation(fields: [photoId], references: [id], onDelete: SetNull)
+  updatedAt   DateTime @updatedAt
+
+  @@map("seo_pages")
+}
+
+/// Questions the shop is actually asked, answered once. Rendered on /services
+/// and published as FAQPage structured data.
+model FaqItem {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String   @db.Text
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("faq_items")
 }

@@ -1,12 +1,13 @@
+import { publicMetadata } from "@/lib/seo";
+import { seoOverride } from "@/lib/seo-pages";
+import { geocode } from "@/lib/maps";
 import { getConfig } from "@/lib/config";
 import Link from "next/link";
 
 export async function generateMetadata() {
   const config = await getConfig();
-  return {
-    title: `About Us | ${config.shopName}`,
-    description: `Learn about the care philosophy and team behind ${config.shopName}.`,
-  };
+  // The city in the title comes from the same cached lookup the maps use.
+  return publicMetadata(config, "/about", await seoOverride("/about"), await geocode(config.shopAddress));
 }
 
 export default async function AboutPage() {

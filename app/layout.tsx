@@ -1,3 +1,4 @@
+import { siteUrl } from "@/lib/seo";
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
 import { getConfig } from "@/lib/config";
@@ -58,7 +59,12 @@ export async function generateMetadata(): Promise<Metadata> {
     description:
       config.shopTagline?.trim() ||
       "Pet grooming appointments, customer care, and shop operations.",
-    metadataBase: new URL(process.env.NEXTAUTH_URL ?? "http://localhost"),
+    metadataBase: siteUrl(config),
+    robots: { index: false, follow: false },
+    // Search Console's HTML-tag verification, for a shop that cannot edit DNS.
+    verification: config.seoGoogleVerification?.trim()
+      ? { google: config.seoGoogleVerification.trim() }
+      : undefined,
   };
 }
 

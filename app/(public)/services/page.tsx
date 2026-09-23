@@ -1,11 +1,20 @@
-import type { Metadata } from "next";
+import { faqJsonLd, publicMetadata, serializeJsonLd, serviceListJsonLd } from "@/lib/seo";
+import { activeFaq, seoOverride } from "@/lib/seo-pages";
+import { geocode } from "@/lib/maps";
+import { headers } from "next/headers";
+import Link from "next/link";
+import styles from "@/components/ServicePricingExplorer.module.css";
 import ServicePricingExplorer from "@/components/ServicePricingExplorer";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/pricing";
 import { livePromotions } from "@/lib/promotions";
 import { getConfig } from "@/lib/config";
 
-export const metadata: Metadata = { title: "Services & Pricing" };
+export async function generateMetadata() {
+  const config = await getConfig();
+  // The city in the title comes from the same cached lookup the maps use.
+  return publicMetadata(config, "/services", await seoOverride("/services"), await geocode(config.shopAddress));
+}
 
 // Prices and promotions are edited in the admin panel at runtime; a static
 // snapshot would freeze them until the next deploy.
@@ -24,6 +33,7 @@ export default async function ServicesPage() {
     }),
     livePromotions("site"),
   ]);
+  const [faq, nonce] = await Promise.all([activeFaq(), headers().then((h) => h.get("x-nonce") ?? undefined)]);
 
   const offersByService = new Map<string, { title: string; code: string | null }[]>();
   for (const promotion of promotions) {
@@ -52,37 +62,35 @@ export default async function ServicesPage() {
       offers: offersByService.get(service.id) ?? [],
     }));
 
-  return (
-    <div className="public-shell min-h-screen px-4 py-12">
-      {/*
-        One page, one panel. The heading, the pricing tool and the fee notes
-        were three glass cards floating apart; they are bands of a single panel
-        now, divided by a hairline, so the page reads as one thing.
-      */}
-      <div className="glass-panel mx-auto max-w-5xl overflow-hidden rounded-3xl">
-        <header className="border-b border-line/70 p-7 md:p-10">
-          <p className="public-eyebrow mb-4">Made for every coat &amp; character</p>
-          <h1 className="public-section-title mb-2">Services &amp; Pricing</h1>
-          <p className="max-w-2xl text-muted">
-            Start with your pet type and we&apos;ll narrow the menu to the care that fits them best.
-          </p>
-        </header>
+  // The catalog and the shop's own answers, published as structured data. Both
+  // are built from rows already on the page -- nothing is typed twice.
+  const catalog = serviceListJsonLd(config, services);
+  const questions = faqJsonLd(config, faq);
 
+  return (
+    <div className={styles.page}>
+      {catalog && <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(catalog) }} />}
+      {questions && <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(questions) }} />}
+      <header className={styles.hero}>
+        <div>
+          <p className="public-eyebrow">Pet grooming services &amp; pricing</p>
+          <h1>Care for every coat.<br /><span>And every character.</span></h1>
+          <p>From a little tidy-up to a full groom. Explore thoughtful care and clear pricing, tailored to your pet.</p>
+        </div>
+      </header>
+      <div className={styles.panel}>
         {serviceOptions.length === 0 ? (
           <div className="p-7 text-muted">
             Pricing is being updated. Call {config.shopPhone ?? "the shop"} for a quote.
           </div>
         ) : (
           <>
-          {/* The explorer's own steps are labelled groups, but the band itself
-              had nothing under the <h1> to navigate to. */}
-          <h2 className="sr-only">Pricing for your pet</h2>
           <ServicePricingExplorer
             services={serviceOptions}
             extras={
               surcharges.length > 0 ? (
-                <details className="disclosure mt-5 rounded-2xl border border-well-line bg-well/70 px-5 py-4">
-                  <summary className="font-bold text-ink">Additional fees &amp; care notes</summary>
+                <details className={`disclosure ${styles.fees}`}>
+                  <summary className="font-semibold text-ink">Additional fees &amp; care notes</summary>
                   <p className="mt-2 text-sm text-muted">Some pets need extra time or specialized care. We&apos;ll always discuss this with you first.</p>
                   <ul className="mt-4 space-y-2">
                     {surcharges.map((surcharge) => (
@@ -107,6 +115,40 @@ export default async function ServicesPage() {
         )}
 
       </div>
+      {serviceOptions.length > 0 && (
+        <section className="mx-auto mt-8 max-w-6xl px-4" aria-labelledby="all-services-heading">
+          <h2 id="all-services-heading" className="public-section-title">Explore all grooming services</h2>
+          <p className="mt-3 text-muted">Browse every service, or use the menu above to compare pricing for your pet.</p>
+          <div className="mt-5 divide-y divide-line">
+            {serviceOptions.map((service) => (
+              <details key={service.id} className="py-4">
+                <summary className="cursor-pointer font-semibold text-ink">{service.name} · {service.species === "DOG" ? "Dogs" : service.species === "CAT" ? "Cats" : "Dogs & cats"}</summary>
+                <p className="mt-2 text-muted">{service.description || "Contact us to discuss this service and your pet’s care needs."}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+      )}
+      {faq.length > 0 && (
+        <section className="mx-auto mt-8 max-w-6xl px-4" aria-labelledby="faq-heading">
+          <h2 id="faq-heading" className="public-section-title">Frequently asked questions</h2>
+          <div className="mt-5 divide-y divide-line">
+            {faq.map((item) => (
+              <details key={item.id} className="disclosure py-4">
+                <summary className="cursor-pointer font-semibold text-ink">{item.question}</summary>
+                <p className="mt-2 whitespace-pre-line text-muted">{item.answer}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+      )}
+      <section className={styles.help} aria-labelledby="care-help-heading">
+        <div>
+          <h2 id="care-help-heading">Not sure what your pet needs?</h2>
+          <p>Tell us a little about your companion. We’ll help you choose the right care.</p>
+        </div>
+        <Link href="/contact">Let’s talk about your pet <span aria-hidden="true">↗</span></Link>
+      </section>
     </div>
   );
 }

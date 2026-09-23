@@ -44,6 +44,14 @@ async function saveSettings(formData: FormData) {
   const shopEmail = formData.get("shopEmail") as string;
   const shopAddress = formData.get("shopAddress") as string;
   const shopWebsite = formData.get("shopWebsite") as string;
+  /*
+   * The address in parts. Blank is the normal state: lib/seo.ts reads the city
+   * and state out of the address line above, and these three only exist for an
+   * address that does not parse into "street, city, ST ZIP".
+   */
+  const shopCity = String(formData.get("shopCity") ?? "").trim() || null;
+  const shopRegion = String(formData.get("shopRegion") ?? "").trim() || null;
+  const shopPostalCode = String(formData.get("shopPostalCode") ?? "").trim() || null;
 
   /*
    * The switches this form owns, read from the registry rather than named
@@ -143,6 +151,9 @@ async function saveSettings(formData: FormData) {
       shopEmail,
       shopAddress,
       shopWebsite,
+      shopCity,
+      shopRegion,
+      shopPostalCode,
       ...postedFlags,
       rewardVisitsPerReward,
       rewardLabel,
@@ -323,9 +334,35 @@ export default async function SettingsPage(props: PageProps) {
             </div>
           )}
 
-          <Field name="shopWebsite" label="Website">
+          <Field name="shopWebsite" label="Live website URL">
             <input type="url" id="shopWebsite" name="shopWebsite" defaultValue={config?.shopWebsite ?? ""} placeholder="https://your-domain.example" className={FIELD} />
+            <p className="mt-1 text-xs text-muted">
+              Used for search listings, canonical links, the sitemap, and social previews. Enter this site’s public URL. Everything else search engines are told is set on{" "}
+              <Link href="/admin/marketing#search" className="underline">Marketing</Link>.
+            </p>
           </Field>
+
+          <details className="disclosure">
+            <summary className="text-sm font-medium text-stone-700">Correct the city, state and ZIP</summary>
+            <p className="mt-2 text-xs text-muted">
+              Search engines are told the city and state read out of the address above. Fill these in only if{" "}
+              <Link href="/admin/marketing#search" className="underline">Marketing</Link> shows the wrong place.
+            </p>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="text-sm">
+                <span className="mb-1 block text-stone-500">City</span>
+                <input name="shopCity" defaultValue={config?.shopCity ?? ""} className={FIELD} />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-stone-500">State</span>
+                <input name="shopRegion" defaultValue={config?.shopRegion ?? ""} className={FIELD} />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-stone-500">ZIP</span>
+                <input name="shopPostalCode" defaultValue={config?.shopPostalCode ?? ""} className={FIELD} />
+              </label>
+            </div>
+          </details>
         </Section>
 
 

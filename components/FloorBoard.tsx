@@ -57,6 +57,7 @@ const NO_ARRIVAL_ALERTS: ServiceAlert[] = [];
 const NO_ARRIVALS: BoardArrival[] = [];
 const NO_ALERTS: Record<string, ServiceAlert[]> = {};
 const STAGE_DESCRIPTIONS: Record<string, string> = {
+  arrivals: "Expected today",
   waiting: "Checked in · ready to begin",
   bath: "A fresh, clean start",
   drying: "Drying off · getting comfortable",
@@ -215,11 +216,10 @@ export default function FloorBoard({
           class: styles.columnHeader,
         }).append(
           $("<span>", { class: styles.step, text: String(index + 1).padStart(2, "0"), "aria-hidden": "true" }),
-          $("<h3>", {
-            class: styles.stageName,
-            text: name,
-            title: hint,
-          }),
+          $("<div>", { class: styles.stageHeading }).append(
+            $("<span>", { class: styles.eyebrow, text: "CURRENT STAGE" }),
+            $("<h3>", { class: styles.stageName, text: name, title: hint }),
+          ),
           $count
         ),
         ...(columnAlerts[key] ?? []).map((alert) => $("<a>", {
@@ -230,7 +230,7 @@ export default function FloorBoard({
           $("<span>", { class: "mt-0.5 block text-xs", text: alert.detail }),
         )),
         $("<p>", { class: `occupancy ${styles.occupancy}` }),
-        $("<div>", { class: styles.meter, "aria-hidden": "true" }).append($("<span>", { class: "meter-fill" })),
+        $("<div>", { class: styles.meter, "aria-hidden": "true", hidden: !capacity[key] }).append($("<span>", { class: "meter-fill" })),
         $list,
         $place
       );
@@ -261,10 +261,15 @@ export default function FloorBoard({
         id: `${boardId}-tab-${entry.key}`,
         "aria-controls": `${boardId}-panel-${entry.key}`,
         "data-column": entry.key,
+        "data-stage": entry.key,
         "aria-label": entry.label,
       }).append(
-        $("<span>", { text: entry.label }),
-        $("<span>", { class: `tab-count ${styles.tabCount}`, "aria-hidden": "true" }),
+        $("<span>", { class: styles.tabTop, "aria-hidden": "true" }).append(
+          $("<span>", { class: styles.tabStep, text: String(index + 1).padStart(2, "0") }),
+          $("<span>", { class: `tab-count ${styles.tabCount}` }),
+        ),
+        $("<span>", { class: styles.tabLabel, text: entry.label }),
+        $("<span>", { class: styles.tabHint, text: STAGE_DESCRIPTIONS[entry.key] }),
         ...((entry.key === "arrivals" ? arrivalAlerts : columnAlerts[entry.key])?.length ? [$("<span>", { class: styles.alertDot, text: "!", "aria-label": "Stage has notices" })] : []),
       ));
       const $panel = column(entry.key, entry.label, hint, index);
@@ -474,7 +479,7 @@ export default function FloorBoard({
       <div ref={rootRef} />
       <div className={styles.help}>
         <span>Drag a pet onto a stage tab, or select a pet, open a tab, and choose Move here.</span>
-        <span>Press Esc to clear a selection</span>
+        <span><kbd>Esc</kbd> to clear selection</span>
       </div>
       <span className="sr-only" aria-live="polite">
         {announcement}

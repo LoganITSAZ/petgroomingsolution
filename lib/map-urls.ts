@@ -10,6 +10,14 @@ export type Coords = { lat: number; lon: number };
 
 export interface GeoPoint extends Coords {
   label: string;
+  /**
+   * The place's own parts, as the geocoder resolved them. A shop writes
+   * "8911 N Central Ave #104 Phoenix, AZ 85020" with one comma in it, so the
+   * city cannot be read off the line reliably — but the map already knows it.
+   */
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
 }
 
 /** Drop "#104", "Apt 3", "Suite B", "Unit 5" and friends from an address. */

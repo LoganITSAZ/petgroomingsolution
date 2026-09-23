@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import styles from "./ServicePricingExplorer.module.css";
 
 type PetType = "DOG" | "CAT";
 type DogSize = "priceSmallCents" | "priceMediumCents" | "priceLargeCents" | "priceXlCents";
@@ -66,181 +67,86 @@ function priceLabel(service: PricingService): string {
 }
 
 export default function ServicePricingExplorer({ services, extras }: { services: PricingService[]; extras?: ReactNode }) {
-  const [petType, setPetType] = useState<PetType | null>(null);
+  const [petType, setPetType] = useState<PetType>("DOG");
   const [dogSize, setDogSize] = useState<DogSize | null>(null);
-  const readyToShowPrices = petType === "CAT" || (petType === "DOG" && dogSize !== null);
-  const matching = useMemo(
-    () => services.filter((service) => service.species === petType || service.species === null),
-    [petType, services]
-  );
+  const [category, setCategory] = useState("All care");
+  const matching = useMemo(() => services.filter((service) => service.species === petType || service.species === null), [petType, services]);
   const grouped = useMemo(() => {
     const result = new Map<string, PricingService[]>();
     for (const service of matching) {
-      const category = CATEGORY_LABELS[service.category] ?? "Services";
-      result.set(category, [...(result.get(category) ?? []), service]);
+      const label = CATEGORY_LABELS[service.category] ?? "More care";
+      result.set(label, [...(result.get(label) ?? []), service]);
     }
     return result;
   }, [matching]);
-  const selectedSize = dogSize ? DOG_SIZES.find((size) => size.value === dogSize)! : null;
+  const selectedSize = DOG_SIZES.find((size) => size.value === dogSize);
+  const visibleGroups = Array.from(grouped).filter(([label]) => category === "All care" || label === category);
+  const count = visibleGroups.reduce((total, [, items]) => total + items.length, 0);
 
-  // The panel swaps its contents in place — the questions collapse into a chip
-  // row and the results scroll inside a fixed region — so answering never grows
-  // the page under the reader.
   return (
-    <section
-      aria-labelledby="pricing-tool-heading"
-      className="relative flex min-h-[34rem] flex-col overflow-hidden p-5 md:min-h-[38rem] md:p-8"
-    >
-      <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-brand-100/70 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 -left-20 h-64 w-64 rounded-full bg-brand-300/25 blur-3xl" />
-
-      {!readyToShowPrices ? (
-        <div className="relative flex flex-1 flex-col justify-center">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="public-eyebrow mb-4">Your pet&apos;s price guide</p>
-            <h2 id="pricing-tool-heading" className="text-3xl font-black tracking-tight text-ink md:text-4xl">
-              Let&apos;s find the right care
-            </h2>
-            <p className="mt-2 text-muted">Answer a couple of quick questions and we&apos;ll simplify the menu for you.</p>
-          </div>
-          <div className="mx-auto mt-8 w-full max-w-3xl">
-            <div className="mb-4 flex items-center justify-center gap-2 text-xs font-bold tracking-tight text-brand-text">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-brand-on-600">1</span>
-              Choose your pet
-              {petType === "DOG" && <><span className="mx-1 h-px w-8 bg-brand-300" /><span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-brand-on-600">2</span> Choose weight</>}
-            </div>
-            <div className="grid grid-cols-2 gap-3" role="group" aria-label="Choose your pet type">
-              {([
-                ["DOG", "🐶", "Dog"],
-                ["CAT", "🐱", "Cat"],
-              ] as const).map(([type, icon, label]) => (
-                <button
-                  key={type}
-                  type="button"
-                  aria-pressed={petType === type}
-                  onClick={() => {
-                    setPetType(type);
-                    if (type === "CAT" || petType !== type) setDogSize(null);
-                  }}
-                  className={`glass-choice group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-200 md:p-6 ${
-                    petType === type
-                      ? "border-brand-500 bg-brand-100/60 text-brand-text shadow-lg shadow-brand-900/10"
-                      : "border-well-line bg-well/70 text-ink hover:-translate-y-0.5 hover:border-brand-300 hover:bg-surface hover:shadow-lg hover:shadow-brand-900/5"
-                  }`}
-                >
-                  <span className="block text-5xl transition duration-200 group-hover:scale-110" aria-hidden="true">{icon}</span>
-                  <span className="mt-3 block text-lg font-black">I have a {label.toLowerCase()}</span>
-                  <span className="mt-1 block text-sm font-medium text-muted">See care and pricing for {label.toLowerCase()}s</span>
-                  {petType === type && <span aria-hidden="true" className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-xs text-brand-on-600">✓</span>}
-                </button>
-              ))}
-            </div>
-            {petType === "DOG" ? (
-              <div className="mt-6 rounded-2xl border border-brand-300/70 bg-well/60 p-4 md:p-5">
-                <div className="mb-3 text-center">
-                  <p className="text-lg font-black text-ink">How much does your dog weigh?</p>
-                  <p className="text-sm text-muted">Choose the closest range to reveal their prices.</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Choose your dog's weight range">
-                  {DOG_SIZES.map((size) => (
-                    <button
-                      key={size.value}
-                      type="button"
-                      aria-pressed={dogSize === size.value}
-                      onClick={() => setDogSize(size.value)}
-                      className={`rounded-xl border px-3 py-3 text-center transition ${
-                        dogSize === size.value
-                          ? "border-brand-500 bg-brand-600 text-brand-on-600 shadow-md"
-                          : "border-well-line bg-well/80 text-ink hover:border-brand-300 hover:bg-brand-100/30"
-                      }`}
-                    >
-                      <span className="block font-black">{size.label}</span>
-                      <span className={`mt-0.5 block text-xs ${dogSize === size.value ? "text-brand-on-600" : "text-muted"}`}>{size.detail}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            <p className="mt-4 rounded-xl bg-brand-100/30 px-4 py-3 text-center text-sm text-muted" aria-live="polite">
-              {petType === "DOG"
-                ? "Select your dog's weight range to see the prices that apply."
-                : "Start by selecting whether you're bringing a dog or a cat."}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="relative flex flex-1 flex-col overflow-hidden">
-          <div className="flex flex-wrap items-center gap-2 border-b border-line/70 pb-4">
-            <h2 id="pricing-tool-heading" className="mr-auto text-lg font-black tracking-tight text-ink">
-              Prices for your {petType === "DOG" ? "dog" : "cat"}
-            </h2>
-            <button
-              type="button"
-              onClick={() => {
-                setPetType(null);
-                setDogSize(null);
-              }}
-              className="rounded-full border border-brand-300 bg-brand-100/50 px-3 py-1 text-sm font-semibold text-brand-text transition hover:bg-brand-100"
-            >
-              {petType === "DOG" ? "🐶 Dog" : "🐱 Cat"} · change
-            </button>
-            {selectedSize && (
-              <button
-                type="button"
-                onClick={() => setDogSize(null)}
-                className="rounded-full border border-brand-300 bg-brand-100/50 px-3 py-1 text-sm font-semibold text-brand-text transition hover:bg-brand-100"
-              >
-                {selectedSize.label} · {selectedSize.detail} · change
+    <section aria-labelledby="pricing-tool-heading" className={styles.explorer}>
+      <div className={styles.preferences}>
+        <p className="public-eyebrow">Personalize the menu</p>
+        <h2 id="pricing-tool-heading" className={styles.title}>Find their care.</h2>
+        <p className={styles.intro}>Choose your companion and size to see their prices.</p>
+        <fieldset className={styles.fieldset}>
+          <legend>Your companion</legend>
+          <div className={styles.petToggle}>
+            {(["DOG", "CAT"] as const).map((type) => (
+              <button key={type} type="button" aria-pressed={petType === type} onClick={() => { setPetType(type); setCategory("All care"); }}>
+                {type === "DOG" ? "Dog" : "Cat"}
               </button>
-            )}
-          </div>
-
-          <p className="py-3 text-sm text-muted" aria-live="polite">
-            <span className="font-bold text-brand-text">{matching.length} services</span> selected for your{" "}
-            {petType === "DOG" ? "dog" : "cat"}.
-          </p>
-
-          <div key={`${petType}-${dogSize ?? ""}`} className="-mr-2 flex-1 space-y-5 overflow-y-auto pr-2">
-            {Array.from(grouped).map(([category, categoryServices]) => (
-              <div key={category}>
-                <h3 className="mb-2 text-xs font-bold tracking-tight text-brand-text">{category}</h3>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {categoryServices.map((service) => {
-                    const hasSizePrices = petType === "DOG" && dogSize !== null && SIZE_LABELS.some(([, , field]) => service[field] != null);
-                    const selectedPrice = hasSizePrices && dogSize ? service[dogSize] : null;
-                    return (
-                      <article key={service.id} className="glass-tile rounded-xl border border-well-line bg-well/70 p-4 shadow-sm transition hover:border-brand-300/70 hover:shadow-md hover:shadow-brand-900/5">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h4 className="font-bold text-ink">{service.name}</h4>
-                            {service.description && <p className="mt-0.5 text-sm leading-relaxed text-muted">{service.description}</p>}
-                          </div>
-                          <span className="shrink-0 text-lg font-black text-brand-text">
-                            {hasSizePrices ? money(selectedPrice) : priceLabel(service)}
-                          </span>
-                        </div>
-
-                        {hasSizePrices && selectedSize && <p className="mt-1 text-xs text-muted">{selectedSize.label} dog · {selectedSize.detail}</p>}
-
-                        <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
-                          {service.species === null && <span className="rounded-full bg-brand-100/60 px-2 py-0.5 font-semibold text-brand-text">All pets</span>}
-                          {service.walkInEligible && <span className="rounded-full bg-brand-100/60 px-2 py-0.5 font-semibold text-brand-text">Walk-in</span>}
-                          {service.durationMins && <span className="rounded-full bg-page px-2 py-0.5 font-medium text-muted">{service.durationMins} min</span>}
-                          {service.offers.map((offer) => <span key={`${offer.title}-${offer.code ?? ""}`} className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">{offer.title}{offer.code ? ` · ${offer.code}` : ""}</span>)}
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              </div>
             ))}
           </div>
-
-          {/* Surcharges only mean something beside a price, so they arrive with
-          the prices rather than sitting under an unanswered tool. */}
-          {extras}
+        </fieldset>
+        {petType === "DOG" && (
+          <fieldset className={styles.fieldset}>
+            <legend>Dog size</legend>
+            <div className={styles.sizes}>
+              <button type="button" aria-pressed={dogSize === null} onClick={() => setDogSize(null)}><span>All sizes</span><span>Compare prices</span></button>
+              {DOG_SIZES.map((size) => (
+                <button key={size.value} type="button" aria-pressed={dogSize === size.value} onClick={() => setDogSize(size.value)}><span>{size.label}</span><span>{size.detail}</span></button>
+              ))}
+            </div>
+            <p className={styles.hint}>Between weight ranges? Ask us to confirm the right size for your dog.</p>
+          </fieldset>
+        )}
+        <div className={styles.note}><span aria-hidden="true">✧</span><p>Every coat is different.<br /><span>Prices are a guide. Your pet’s coat and care needs may affect the final price.</span></p></div>
+      </div>
+      <div className={styles.menu}>
+        <div className={styles.menuHeading}>
+          <div><p className="public-eyebrow">The care menu</p><h3>{petType === "DOG" ? selectedSize ? `${selectedSize.label} dog` : "All dog sizes" : "Cat care"}</h3></div>
+          <p role="status"><span className="sr-only">{petType === "DOG" ? selectedSize ? `${selectedSize.label} dog: ` : "All dog sizes: " : "Cat care: "}</span>{count} {count === 1 ? "service" : "services"}</p>
         </div>
-      )}
+        <div className={styles.filters} role="group" aria-label="Filter by care category">
+          {["All care", ...grouped.keys()].map((label) => <button type="button" key={label} aria-pressed={category === label} onClick={() => setCategory(label)}>{label}</button>)}
+        </div>
+        {visibleGroups.length === 0 && <p className={styles.empty}>No services are currently listed for your pet. Contact the shop and we’ll help you find the right care.</p>}
+        {visibleGroups.map(([label, items]) => (
+          <section key={label} className={styles.category} aria-label={label}>
+            <h4>{label}<span>{items.length} {items.length === 1 ? "service" : "services"}</span></h4>
+            {items.map((service) => {
+              const sized = petType === "DOG" && SIZE_LABELS.some(([, , field]) => service[field] != null);
+              const price = sized && dogSize ? service[dogSize] == null ? "Price on request" : money(service[dogSize]) : priceLabel(service);
+              return (
+                <article key={service.id} className={styles.service}>
+                  <div className={styles.serviceInfo}>
+                    <h5>{service.name}</h5>
+                    {service.description && <p>{service.description}</p>}
+                    <div className={styles.meta}>
+                      {service.durationMins != null && service.durationMins > 0 && <span>{service.durationMins} min</span>}
+                      {service.walkInEligible && <span className={styles.walkIn}>Walk-ins welcome</span>}
+                      {service.offers.map((offer) => <span className={styles.offer} key={`${offer.title}-${offer.code ?? ""}`}>{offer.title}{offer.code ? ` · ${offer.code}` : ""}</span>)}
+                    </div>
+                  </div>
+                  <div className={styles.price}><span>{price}</span>{sized && <small>{selectedSize ? `${selectedSize.label} dog` : "Varies by size"}</small>}</div>
+                </article>
+              );
+            })}
+          </section>
+        ))}
+        {extras}
+      </div>
     </section>
   );
 }

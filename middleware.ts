@@ -28,6 +28,9 @@ export default auth(function middleware(req: NextRequest & { auth: { user?: { us
 
   function withSecurityHeaders(response: NextResponse): NextResponse {
     response.headers.set("Content-Security-Policy", csp);
+    if (/^\/(admin|staff|station|portal|login|register|forgot-password|reset-password)(?:\/|$)/.test(pathname)) {
+      response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    }
     for (const [name, value] of SECURITY_HEADERS) response.headers.set(name, value);
     return response;
   }

@@ -463,3 +463,19 @@ export async function sendSlotOffer({
     `,
   });
 }
+
+/** Contact mail is independent of customer appointment notifications. */
+export async function sendContactMessage({ to, name, email, phone, message }: {
+  to: string; name: string; email: string; phone: string; message: string;
+}) {
+  const resend = getResend();
+  if (!resend) throw new Error("Email delivery is not configured");
+  const result = await resend.emails.send({
+    from: await getFrom(),
+    to,
+    replyTo: email,
+    subject: `Website contact: ${name}`,
+    text: `Name: ${name}\nEmail: ${email}\nPhone: ${phone || "Not provided"}\n\n${message}`,
+  });
+  if (result.error || !result.data?.id) throw new Error("Contact email was not accepted");
+}

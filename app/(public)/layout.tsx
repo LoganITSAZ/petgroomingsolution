@@ -1,8 +1,12 @@
+import { businessJsonLd, serializeJsonLd } from "@/lib/seo";
+import { geocode } from "@/lib/maps";
 import Link from "next/link";
 import "./public.css";
 import OfficeIcon from "@/components/OfficeIcon";
+import PublicStatusRefresh from "@/components/PublicStatusRefresh";
 import MobileMenu from "@/components/MobileMenu";
 import { getConfig } from "@/lib/config";
+import { shopContact } from "@/lib/shop-contact";
 import { headers } from "next/headers";
 import PublicThemeToggle, { NO_FLASH_SCRIPT } from "@/components/PublicThemeToggle";
 import { resolveTheme, themeCss } from "@/lib/themes";
@@ -16,6 +20,10 @@ export const dynamic = "force-dynamic";
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const config = await getConfig();
+  // Coordinates come from the same cached lookup the maps use, so the business
+  // markup carries a real location without asking the shop for one.
+  const business = businessJsonLd(config, await geocode(config.shopAddress));
+  const { phone, address } = shopContact(config);
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   // The shop's own date decides the seasonal theme, not the visitor's.
@@ -42,6 +50,7 @@ export default async function PublicLayout({ children }: { children: React.React
       suppressHydrationWarning
       className="public-shell min-h-screen flex flex-col text-ink"
     >
+      {business && <script nonce={nonce} type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(business) }} />}
       {/* Both halves of the theme. An element has one style attribute, so the
           dark set cannot ride along inline — see themeCss(). */}
       <style dangerouslySetInnerHTML={{ __html: themeCss(theme.tokens) }} />
@@ -139,6 +148,7 @@ export default async function PublicLayout({ children }: { children: React.React
         </div>
       </header>
 
+      <PublicStatusRefresh />
       <main id="main-content" className="flex-1">{children}</main>
 
       <footer className="public-footer mt-8 bg-footer-bg text-footer-ink py-10">
@@ -157,9 +167,10 @@ export default async function PublicLayout({ children }: { children: React.React
           </div>
           <div>
             <p className="font-semibold text-white mb-1">Contact</p>
-            {config.shopPhone && <p>{config.shopPhone}</p>}
-            {config.shopEmail && <p>{config.shopEmail}</p>}
-            {config.shopAddress && <p>{config.shopAddress}</p>}
+            <p><a href={`tel:${phone}`} className="hover:underline">{phone}</a></p>
+            <p><Link href="/contact#contact-form" className="hover:underline">Send us a message</Link></p>
+            <p>{address}</p>
+            {config.shopAddress?.trim() && <p className="mt-2">Welcoming pets from within 20 miles of our shop.</p>}
           </div>
         </div>
       </footer>

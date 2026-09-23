@@ -1,3 +1,4 @@
+import * as React from "react";
 import { prisma } from "@/lib/prisma";
 import type { SystemConfig } from "@prisma/client";
 import { DEFAULT_SHOP_NAME, DEFAULT_SHOP_TAGLINE, defaultWaiverText } from "@/lib/branding";
@@ -6,7 +7,18 @@ import { DEFAULT_SHOP_NAME, DEFAULT_SHOP_TAGLINE, defaultWaiverText } from "@/li
  * Fetch the global system config row.
  * Creates the default row if it doesn't exist yet (first boot).
  */
-export async function getConfig(): Promise<SystemConfig> {
+/*
+ * Per-request dedupe. Nearly every server component asks for this row, and
+ * React's cache() collapses them into one query.
+ *
+ * It is read off the namespace rather than imported by name because cache()
+ * only exists in React's server build: Vitest resolves the client one, and a
+ * missing named import would take every test that touches a module importing
+ * this file down with it.
+ */
+const perRequest = (React as { cache?: <T>(fn: T) => T }).cache ?? (<T,>(fn: T) => fn);
+
+export const getConfig = perRequest(async (): Promise<SystemConfig> => {
   return prisma.systemConfig.upsert({
     where: { id: "global" },
     update: {},
@@ -28,7 +40,7 @@ export async function getConfig(): Promise<SystemConfig> {
       walkInWindowEnd: "15:00",
     },
   });
-}
+});
 
 // ─── Defaults ──────────────────────────────────────────────
 

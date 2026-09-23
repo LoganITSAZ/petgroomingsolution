@@ -90,6 +90,7 @@ const SETTINGS_NAV: NavItem[] = [
 const TECHNICAL_NAV: NavItem[] = [
   { href: "/admin", label: "System Status" },
   { href: "/admin/notifications", label: "Notifications" },
+  { href: "/admin/contact", label: "Contact Form" },
 ];
 
 /** A group header names a scope, never a page. */

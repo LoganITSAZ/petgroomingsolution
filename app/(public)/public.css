@@ -194,3 +194,18 @@
 @media (prefers-reduced-motion: reduce) {
   #public-root :is(a, button) { transition: none; transform: none; }
 }
+
+/* A shared, automatically refreshed status on the home and contact pages. */
+.public-shop-status-row { display: flex; align-items: baseline; gap: 0.65rem; }
+.public-status-dot { width: 0.5rem; height: 0.5rem; flex: 0 0 0.5rem; border-radius: 50%; }
+.public-shop-status-title { font-size: 1.125rem; font-weight: 650; line-height: 1.4; }
+.public-shop-status-detail { margin-top: 0.35rem; color: rgb(var(--muted)); font-size: 0.8125rem; line-height: 1.65; }
+.public-walk-in-status { margin-top: 1rem; padding: 1rem; border: 1px solid rgb(var(--line)); border-radius: 1rem; background: rgb(var(--brand-100) / 0.3); font-size: 0.875rem; }
+.public-status-caption { margin-top: 0.75rem; color: rgb(var(--muted)); font-size: 0.6875rem; }
+.public-weekly-hours { margin-block: 1.25rem; }
+.public-weekly-hours table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.75rem; line-height: 1.65; }
+.public-weekly-hours th, .public-weekly-hours td { padding: 0.85rem 0.35rem; text-align: left; vertical-align: top; border-bottom: 1px solid rgb(var(--line) / 0.65); overflow-wrap: anywhere; }
+.public-weekly-hours thead th { color: rgb(var(--muted)); font-size: 0.6875rem; font-weight: 650; }
+.public-weekly-hours tbody th { font-weight: 500; }
+.public-weekly-hours th:first-child { width: 27%; padding-left: 0; }
+.public-weekly-hours td:last-child, .public-weekly-hours th:last-child { padding-right: 0; }

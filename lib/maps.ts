@@ -51,12 +51,16 @@ export const geocode = cache(async function geocode(
   const key = keyFor(address);
 
   const hit = await prisma.geocodeCache.findUnique({ where: { query: key } });
+  const stale = Date.now() - (hit?.checkedAt.getTime() ?? 0) >= MISS_RETRY_MS;
   if (hit) {
-    if (hit.lat !== null && hit.lon !== null) {
-      return { lat: hit.lat, lon: hit.lon, label: hit.label ?? address };
+    // A row from before the address parts were cached has coordinates and no
+    // city. Rather than re-query on every render, let it refresh once a day —
+    // the same rule a remembered miss follows.
+    if (hit.lat !== null && hit.lon !== null && (hit.city !== null || !stale)) {
+      return { lat: hit.lat, lon: hit.lon, label: hit.label ?? address, city: hit.city, region: hit.region, postalCode: hit.postalCode };
     }
     // A remembered miss. Leave it alone until it is worth another try.
-    if (Date.now() - hit.checkedAt.getTime() < MISS_RETRY_MS) return null;
+    if (hit.lat === null && !stale) return null;
   }
 
   const found = await place(address);
@@ -68,11 +72,17 @@ export const geocode = cache(async function geocode(
       lat: found?.lat ?? null,
       lon: found?.lon ?? null,
       label: found?.label ?? null,
+      city: found?.city ?? null,
+      region: found?.region ?? null,
+      postalCode: found?.postalCode ?? null,
     },
     update: {
       lat: found?.lat ?? null,
       lon: found?.lon ?? null,
       label: found?.label ?? null,
+      city: found?.city ?? null,
+      region: found?.region ?? null,
+      postalCode: found?.postalCode ?? null,
       checkedAt: new Date(),
     },
   });
@@ -103,7 +113,8 @@ async function lookup(address: string): Promise<GeoPoint | null> {
   const timer = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
 
   try {
-    const url = `${NOMINATIM}?q=${encodeURIComponent(address)}&format=jsonv2&limit=1`;
+    // addressdetails=1 is what makes the city authoritative rather than guessed.
+    const url = `${NOMINATIM}?q=${encodeURIComponent(address)}&format=jsonv2&limit=1&addressdetails=1`;
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
@@ -120,6 +131,7 @@ async function lookup(address: string): Promise<GeoPoint | null> {
       lat?: string;
       lon?: string;
       display_name?: string;
+      address?: Record<string, string | undefined>;
     }[];
     const first = Array.isArray(results) ? results[0] : undefined;
     if (!first?.lat || !first?.lon) return null;
@@ -128,7 +140,18 @@ async function lookup(address: string): Promise<GeoPoint | null> {
     const lon = Number(first.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
 
-    return { lat, lon, label: first.display_name ?? address };
+    // Nominatim names the settlement differently by country and size; the
+    // shop's own town is whichever of these came back.
+    const parts = first.address ?? {};
+    const city = parts.city ?? parts.town ?? parts.village ?? parts.municipality ?? parts.suburb ?? null;
+    return {
+      lat,
+      lon,
+      label: first.display_name ?? address,
+      city,
+      region: parts.state ?? parts.region ?? null,
+      postalCode: parts.postcode ?? null,
+    };
   } catch {
     // Offline, blocked, rate-limited or too slow. The caller shows text.
     return null;
