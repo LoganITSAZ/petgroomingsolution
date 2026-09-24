@@ -89,6 +89,12 @@ async function saveSettings(formData: FormData) {
   const pickupLateMins = Math.max(pickupWatchMins + 1, parseInt((formData.get("pickupLateMins") as string) ?? "120", 10) || 120);
   const pickupCriticalMins = Math.max(pickupLateMins + 1, parseInt((formData.get("pickupCriticalMins") as string) ?? "240", 10) || 240);
 
+  // Dog sizes escalate like the thresholds above, so they are nudged into
+  // order rather than refused.
+  const sizeSmallUnderLbs = Math.max(1, parseInt((formData.get("sizeSmallUnderLbs") as string) ?? "15", 10) || 15);
+  const sizeMediumUnderLbs = Math.max(sizeSmallUnderLbs + 1, parseInt((formData.get("sizeMediumUnderLbs") as string) ?? "30", 10) || 30);
+  const sizeLargeMaxLbs = Math.max(sizeMediumUnderLbs + 1, parseInt((formData.get("sizeLargeMaxLbs") as string) ?? "50", 10) || 50);
+
   // Grace forgives a lapse, so a negative one is meaningless; a year of it is
   // no gate at all.
   const vaccinationGateBlocks = formData.get("vaccinationGateBlocks") === "on";
@@ -176,6 +182,9 @@ async function saveSettings(formData: FormData) {
       pickupWatchMins,
       pickupLateMins,
       pickupCriticalMins,
+      sizeSmallUnderLbs,
+      sizeMediumUnderLbs,
+      sizeLargeMaxLbs,
     },
   });
 
@@ -183,6 +192,7 @@ async function saveSettings(formData: FormData) {
   revalidatePath("/admin/appearance");
   revalidatePath("/admin/settings");
   revalidatePath("/portal");
+  revalidatePath("/services");
   revalidatePath("/staff/customers");
   redirect("/admin/settings?saved=1");
 }
@@ -634,6 +644,28 @@ export default async function SettingsPage(props: PageProps) {
           <ThresholdLiveWarning
             fieldIds={["pickupWatchMins", "pickupLateMins", "pickupCriticalMins"]}
             message="These will be reordered on save to keep watch < late < critical."
+          />
+        </Section>
+
+        <Section
+          title="Dog Sizes"
+          hint="Weights that decide which size price a dog is quoted. Cats and flat-priced services ignore them."
+        >
+          <Field name="sizeSmallUnderLbs" label="Small is under (lb)">
+            <input type="number" id="sizeSmallUnderLbs" name="sizeSmallUnderLbs" defaultValue={config?.sizeSmallUnderLbs ?? 15} min={1} max={300} className={FIELD} />
+          </Field>
+
+          <Field name="sizeMediumUnderLbs" label="Medium is under (lb)">
+            <input type="number" id="sizeMediumUnderLbs" name="sizeMediumUnderLbs" defaultValue={config?.sizeMediumUnderLbs ?? 30} min={2} max={300} className={FIELD} />
+          </Field>
+
+          <Field name="sizeLargeMaxLbs" label="Large is up to (lb)" hint="Anything heavier is XL.">
+            <input type="number" id="sizeLargeMaxLbs" name="sizeLargeMaxLbs" defaultValue={config?.sizeLargeMaxLbs ?? 50} min={3} max={300} className={FIELD} />
+          </Field>
+
+          <ThresholdLiveWarning
+            fieldIds={["sizeSmallUnderLbs", "sizeMediumUnderLbs", "sizeLargeMaxLbs"]}
+            message="These will be reordered on save to keep small < medium < large."
           />
         </Section>
 
