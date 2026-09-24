@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import styles from "./ServicePricingExplorer.module.css";
+import { PET_SIZES, sizeName, sizeRange, type PetSize, type SizeCutoffs } from "@/lib/pet-size";
 
 type PetType = "DOG" | "CAT";
 type DogSize = "priceSmallCents" | "priceMediumCents" | "priceLargeCents" | "priceXlCents";
@@ -33,16 +34,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   OTHER: "More care",
 };
 
-const SIZE_LABELS = [
-  ["Small", "Under 15 lb", "priceSmallCents"],
-  ["Medium", "15–30 lb", "priceMediumCents"],
-  ["Large", "30–45 lb", "priceLargeCents"],
-  ["XL", "50+ lb", "priceXlCents"],
-] as const;
-
-const DOG_SIZES: { value: DogSize; label: string; detail: string }[] = SIZE_LABELS.map(
-  ([label, detail, value]) => ({ value, label, detail })
-);
+const SIZE_FIELD: Record<PetSize, DogSize> = {
+  SMALL: "priceSmallCents",
+  MEDIUM: "priceMediumCents",
+  LARGE: "priceLargeCents",
+  XL: "priceXlCents",
+};
+const SIZE_FIELDS = Object.values(SIZE_FIELD);
 
 function money(cents: number | null): string {
   if (cents == null) return "—";
@@ -66,7 +64,7 @@ function priceLabel(service: PricingService): string {
   return low === high ? money(low) : `${money(low)}–${money(high)}`;
 }
 
-export default function ServicePricingExplorer({ services, extras }: { services: PricingService[]; extras?: ReactNode }) {
+export default function ServicePricingExplorer({ services, extras, cutoffs }: { services: PricingService[]; extras?: ReactNode; cutoffs: SizeCutoffs }) {
   const [petType, setPetType] = useState<PetType>("DOG");
   const [dogSize, setDogSize] = useState<DogSize | null>(null);
   const [category, setCategory] = useState("All care");
@@ -79,7 +77,8 @@ export default function ServicePricingExplorer({ services, extras }: { services:
     }
     return result;
   }, [matching]);
-  const selectedSize = DOG_SIZES.find((size) => size.value === dogSize);
+  const dogSizes = PET_SIZES.map((size) => ({ value: SIZE_FIELD[size], label: sizeName(size), detail: sizeRange(size, cutoffs) }));
+  const selectedSize = dogSizes.find((size) => size.value === dogSize);
   const visibleGroups = Array.from(grouped).filter(([label]) => category === "All care" || label === category);
   const count = visibleGroups.reduce((total, [, items]) => total + items.length, 0);
 
@@ -104,7 +103,7 @@ export default function ServicePricingExplorer({ services, extras }: { services:
             <legend>Dog size</legend>
             <div className={styles.sizes}>
               <button type="button" aria-pressed={dogSize === null} onClick={() => setDogSize(null)}><span>All sizes</span><span>Compare prices</span></button>
-              {DOG_SIZES.map((size) => (
+              {dogSizes.map((size) => (
                 <button key={size.value} type="button" aria-pressed={dogSize === size.value} onClick={() => setDogSize(size.value)}><span>{size.label}</span><span>{size.detail}</span></button>
               ))}
             </div>
@@ -126,7 +125,7 @@ export default function ServicePricingExplorer({ services, extras }: { services:
           <section key={label} className={styles.category} aria-label={label}>
             <h4>{label}<span>{items.length} {items.length === 1 ? "service" : "services"}</span></h4>
             {items.map((service) => {
-              const sized = petType === "DOG" && SIZE_LABELS.some(([, , field]) => service[field] != null);
+              const sized = petType === "DOG" && SIZE_FIELDS.some((field) => service[field] != null);
               const price = sized && dogSize ? service[dogSize] == null ? "Price on request" : money(service[dogSize]) : priceLabel(service);
               return (
                 <article key={service.id} className={styles.service}>

@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/pricing";
 import { livePromotions } from "@/lib/promotions";
 import { getConfig } from "@/lib/config";
+import { sizeCutoffs } from "@/lib/pet-size";
 
 export async function generateMetadata() {
   const config = await getConfig();
@@ -87,6 +88,7 @@ export default async function ServicesPage() {
           <>
           <ServicePricingExplorer
             services={serviceOptions}
+            cutoffs={sizeCutoffs(config)}
             extras={
               surcharges.length > 0 ? (
                 <details className={`disclosure ${styles.fees}`}>
