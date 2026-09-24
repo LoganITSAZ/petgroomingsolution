@@ -134,11 +134,12 @@ async function demoPhoto(hue: number): Promise<string> {
 }
 
 async function main() {
-  const [config, services, stations, surcharges] = await Promise.all([
+  const [config, services, stations, surcharges, documents] = await Promise.all([
     prisma.systemConfig.findUnique({ where: { id: "global" } }),
     prisma.service.findMany({ where: { isActive: true } }),
     prisma.station.findMany({ where: { isActive: true } }),
     prisma.surcharge.findMany({ where: { isActive: true } }),
+    prisma.shopDocument.findMany({ where: { isActive: true }, select: { id: true, version: true } }),
   ]);
   if (!config || services.length === 0 || stations.length === 0) {
     throw new Error("Run `npm run db:seed` first — demo data builds on the catalog and stations.");
@@ -374,10 +375,17 @@ async function main() {
       },
     });
 
-    // The waiver they signed, so the portal does not stop them at the door.
-    await prisma.waiverAcceptance.create({
-      data: { customerId: customer.id, waiverVersion: config.waiverVersion ?? "1.0" },
-    });
+    // The documents they signed, so the portal does not stop them at the door.
+    if (documents.length > 0) {
+      await prisma.documentAcceptance.createMany({
+        data: documents.map((document) => ({
+          customerId: customer.id,
+          documentId: document.id,
+          version: document.version,
+          signedName: `${customer.firstName} ${customer.lastName}`,
+        })),
+      });
+    }
 
     for (let p = 0; p < (chance(0.3) ? 2 : 1); p++) {
       const isCat = chance(0.2);

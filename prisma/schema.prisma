@@ -34,7 +34,7 @@ model SystemConfig {
   featureWalkInPortal         Boolean @default(true) // customers can check in walk-ins via portal
   featureEmailNotify          Boolean @default(true) // send email on booking + ready pickup
   featureSmsNotify            Boolean @default(false) // send SMS (requires Twilio config)
-  featureWaiverRequired       Boolean @default(true) // require liability waiver on first signup
+  featureWaiverRequired       Boolean @default(true) // require the shop's documents to be signed before booking
   featureRewards              Boolean @default(false) // visit punch card for customers
   /// Before/after and issue photos on a visit. On by default: a shop that
   /// never uploads sees an empty strip, and photos already taken stay
@@ -73,9 +73,10 @@ model SystemConfig {
   /// texts has not agreed to ring people.
   featureVoiceCalls           Boolean @default(false)
 
-  // Liability waiver
-  waiverText    String? @db.Text // full waiver body; null = feature off even if flag is true
-  waiverVersion String? // e.g. "1.0" — bump to re-prompt existing customers
+  // The documents a customer signs are `ShopDocument` rows, not columns here: a
+  // shop has a waiver, and may also have a matting release and a medical
+  // consent, and three of those would be nine columns. `featureWaiverRequired`
+  // is the policy — whether anything must be signed before booking at all.
 
   // Business hours (JSON: { monday: { open: "08:00", close: "15:00" } | null, ... })
   businessHours Json?
@@ -236,7 +237,7 @@ model Staff {
   statusHistory        AppointmentStatusHistory[]
   visitEvents          VisitEvent[]
   visitPhotos          VisitPhoto[]
-  waiverRevisions      WaiverRevision[]
+  documentRevisions    DocumentRevision[]
   StaffPresenceEvent   StaffPresenceEvent[]
   StaffShift           StaffShift[]
 
@@ -385,6 +386,7 @@ model Photo {
   pets        Pet[]
   visitPhotos VisitPhoto[]
   seoPages    SeoPage[]
+  signatures  DocumentAcceptance[]
 
   @@map("photos")
 }
@@ -434,7 +436,7 @@ model Customer {
   // Everyone else the owner has approved to drop off or collect their pets.
   alternateContacts AlternateContact[]
   appointments      Appointment[]
-  waiverAcceptances WaiverAcceptance[]
+  documentAcceptances DocumentAcceptance[]
   rewardEarnings    RewardEarning[]
   rewardRedemptions RewardRedemption[]
   notifications     NotificationLog[]
@@ -1045,36 +1047,81 @@ enum AppointmentType {
 }
 
 // ─────────────────────────────────────────────
-// WAIVER ACCEPTANCES (per customer, per version)
+// SHOP DOCUMENTS (what a customer signs, and what they signed)
 // ─────────────────────────────────────────────
-// ─────────────────────────────────────────────
-// WAIVER REVISIONS (the published text of every version)
-// ─────────────────────────────────────────────
-model WaiverRevision {
+/// A document the shop asks customers to agree to.
+///
+/// Rows, not columns: a shop has a liability waiver, and may also have a matting
+/// release and consent for emergency medical care. Each carries its own text and
+/// its own version, so bumping one re-prompts for that one alone.
+///
+/// `kind` is what the document *is*, which is what lets a screen say "waiver"
+/// without matching on a title the shop is free to rewrite.
+model ShopDocument {
+  id        String           @id @default(cuid())
+  kind      ShopDocumentKind @default(OTHER)
+  title     String
+  body      String           @db.Text
+  version   String // bumped on save when the text changes; re-prompts everybody
+  isActive  Boolean          @default(true)
+  sortOrder Int              @default(0)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  revisions   DocumentRevision[]
+  acceptances DocumentAcceptance[]
+
+  @@map("shop_documents")
+}
+
+enum ShopDocumentKind {
+  WAIVER // liability
+  MATTING_RELEASE // a coat that has to come off
+  MEDICAL_CONSENT // treatment if something goes wrong
+  OTHER
+}
+
+/// The published text of every version, so an earlier document can be restored
+/// under its original number.
+model DocumentRevision {
   id          String   @id @default(cuid())
-  version     String   @unique // matches SystemConfig.waiverVersion when published
+  documentId  String
+  version     String
   text        String   @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdById String? // staff member who published it
 
-  createdBy Staff? @relation(fields: [createdById], references: [id])
+  document  ShopDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy Staff?       @relation(fields: [createdById], references: [id])
 
-  @@map("waiver_revisions")
+  @@unique([documentId, version])
+  @@map("document_revisions")
 }
 
-model WaiverAcceptance {
-  id            String   @id @default(cuid())
-  customerId    String
-  waiverVersion String // matches SystemConfig.waiverVersion at time of signing
-  acceptedAt    DateTime @default(now())
-  ipAddress     String? // for audit trail
-  userAgent     String?
+/// One customer, one document, one version.
+///
+/// `signedName` and `signaturePhotoId` are the signature: the name typed under
+/// the drawing, and the drawing itself as a `Photo` row like every other image
+/// in this app. Both are optional, because acceptances written before the shop
+/// collected signatures are still acceptances and are not rewritten.
+model DocumentAcceptance {
+  id               String   @id @default(cuid())
+  customerId       String
+  documentId       String
+  version          String // the version as it stood when they signed
+  acceptedAt       DateTime @default(now())
+  ipAddress        String? // for audit trail
+  userAgent        String?
+  signedName       String?
+  signaturePhotoId String?
 
-  customer Customer @relation(fields: [customerId], references: [id])
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  document       ShopDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  signaturePhoto Photo?       @relation(fields: [signaturePhotoId], references: [id])
 
-  @@unique([customerId, waiverVersion])
-  @@map("waiver_acceptances")
+  @@unique([customerId, documentId, version])
+  @@map("document_acceptances")
 }
 
 // ─────────────────────────────────────────────

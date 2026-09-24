@@ -10,7 +10,7 @@ import AddressMap from "@/components/AddressMap";
 import ThresholdLiveWarning from "@/components/admin/ThresholdLiveWarning";
 import { PageShell, PageSection } from "@/components/ui";
 import BrandColorField from "@/components/admin/BrandColorField";
-import WaiverSettings from "./WaiverSettings";
+import DocumentSettings from "./DocumentSettings";
 import VaccineRequirements from "./VaccineRequirements";
 import SaveToast from "@/components/SaveToast";
 
@@ -55,8 +55,8 @@ async function saveSettings(formData: FormData) {
 
   /*
    * The switches this form owns, read from the registry rather than named
-   * five times. The waiver flag is declared in the registry too but lives on
-   * the waiver section with its text, so it is not posted here and must not
+   * five times. The documents flag is declared in the registry too but lives
+   * on the Documents section with the text, so it is not posted here and must not
    * be written from an absent checkbox.
    */
   const postedFlags = Object.fromEntries(
@@ -370,9 +370,9 @@ export default async function SettingsPage(props: PageProps) {
         <Section title="Features" hint="What the shop offers. Each one can be switched off without losing the data behind it.">
           <div className="-mt-2">
             {featuresByGroup()
-              // The waiver is declared in the registry but owned by the waiver
-              // section below, so its group renders nothing and must not leave
-              // an empty div behind.
+              // The documents flag is declared in the registry but owned by the
+              // Documents section below, so its group renders nothing and must
+              // not leave an empty div behind.
               .map(({ group, features }) => ({
                 group,
                 features: features.filter((feature) => feature.key !== "featureWaiverRequired"),
@@ -394,11 +394,11 @@ export default async function SettingsPage(props: PageProps) {
               ))}
           </div>
           <p className="text-xs text-stone-500 border-t border-stone-100 pt-3">
-            The liability waiver is switched on and off in the{" "}
-            <Link href="#liability-waiver" className="text-amber-700 hover:text-amber-900 underline">
-              Liability Waiver
+            The documents customers sign are switched on and off in the{" "}
+            <Link href="#shop-documents" className="text-amber-700 hover:text-amber-900 underline">
+              Documents
             </Link>{" "}
-            section below, alongside its text and version. The sender address and Twilio credentials live on{" "}
+            section below, alongside their text and versions. The sender address and Twilio credentials live on{" "}
             <Link href="/admin/notifications" className="text-amber-700 hover:text-amber-900 underline">
               Notifications
             </Link>
@@ -656,7 +656,7 @@ export default async function SettingsPage(props: PageProps) {
         </PageSection>
       </form>
       <VaccineRequirements searchParams={props.searchParams} />
-      <WaiverSettings searchParams={props.searchParams} />
+      <DocumentSettings searchParams={props.searchParams} />
     </PageShell>
   );
 }

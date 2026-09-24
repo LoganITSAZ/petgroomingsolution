@@ -157,7 +157,7 @@ export default async function AdminOverview() {
       appointments,
       statusHistory,
       visitEvents,
-      waivers,
+      signatures,
     ] = await Promise.all([
       getConfig(),
       prisma.customer.count(),
@@ -167,7 +167,7 @@ export default async function AdminOverview() {
       prisma.appointment.count(),
       prisma.appointmentStatusHistory.count(),
       prisma.visitEvent.count(),
-      prisma.waiverAcceptance.count(),
+      prisma.documentAcceptance.count(),
     ]);
     lastReminder =
       (
@@ -186,7 +186,7 @@ export default async function AdminOverview() {
       { label: "Appointments", value: appointments },
       { label: "Status history", value: statusHistory },
       { label: "Visit events", value: visitEvents },
-      { label: "Waiver acceptances", value: waivers },
+      { label: "Documents signed", value: signatures },
     ];
   }
 

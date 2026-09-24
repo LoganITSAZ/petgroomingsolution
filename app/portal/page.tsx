@@ -17,7 +17,6 @@ export default async function PortalDashboard() {
   const [customer, upcomingAppointments, pets, card] = await Promise.all([
     prisma.customer.findUnique({
       where: { id: customerId },
-      include: { waiverAcceptances: true },
     }),
     prisma.appointment.findMany({
       where: {

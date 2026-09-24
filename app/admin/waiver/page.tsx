@@ -11,5 +11,5 @@ export default async function WaiverPage({ searchParams }: {
       query.set(key === "saved" ? "waiverSaved" : key === "error" ? "waiverError" : key, value);
     }
   }
-  redirect(`/admin/settings${query.size ? `?${query}` : ""}#liability-waiver`);
+  redirect(`/admin/settings${query.size ? `?${query}` : ""}#shop-documents`);
 }

@@ -60,8 +60,8 @@ export default function VersionField({
       {manual ? (
         <input
           type="text"
-          name="waiverVersion"
-          aria-label="Waiver version"
+          name="version"
+          aria-label="Document version"
           defaultValue={currentVersion}
           placeholder="1.0"
           className="w-28 border border-stone-200 rounded-lg px-2 py-1 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-500"

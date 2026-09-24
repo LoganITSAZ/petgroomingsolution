@@ -30,7 +30,6 @@ function configured(overrides: Partial<FeatureConfig> = {}): FeatureConfig {
     twilioAccountSid: "AC_test",
     twilioAuthToken: "token",
     twilioFromNumber: "+15550000000",
-    waiverText: "Sign here.",
     ...overrides,
   };
 }
@@ -84,12 +83,11 @@ describe("isEnabled", () => {
     expect(isEnabled(config, "featureSmsNotify")).toBe(false);
   });
 
-  it("is false for the waiver with no text to show", () => {
-    expect(isEnabled(configured({ waiverText: null }), "featureWaiverRequired")).toBe(false);
-  });
-
-  it("treats whitespace-only waiver text as no waiver", () => {
-    expect(isEnabled(configured({ waiverText: "   " }), "featureWaiverRequired")).toBe(false);
+  // The documents themselves are rows, so there is nothing on the config to
+  // check: no active document means nothing is asked for, which is emptiness
+  // rather than a dead switch.
+  it("is on for documents with the column set", () => {
+    expect(isEnabled(configured({}), "featureWaiverRequired")).toBe(true);
   });
 });
 

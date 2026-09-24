@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import SignaturePad from "@/components/SignaturePad";
 
 interface RegisterFormProps {
   action: (formData: FormData) => Promise<void>;
-  waiverRequired: boolean;
-  waiverText: string | null;
+  /** What the shop asks a new customer to sign, in its own order. */
+  documents: { id: string; title: string; body: string; version: string }[];
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -16,15 +17,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_email: "Please enter a valid email address.",
   password_too_short: "Password must be at least 8 characters.",
   password_mismatch: "Passwords do not match.",
-  waiver_required: "You must accept the waiver to continue.",
+  waiver_required: "Please accept every document to continue.",
   email_taken: "An account with that email already exists.",
 };
 
-export default function RegisterForm({
-  action,
-  waiverRequired,
-  waiverText,
-}: RegisterFormProps) {
+export default function RegisterForm({ action, documents }: RegisterFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const serverError = searchParams.get("error");
@@ -35,11 +32,9 @@ export default function RegisterForm({
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [waiverAccepted, setWaiverAccepted] = useState(false);
+  const [accepted, setAccepted] = useState<Record<string, boolean>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
-
-  const waiverBoxRef = useRef<HTMLDivElement>(null);
 
   function validateClient(): boolean {
     const errors: Record<string, string> = {};
@@ -51,8 +46,8 @@ export default function RegisterForm({
       errors.password = "Password must be at least 8 characters.";
     if (password !== confirmPassword)
       errors.confirmPassword = "Passwords do not match.";
-    if (waiverRequired && !waiverAccepted)
-      errors.waiver = "You must accept the waiver to continue.";
+    if (documents.some((document) => !accepted[document.id]))
+      errors.waiver = "Please accept every document to continue.";
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -61,14 +56,16 @@ export default function RegisterForm({
     e.preventDefault();
     if (!validateClient()) return;
 
-    const fd = new FormData();
+    // Started from the form so the signature pad's own fields ride along; the
+    // controlled values are set over the top.
+    const fd = new FormData(e.currentTarget);
     fd.set("firstName", firstName);
     fd.set("lastName", lastName);
     fd.set("email", email);
     fd.set("phone", phone);
     fd.set("password", password);
     fd.set("confirmPassword", confirmPassword);
-    fd.set("waiverAccepted", String(waiverAccepted));
+    fd.set("documentsAccepted", String(documents.every((document) => accepted[document.id])));
 
     startTransition(async () => {
       await action(fd);
@@ -222,32 +219,36 @@ export default function RegisterForm({
             )}
           </div>
 
-          {/* Waiver */}
-          {waiverRequired && waiverText && (
-            <div>
+          {/* Whatever the shop asks people to sign — one box each, because
+              agreeing to a matting release is not agreeing to a waiver. */}
+          {documents.map((document) => (
+            <div key={document.id}>
               {/* Not a <label>: this captions the scrollable document below,
                   which is not a form control. The accept checkbox has its own
                   label. */}
-              <p className="block text-sm font-medium text-stone-700 mb-2">
-                Liability Waiver
-              </p>
-              <div
-                ref={waiverBoxRef}
-                className="h-40 overflow-y-auto border border-stone-300 rounded-lg px-3 py-2 text-xs text-stone-600 bg-stone-50 whitespace-pre-wrap leading-relaxed"
-              >
-                {waiverText}
+              <p className="block text-sm font-medium text-stone-700 mb-2">{document.title}</p>
+              <div className="h-40 overflow-y-auto border border-stone-300 rounded-lg px-3 py-2 text-xs text-stone-600 bg-stone-50 whitespace-pre-wrap leading-relaxed">
+                {document.body}
               </div>
               <label className="flex items-start gap-2 mt-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={waiverAccepted}
-                  onChange={(e) => setWaiverAccepted(e.target.checked)}
+                  checked={accepted[document.id] ?? false}
+                  onChange={(e) =>
+                    setAccepted((current) => ({ ...current, [document.id]: e.target.checked }))
+                  }
                   className="mt-0.5 h-4 w-4 rounded border-stone-300 text-brand-600 focus:ring-brand-400"
                 />
                 <span className="text-sm text-stone-700">
-                  I have read and agree to the liability waiver above.
+                  I have read and agree to {document.title.toLowerCase()} (version {document.version}).
                 </span>
               </label>
+            </div>
+          ))}
+
+          {documents.length > 0 && (
+            <div>
+              <SignaturePad />
               {fieldErrors.waiver && (
                 <p className="text-red-600 text-xs mt-1">{fieldErrors.waiver}</p>
               )}

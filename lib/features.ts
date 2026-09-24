@@ -71,7 +71,6 @@ export interface FeatureConfig {
   twilioAccountSid: string | null;
   twilioAuthToken: string | null;
   twilioFromNumber: string | null;
-  waiverText: string | null;
 }
 
 /**
@@ -245,15 +244,11 @@ export const FEATURES: Feature[] = [
   },
   {
     key: "featureWaiverRequired",
-    label: "Liability Waiver",
+    label: "Documents",
     blurb:
-      "New customers sign the waiver before their first visit. Off, nobody is asked again; waivers already signed stay on file.",
+      "New customers sign the shop's documents before their first visit. Off, nobody is asked again; what is already signed stays on file.",
     group: "Compliance",
     offMeans: "frozen",
-    needs: (config) =>
-      filled(config.waiverText)
-        ? null
-        : "There is no waiver text to show — write it on the Waiver page.",
   },
 ];
 

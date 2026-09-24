@@ -39,8 +39,6 @@ async function main() {
       featureEmailNotify: true,
       featureSmsNotify: false,
       featureWaiverRequired: true,
-      waiverText: defaultWaiverText(DEFAULT_SHOP_NAME),
-      waiverVersion: "1.0",
       businessHours: DEFAULT_BUSINESS_HOURS,
       bookingLeadHours: 2,
       bookingWindowDays: 30,
@@ -49,6 +47,25 @@ async function main() {
     },
   });
   console.log("✓ SystemConfig");
+
+  // The one document every shop signs people on. First boot only: the body is
+  // the shop's own copy once it has edited it, and the seed runs every deploy.
+  const documentCount = await prisma.shopDocument.count();
+  if (documentCount === 0) {
+    await prisma.shopDocument.create({
+      data: {
+        id: "doc_waiver",
+        kind: "WAIVER",
+        title: "Liability Waiver",
+        body: defaultWaiverText(DEFAULT_SHOP_NAME),
+        version: "1.0",
+        sortOrder: 0,
+      },
+    });
+    console.log("✓ ShopDocument — liability waiver");
+  } else {
+    console.log(`✓ Documents — ${documentCount} already exist, skipped`);
+  }
 
   // First-boot admin. Once the shop has any staff, this is skipped: the seed
   // runs on every deploy and must never resurrect a removed account or reset

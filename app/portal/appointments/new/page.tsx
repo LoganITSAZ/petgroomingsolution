@@ -10,7 +10,9 @@ import { getConfig } from "@/lib/config";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { acceptWaiver, waiverOutstanding } from "@/lib/waiver-status";
+import { acceptDocuments, outstandingDocuments } from "@/lib/documents";
+import { storeImageDataUrl } from "@/lib/photos";
+import SignaturePad from "@/components/SignaturePad";
 import { missedVisitMessage, recentMissedVisits } from "@/lib/no-show";
 import Link from "next/link";
 
@@ -41,34 +43,50 @@ export default async function PortalNewAppointmentPage(props: {
     recentMissedVisits(customerId),
   ]);
 
-  // A waiver version bump has to re-prompt: booking is the moment it matters.
-  const waiver = await waiverOutstanding(customerId);
-  if (waiver.required) {
+  // A version bump has to re-prompt, and a document added since they
+  // registered has never been asked: booking is the moment either matters.
+  const outstanding = await outstandingDocuments(customerId);
+  if (outstanding.length > 0) {
     return (
       <PageShell
         title="One thing first"
-        subtitle="Our liability waiver has been updated."
+        subtitle={
+          outstanding.length === 1
+            ? `Please read and sign our ${outstanding[0].title.toLowerCase()}.`
+            : "Please read and sign these before booking."
+        }
         className="max-w-2xl"
       >
-        <PageSection>
-          <Well className="max-h-80 overflow-y-auto whitespace-pre-wrap text-sm text-stone-700 py-2">
-            {waiver.text}
-          </Well>
-        </PageSection>
-        <PageSection tone="muted">
-        <form action={acceptCurrentWaiver} className="flex items-center justify-between gap-3">
-          <label className="flex items-center gap-2 text-sm text-stone-700">
-            <input type="checkbox" name="accepted" required className="accent-amber-700" />I have
-            read and agree to the waiver (version {waiver.version}).
-          </label>
-          <button
-            type="submit"
-            className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-semibold"
-          >
-            Accept and continue
-          </button>
+        <form action={signOutstanding}>
+          {outstanding.map((document) => (
+            <PageSection key={document.id} title={document.title}>
+              <Well className="max-h-80 overflow-y-auto whitespace-pre-wrap text-sm text-stone-700 py-2">
+                {document.body}
+              </Well>
+              <label className="mt-2 flex items-start gap-2 text-sm text-stone-700">
+                <input
+                  type="checkbox"
+                  name="accepted"
+                  value={document.id}
+                  required
+                  className="mt-0.5 accent-amber-700"
+                />
+                I have read and agree to {document.title.toLowerCase()} (version {document.version}).
+              </label>
+            </PageSection>
+          ))}
+          <PageSection tone="muted">
+            <SignaturePad />
+            <div className="mt-3 flex justify-end">
+              <button
+                type="submit"
+                className="bg-brand-600 hover:bg-brand-700 text-brand-on-600 hover:text-brand-on-700 px-5 py-2 rounded-lg text-sm font-semibold"
+              >
+                Accept and continue
+              </button>
+            </div>
+          </PageSection>
         </form>
-        </PageSection>
       </PageShell>
     );
   }
@@ -98,16 +116,26 @@ export default async function PortalNewAppointmentPage(props: {
 now.getTime() + (config.bookingWindowDays ?? 30) * 24 * 60 * 60 * 1000
   );
 
-  async function acceptCurrentWaiver(formData: FormData) {
+  async function signOutstanding(formData: FormData) {
     "use server";
 
     const session = await auth();
     if (!session?.user || session.user.userType !== "customer") redirect("/login?type=customer");
-    if (formData.get("accepted") !== "on") redirect("/portal/appointments/new");
+
+    // Re-derived, and only the documents actually ticked are recorded — a
+    // signature on a box nobody checked is not agreement.
+    const ticked = new Set(formData.getAll("accepted").map(String));
+    const owed = (await outstandingDocuments(session.user.id)).filter((document) =>
+      ticked.has(document.id)
+    );
+    if (owed.length === 0) redirect("/portal/appointments/new");
 
     const headerList = await headers();
-    await acceptWaiver(session.user.id, {
-      ipAddress: headerList.get("x-forwarded-for"),
+    const signature = await storeImageDataUrl(formData.get("signature"));
+    await acceptDocuments(session.user.id, owed, {
+      signedName: (formData.get("signedName") as string | null) ?? null,
+      signaturePhotoId: signature && "id" in signature ? signature.id : null,
+      ipAddress: headerList.get("x-real-ip") ?? headerList.get("x-forwarded-for"),
       userAgent: headerList.get("user-agent"),
     });
 

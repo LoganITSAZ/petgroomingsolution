@@ -1,7 +1,7 @@
 import * as React from "react";
 import { prisma } from "@/lib/prisma";
 import type { SystemConfig } from "@prisma/client";
-import { DEFAULT_SHOP_NAME, DEFAULT_SHOP_TAGLINE, defaultWaiverText } from "@/lib/branding";
+import { DEFAULT_SHOP_NAME, DEFAULT_SHOP_TAGLINE } from "@/lib/branding";
 
 /**
  * Fetch the global system config row.
@@ -31,8 +31,6 @@ export const getConfig = perRequest(async (): Promise<SystemConfig> => {
       featureEmailNotify: true,
       featureSmsNotify: false,
       featureWaiverRequired: true,
-      waiverVersion: "1.0",
-      waiverText: defaultWaiverText(),
       businessHours: DEFAULT_BUSINESS_HOURS,
       bookingLeadHours: 2,
       bookingWindowDays: 30,

@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
+import { acceptDocuments, activeDocuments } from "@/lib/documents";
+import { storeImageDataUrl } from "@/lib/photos";
 import RegisterForm from "./RegisterForm";
 
 // Screen readers announce the title first; without one every page in the
@@ -17,6 +19,8 @@ export const dynamic = "force-dynamic";
 
 export default async function RegisterPage() {
   const config = await getConfig();
+  // Nothing to sign is a shop with no documents, not an empty section.
+  const documents = config.featureWaiverRequired ? await activeDocuments() : [];
 
   async function registerAction(formData: FormData) {
     "use server";
@@ -29,7 +33,7 @@ export default async function RegisterPage() {
     const phone = (formData.get("phone") as string | null)?.trim() || null;
     const password = (formData.get("password") as string | null) ?? "";
     const confirmPassword = (formData.get("confirmPassword") as string | null) ?? "";
-    const waiverAccepted = formData.get("waiverAccepted") === "true";
+    const documentsAccepted = formData.get("documentsAccepted") === "true";
 
     // Validate
     if (!firstName || !lastName || !email || !password) {
@@ -44,7 +48,10 @@ export default async function RegisterPage() {
     if (password !== confirmPassword) {
       redirect("/register?error=password_mismatch");
     }
-    if (cfg.featureWaiverRequired && !waiverAccepted) {
+    // Re-derived here rather than trusted from the render: a server action is
+    // its own endpoint.
+    const required = cfg.featureWaiverRequired ? await activeDocuments() : [];
+    if (required.length > 0 && !documentsAccepted) {
       redirect("/register?error=waiver_required");
     }
 
@@ -66,22 +73,15 @@ export default async function RegisterPage() {
       },
     });
 
-    // Record waiver acceptance if required
-    if (cfg.featureWaiverRequired && cfg.waiverVersion) {
+    // What they agreed to, one row each, with the signature they drew.
+    if (required.length > 0) {
       const reqHeaders = await headers();
-      const ip =
-        reqHeaders.get("x-forwarded-for")?.split(",")[0].trim() ??
-        reqHeaders.get("x-real-ip") ??
-        null;
-      const userAgent = reqHeaders.get("user-agent") ?? null;
-
-      await prisma.waiverAcceptance.create({
-        data: {
-          customerId: customer.id,
-          waiverVersion: cfg.waiverVersion,
-          ipAddress: ip,
-          userAgent,
-        },
+      const signature = await storeImageDataUrl(formData.get("signature"));
+      await acceptDocuments(customer.id, required, {
+        signedName: (formData.get("signedName") as string | null) ?? null,
+        signaturePhotoId: signature && "id" in signature ? signature.id : null,
+        ipAddress: reqHeaders.get("x-real-ip") ?? reqHeaders.get("x-forwarded-for"),
+        userAgent: reqHeaders.get("user-agent"),
       });
     }
 
@@ -98,11 +98,7 @@ export default async function RegisterPage() {
         </div>
       }
     >
-      <RegisterForm
-        action={registerAction}
-        waiverRequired={config.featureWaiverRequired}
-        waiverText={config.waiverText ?? null}
-      />
+      <RegisterForm action={registerAction} documents={documents} />
     </Suspense>
   );
 }
