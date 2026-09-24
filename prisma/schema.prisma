@@ -133,6 +133,12 @@ model SystemConfig {
   pickupLateMins     Int @default(120)
   pickupCriticalMins Int @default(240)
 
+  // Dog sizes by weight. Small is under the first, Medium under the second,
+  // Large up to and including the third, XL over it. Cats are flat-priced.
+  sizeSmallUnderLbs  Int @default(15)
+  sizeMediumUnderLbs Int @default(30)
+  sizeLargeMaxLbs    Int @default(50)
+
   // Scheduling: the week past which scheduled hours read as overtime.
   overtimeWeeklyHours Int @default(40)
 
@@ -344,6 +350,10 @@ model BreedGuide {
   tips        String  @db.Text
   // Typical time this breed takes, when it differs from the service default.
   typicalMins Int?
+  // Typical adult weight, standing in for a pet nobody has weighed. Left
+  // blank for breeds that come in several sizes — a Toy Poodle is not a
+  // Standard, and a wrong estimate is worse than none.
+  typicalWeightLbs Float?
   // A stock photo of the breed, by URL. Not a pet's photo, so it is not in the
   // `Photo` table: nothing private, nothing to serve behind auth, and the shop
   // can point it at any picture it likes.
@@ -751,6 +761,13 @@ enum PricingMode {
   BASE // small price is the base; the other sizes are derived from it
 }
 
+enum PetSize {
+  SMALL
+  MEDIUM
+  LARGE
+  XL
+}
+
 // Extra fees quoted alongside the catalog (matting, difficult handling, ...)
 model Surcharge {
   id        String   @id @default(cuid())
@@ -1032,6 +1049,9 @@ model AppointmentService {
   serviceId     String? // catalog row, if the service is still listed
   serviceType   ServiceType
   priceCents    Int? // snapshot of the quoted price
+  // The size that set priceCents. Null for flat services, cats, an unknown
+  // size, and every line quoted before sizes were derived.
+  sizeTier      PetSize?
   sortOrder     Int         @default(0)
   createdAt     DateTime    @default(now())
 
