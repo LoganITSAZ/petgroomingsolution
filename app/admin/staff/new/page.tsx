@@ -23,12 +23,17 @@ export default async function NewStaffPage(props: {
   searchParams: Promise<{ error?: string }>;
 }) {
   const searchParams = await props.searchParams;
-  const [config, stations] = await Promise.all([
+  const [config, stations, services] = await Promise.all([
     getConfig(),
     prisma.station.findMany({
       where: { isActive: true, role: { in: WORK_STATION_ROLES } },
       select: { id: true, name: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
+    }),
+    prisma.service.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, category: true },
+      orderBy: [{ category: "asc" }, { name: "asc" }],
     }),
   ]);
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
@@ -47,12 +52,16 @@ export default async function NewStaffPage(props: {
         submitLabel="Add Staff Member"
         defaultCommission={config.defaultCommissionPercent}
         stations={stations}
+        services={services}
         initial={{
           name: "",
           email: "",
           roles: [StaffRole.GROOMER],
           isActive: true,
           commissionPercent: null,
+          hourlyRateCents: null,
+          ratesByCategory: {},
+          ratesByService: {},
           defaultStationId: null,
         }}
       />

@@ -2,6 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { AppointmentStatus, AppointmentType } from "@prisma/client";
 import { isFloorStaff, shopDayKey, shopDayRange } from "@/lib/utils";
 import { serviceFloorCents } from "@/lib/pricing";
+import {
+  commissionCents,
+  effectiveRatePercent,
+  payEstimate,
+  type CommissionLine,
+} from "@/lib/commission";
+import { commissionRatesByStaff, scheduledMinutesByStaff } from "@/lib/commission-rates";
 
 /**
  * Everything here is derived from rows the shop already writes — appointments
@@ -26,6 +33,8 @@ export interface CompletionRecord {
   /** What an agreed rate took off this visit. Pay is on the list price above. */
   discountCents: number;
   serviceTypes: string[];
+  /** Per line, because a rate can belong to a service or to its category. */
+  lines: CommissionLine[];
 }
 
 /**
@@ -76,6 +85,11 @@ export async function getCompletions(since?: Date): Promise<CompletionRecord[]> 
       priceCents,
       discountCents: appointment.pricingDiscountCents ?? 0,
       serviceTypes: appointment.services.map((line) => line.serviceType),
+      lines: appointment.services.map((line) => ({
+        serviceId: line.serviceId,
+        category: line.service?.category ?? null,
+        priceCents: line.priceCents ?? (line.service ? serviceFloorCents(line.service) : null),
+      })),
     };
   });
 }
@@ -143,7 +157,12 @@ function currentStreak(dayKeys: Set<string>, today: string): number {
 
 export interface LeaderboardRow {
   roles: string[];
+  /** Their base rate. A service or category rate can beat it on any line. */
   commissionPercent: number;
+  /** What the month's work actually blended out at, when rates vary. */
+  effectiveRatePercent: number | null;
+  /** How much of the month's figure is the hourly floor rather than commission. */
+  payMonthFlooredByCents: number;
   payTodayCents: number;
   payWeekCents: number;
   payMonthCents: number;
@@ -294,7 +313,14 @@ export async function getLeaderboard(): Promise<LeaderboardRow[]> {
 
   const [staff, completions, config, lifetimeCounts, tipPayments] = await Promise.all([
     prisma.staff.findMany({
-      select: { id: true, name: true, roles: true, isActive: true, commissionPercent: true },
+      select: {
+        id: true,
+        name: true,
+        roles: true,
+        isActive: true,
+        commissionPercent: true,
+        hourlyRateCents: true,
+      },
       orderBy: { name: "asc" },
     }),
     getCompletions(windowStart),
@@ -319,6 +345,16 @@ export async function getLeaderboard(): Promise<LeaderboardRow[]> {
 
   const defaultCommission = config?.defaultCommissionPercent ?? 40;
 
+  // Rates and scheduled hours for everybody at once: a lookup per groomer is
+  // what turns one page into forty queries.
+  const floorStaff = staff.filter((member) => isFloorStaff(member.roles));
+  const [ratesByStaff, minutesToday, minutesWeek, minutesMonth] = await Promise.all([
+    commissionRatesByStaff(floorStaff),
+    scheduledMinutesByStaff(floorStaff.map((m) => m.id), todayStart, todayEnd),
+    scheduledMinutesByStaff(floorStaff.map((m) => m.id), weekStart, todayEnd),
+    scheduledMinutesByStaff(floorStaff.map((m) => m.id), monthStart, todayEnd),
+  ]);
+
   const tipsFor = (staffId: string, from: Date) =>
     tipPayments
       .filter((payment) => payment.appointment.staffId === staffId && payment.takenAt >= from)
@@ -338,17 +374,30 @@ export async function getLeaderboard(): Promise<LeaderboardRow[]> {
         .map((c) => c.turnaroundMins)
         .filter((mins): mins is number => mins != null);
 
-      // Estimated pay: commission on the list price of everything they
-      // finished. Tickets vary with pet size and surcharges, so this is a
-      // floor, never a payroll figure.
+      /*
+       * Estimated pay: the rate that applies to each line of what they
+       * finished — a service's own rate, then its category's, then theirs, then
+       * the shop's — lifted to their hourly minimum if the commission lands
+       * under the hours they were scheduled. Tickets move with pet size and
+       * surcharges, so this is a floor, never a payroll figure.
+       */
       const commissionPercent = member.commissionPercent ?? defaultCommission;
-      const payFor = (from: Date, to?: Date) =>
-        Math.round(
-          mine
-            .filter((c) => c.finishedAt >= from && (to ? c.finishedAt < to : true))
-            .reduce((sum, c) => sum + (c.priceCents ?? 0), 0) *
-            (commissionPercent / 100)
-        );
+      const rates = ratesByStaff.get(member.id) ?? {
+        staffPercent: member.commissionPercent,
+        shopPercent: defaultCommission,
+      };
+      const linesIn = (from: Date, to?: Date) =>
+        mine
+          .filter((c) => c.finishedAt >= from && (to ? c.finishedAt < to : true))
+          .flatMap((c) => c.lines);
+      const payFor = (from: Date, to: Date | undefined, scheduled: number) =>
+        payEstimate({
+          commissionCents: commissionCents(linesIn(from, to), rates),
+          hourlyRateCents: member.hourlyRateCents,
+          minutesScheduled: scheduled,
+        });
+      const monthPay = payFor(monthStart, undefined, minutesMonth.get(member.id) ?? 0);
+      const monthLines = linesIn(monthStart);
 
       const stats = {
         lifetime: lifetimeByStaff.get(member.id) ?? 0,
@@ -362,9 +411,11 @@ export async function getLeaderboard(): Promise<LeaderboardRow[]> {
         roles: member.roles,
         isActive: member.isActive,
         commissionPercent,
-        payTodayCents: payFor(todayStart, todayEnd),
-        payWeekCents: payFor(weekStart),
-        payMonthCents: payFor(monthStart),
+        effectiveRatePercent: effectiveRatePercent(monthLines, rates),
+        payMonthFlooredByCents: monthPay.flooredBy,
+        payTodayCents: payFor(todayStart, todayEnd, minutesToday.get(member.id) ?? 0).cents,
+        payWeekCents: payFor(weekStart, undefined, minutesWeek.get(member.id) ?? 0).cents,
+        payMonthCents: monthPay.cents,
         tipWeekCents: tipsFor(member.id, weekStart),
         tipMonthCents: tipsFor(member.id, monthStart),
         today: mine.filter((c) => c.finishedAt >= todayStart && c.finishedAt < todayEnd).length,

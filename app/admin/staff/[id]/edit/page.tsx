@@ -27,16 +27,24 @@ export default async function EditStaffPage(props: {
 }) {
   const params = await props.params;
   const searchParams = await props.searchParams;
-  const [staff, config, stations] = await Promise.all([
+  const [staff, config, stations, services] = await Promise.all([
     prisma.staff.findUnique({
       where: { id: params.id },
-      include: { _count: { select: { appointments: true } } },
+      include: {
+        _count: { select: { appointments: true } },
+        commissionRates: { select: { serviceId: true, category: true, percent: true } },
+      },
     }),
     getConfig(),
     prisma.station.findMany({
       where: { isActive: true, role: { in: WORK_STATION_ROLES } },
       select: { id: true, name: true },
       orderBy: [{ role: "asc" }, { name: "asc" }],
+    }),
+    prisma.service.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, category: true },
+      orderBy: [{ category: "asc" }, { name: "asc" }],
     }),
   ]);
   if (!staff) notFound();
@@ -67,6 +75,7 @@ export default async function EditStaffPage(props: {
         submitLabel="Save"
         defaultCommission={config.defaultCommissionPercent}
         stations={stations}
+        services={services}
         initial={{
           id: staff.id,
           name: staff.name,
@@ -74,6 +83,17 @@ export default async function EditStaffPage(props: {
           roles: staff.roles,
           isActive: staff.isActive,
           commissionPercent: staff.commissionPercent,
+          hourlyRateCents: staff.hourlyRateCents,
+          ratesByCategory: Object.fromEntries(
+            staff.commissionRates
+              .filter((rate) => rate.category)
+              .map((rate) => [rate.category!, rate.percent])
+          ),
+          ratesByService: Object.fromEntries(
+            staff.commissionRates
+              .filter((rate) => rate.serviceId)
+              .map((rate) => [rate.serviceId as string, rate.percent])
+          ),
           defaultStationId: staff.defaultStationId,
         }}
       />

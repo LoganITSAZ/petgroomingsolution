@@ -217,8 +217,13 @@ model Staff {
   photoId         String?
 
   // Percent of the services they finish that they are paid. Null falls back to
-  // SystemConfig.defaultCommissionPercent.
+  // SystemConfig.defaultCommissionPercent. A rate for one service or one
+  // category is a StaffCommissionRate row and outranks this.
   commissionPercent Float?
+  // An hourly minimum, in cents. A quiet week that earns less commission than
+  // the hours they were scheduled is lifted to this. Null means commission
+  // stands on its own.
+  hourlyRateCents   Int?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -247,8 +252,31 @@ model Staff {
   paymentsTaken        Payment[]
   insightDecisions     InsightDecision[]
   paymentAttempts      PaymentAttempt[]
+  commissionRates      StaffCommissionRate[]
 
   @@map("staff")
+}
+
+/// One exception to a groomer's rate: this service, or this whole category.
+/// The absence of a row is the fallback, so a shop paying one rate writes none.
+model StaffCommissionRate {
+  id        String           @id @default(cuid())
+  staffId   String
+  serviceId String?
+  category  ServiceCategory?
+  percent   Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staff   Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  // Postgres counts NULLs as distinct, so these two do not collide: a
+  // per-service row has a null category and a per-category row a null service.
+  @@unique([staffId, serviceId])
+  @@unique([staffId, category])
+  @@map("staff_commission_rates")
 }
 
 enum StaffPresence {
@@ -699,6 +727,7 @@ model Service {
 
   appointmentServices AppointmentService[]
   promotions          Promotion[]
+  commissionRates     StaffCommissionRate[]
 
   // Not unique on [type, species]: Postgres does not dedupe NULL species, so
   // the constraint would only half work. Uniqueness is enforced on the name.

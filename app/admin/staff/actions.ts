@@ -2,7 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth-guards";
-import { StaffRole } from "@prisma/client";
+import { ServiceCategory, StaffRole } from "@prisma/client";
+import { parseDollarsToCents } from "@/lib/pricing";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -21,6 +22,38 @@ interface StaffInput {
   defaultStationId: string | null;
   isActive: boolean;
   commissionPercent: number | null;
+  hourlyRateCents: number | null;
+}
+
+/** A blank box is the absence of an exception, not a rate of zero. */
+function parsePercent(value: FormDataEntryValue | null): number | null | "bad" {
+  const raw = String(value ?? "").trim().replace(/%$/, "");
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) return "bad";
+  return parsed;
+}
+
+/** Rows to replace this person's exceptions with, or the error key. */
+function parseRates(
+  formData: FormData
+): { serviceId: string | null; category: ServiceCategory | null; percent: number }[] | { error: string } {
+  const rows: { serviceId: string | null; category: ServiceCategory | null; percent: number }[] = [];
+  for (const [field, value] of formData.entries()) {
+    const category = field.startsWith("rateCategory_") ? field.slice("rateCategory_".length) : null;
+    const serviceId = field.startsWith("rateService_") ? field.slice("rateService_".length) : null;
+    if (!category && !serviceId) continue;
+    if (category && !Object.values(ServiceCategory).includes(category as ServiceCategory)) continue;
+    const percent = parsePercent(value);
+    if (percent === "bad") return { error: "bad_commission" };
+    if (percent === null) continue;
+    rows.push({
+      serviceId,
+      category: category ? (category as ServiceCategory) : null,
+      percent,
+    });
+  }
+  return rows;
 }
 
 function parseStaff(formData: FormData): StaffInput | { error: string } {
@@ -42,13 +75,8 @@ function parseStaff(formData: FormData): StaffInput | { error: string } {
   if (!email || !email.includes("@")) return { error: "email_required" };
   if (roles.length === 0) return { error: "invalid_role" };
 
-  const commissionRaw = ((formData.get("commissionPercent") as string | null) ?? "").trim();
-  let commissionPercent: number | null = null;
-  if (commissionRaw) {
-    const parsed = Number(commissionRaw.replace(/%$/, ""));
-    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) return { error: "bad_commission" };
-    commissionPercent = parsed;
-  }
+  const commissionPercent = parsePercent(formData.get("commissionPercent"));
+  if (commissionPercent === "bad") return { error: "bad_commission" };
 
   return {
     name,
@@ -57,6 +85,7 @@ function parseStaff(formData: FormData): StaffInput | { error: string } {
     defaultStationId: ((formData.get("defaultStationId") as string | null) ?? "").trim() || null,
     isActive: formData.get("isActive") === "on",
     commissionPercent,
+    hourlyRateCents: parseDollarsToCents(formData.get("hourlyRate")),
   };
 }
 
@@ -72,8 +101,15 @@ export async function createStaff(formData: FormData): Promise<void> {
   const clash = await prisma.staff.findUnique({ where: { email: parsed.email } });
   if (clash) redirect("/admin/staff/new?error=email_taken");
 
+  const rates = parseRates(formData);
+  if ("error" in rates) redirect(`/admin/staff/new?error=${rates.error}`);
+
   await prisma.staff.create({
-    data: { ...parsed, passwordHash: await bcrypt.hash(password, 12) },
+    data: {
+      ...parsed,
+      passwordHash: await bcrypt.hash(password, 12),
+      commissionRates: { create: rates },
+    },
   });
 
   done(`?created=${encodeURIComponent(parsed.name)}`);
@@ -101,11 +137,16 @@ export async function updateStaff(formData: FormData): Promise<void> {
   const password = ((formData.get("password") as string | null) ?? "").trim();
   if (password && password.length < 8) redirect(`/admin/staff/${id}/edit?error=weak_password`);
 
+  const rates = parseRates(formData);
+  if ("error" in rates) redirect(`/admin/staff/${id}/edit?error=${rates.error}`);
+
   await prisma.staff.update({
     where: { id },
     data: {
       ...parsed,
       ...(password ? { passwordHash: await bcrypt.hash(password, 12) } : {}),
+      // The form posts every box, so the ticked set is the whole truth.
+      commissionRates: { deleteMany: {}, create: rates },
     },
   });
 

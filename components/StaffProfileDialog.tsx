@@ -56,6 +56,8 @@ export interface StaffProfile {
     streak: number;
     avgTurnaroundMins: number | null;
     commissionPercent: number;
+    /** What the month blended out at when rates vary by service. */
+    effectiveRatePercent: number | null;
     payWeek: string;
     payMonth: string;
     badges: { key: string; label: string; detail: string }[];
@@ -239,7 +241,11 @@ export default function StaffProfileDialog({
             <p className="text-xs text-stone-500">
               Est. pay {profile.analytics.payWeek} this week ·{" "}
               {profile.analytics.payMonth} this month, at{" "}
-              {profile.analytics.commissionPercent}% of list price
+              {profile.analytics.effectiveRatePercent != null &&
+              Math.round(profile.analytics.effectiveRatePercent * 10) !==
+                Math.round(profile.analytics.commissionPercent * 10)
+                ? `${profile.analytics.effectiveRatePercent.toFixed(1)}% of list price, blended (base ${profile.analytics.commissionPercent}%)`
+                : `${profile.analytics.commissionPercent}% of list price`}
             </p>
             {profile.analytics.badges.length > 0 && (
               <ul className="mt-1.5 flex flex-wrap gap-1.5">

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
 import { FINISHED_STATUSES, getCompletions } from "@/lib/analytics";
 import { formatCents } from "@/lib/pricing";
+import { commissionCents, effectiveRatePercent, payEstimate } from "@/lib/commission";
+import { commissionRatesByStaff, scheduledMinutesByStaff } from "@/lib/commission-rates";
 import { formatServiceType, formatShopTime, formatStatus, shopDayKey, shopDayRange } from "@/lib/utils";
 
 /**
@@ -344,8 +346,11 @@ interface GroomerRow {
   name: string;
   finished: number;
   listCents: number;
+  /** What the range blended out at across their rates, not their base rate. */
   commissionPercent: number;
   payCents: number;
+  /** Cents of the figure that is the hourly floor rather than commission. */
+  flooredByCents: number;
   avgTurnaroundMins: number | null;
 }
 
@@ -354,7 +359,7 @@ const groomerPay: ReportDefinition<GroomerRow> = {
   name: "Groomer pay",
   description: "Finished visits per groomer in the range, and the commission they imply.",
   caveat:
-    "An estimate, not payroll: commission is paid on the list price of the services finished, and real tickets move with pet size and surcharges.",
+    "An estimate, not payroll: commission is paid on the list price of the services finished, real tickets move with pet size and surcharges, and the hourly floor is read off scheduled hours rather than worked ones.",
   columns: [
     { key: "name", label: "Groomer", value: (row) => row.name },
     { key: "finished", label: "Finished", numeric: true, total: true, value: (row) => row.finished },
@@ -381,6 +386,14 @@ const groomerPay: ReportDefinition<GroomerRow> = {
       value: (row) => row.payCents,
     },
     {
+      key: "flooredByCents",
+      label: "Lifted by hourly floor",
+      numeric: true,
+      money: true,
+      total: true,
+      value: (row) => row.flooredByCents,
+    },
+    {
       key: "avgTurnaroundMins",
       label: "Avg turnaround (min)",
       numeric: true,
@@ -391,7 +404,7 @@ const groomerPay: ReportDefinition<GroomerRow> = {
     const [staff, completions, config] = await Promise.all([
       prisma.staff.findMany({
         where: { roles: { hasSome: [StaffRole.GROOMER, StaffRole.BATHER] } },
-        select: { id: true, name: true, commissionPercent: true },
+        select: { id: true, name: true, commissionPercent: true, hourlyRateCents: true },
         orderBy: { name: "asc" },
       }),
       getCompletions(range.start),
@@ -401,11 +414,30 @@ const groomerPay: ReportDefinition<GroomerRow> = {
     const inRange = completions.filter((completion) =>
       completionInRange(completion.finishedAt, range)
     );
+    const [ratesByStaff, minutesByStaff] = await Promise.all([
+      commissionRatesByStaff(staff),
+      scheduledMinutesByStaff(staff.map((member) => member.id), range.start, range.end),
+    ]);
 
     return staff.map((member) => {
       const theirs = inRange.filter((completion) => completion.staffId === member.id);
       const listCents = theirs.reduce((sum, completion) => sum + (completion.priceCents ?? 0), 0);
-      const percent = member.commissionPercent ?? config.defaultCommissionPercent;
+      const lines = theirs.flatMap((completion) => completion.lines);
+      const rates = ratesByStaff.get(member.id) ?? {
+        staffPercent: member.commissionPercent,
+        shopPercent: config.defaultCommissionPercent,
+      };
+      // The blended rate rather than their base one: a groomer on 60% for a
+      // full groom and 25% for nails was never paid either number.
+      const percent =
+        effectiveRatePercent(lines, rates) ??
+        member.commissionPercent ??
+        config.defaultCommissionPercent;
+      const pay = payEstimate({
+        commissionCents: commissionCents(lines, rates),
+        hourlyRateCents: member.hourlyRateCents,
+        minutesScheduled: minutesByStaff.get(member.id) ?? 0,
+      });
       const turnarounds = theirs
         .map((completion) => completion.turnaroundMins)
         .filter((mins): mins is number => mins != null);
@@ -415,7 +447,8 @@ const groomerPay: ReportDefinition<GroomerRow> = {
         finished: theirs.length,
         listCents,
         commissionPercent: percent,
-        payCents: Math.round((listCents * percent) / 100),
+        payCents: pay.cents,
+        flooredByCents: pay.flooredBy,
         avgTurnaroundMins:
           turnarounds.length > 0
             ? Math.round(turnarounds.reduce((sum, mins) => sum + mins, 0) / turnarounds.length)

@@ -1,11 +1,17 @@
-import { StaffRole } from "@prisma/client";
+import { ServiceCategory, StaffRole } from "@prisma/client";
 import Link from "next/link";
 import { PageSection } from "@/components/ui";
 import TagPicker from "@/components/TagPicker";
+import { SERVICE_CATEGORY_LABEL, centsToInput } from "@/lib/pricing";
 
 /**
- * One form for hiring and for editing. Commission is per person, blank meaning
- * "use the shop default".
+ * One form for hiring and for editing.
+ *
+ * Pay is three things in order of how often a shop needs them: one rate for the
+ * person (blank = the shop default), an hourly minimum, and — behind a
+ * disclosure, because most shops never open it — a rate for one category or one
+ * service. A blank box is not a rate of zero, it is the absence of an exception,
+ * which is what makes the fallback chain work without a switch anywhere.
  */
 
 const inputClass =
@@ -16,6 +22,12 @@ export interface StationOption {
   name: string;
 }
 
+export interface ServiceOption {
+  id: string;
+  name: string;
+  category: ServiceCategory;
+}
+
 export interface StaffFormValues {
   id?: string;
   name: string;
@@ -24,6 +36,10 @@ export interface StaffFormValues {
   defaultStationId: string | null;
   isActive: boolean;
   commissionPercent: number | null;
+  hourlyRateCents: number | null;
+  /** Exceptions only: percent by category and by service. */
+  ratesByCategory: Partial<Record<ServiceCategory, number>>;
+  ratesByService: Record<string, number>;
 }
 
 const ROLE_LABEL: Record<StaffRole, string> = {
@@ -39,12 +55,14 @@ export default function StaffForm({
   submitLabel,
   defaultCommission,
   stations,
+  services,
 }: {
   action: (formData: FormData) => Promise<void>;
   initial: StaffFormValues;
   submitLabel: string;
   defaultCommission: number;
   stations: StationOption[];
+  services: ServiceOption[];
 }) {
   const editing = Boolean(initial.id);
 
@@ -84,7 +102,78 @@ export default function StaffForm({
               Leave blank to use the shop default of {defaultCommission}%.
             </span>
           </label>
+          <label className="text-sm">
+            <span className="block font-medium text-stone-700 mb-1">Hourly minimum</span>
+            <input
+              name="hourlyRate"
+              inputMode="decimal"
+              defaultValue={centsToInput(initial.hourlyRateCents)}
+              placeholder="None"
+              className={inputClass}
+            />
+            <span className="block text-xs text-stone-400 mt-1">
+              A quiet week earning less commission than the hours they were scheduled is lifted to
+              this. Leave blank and commission stands on its own.
+            </span>
+          </label>
         </div>
+
+        {/* Secondary by design: a shop paying one rate never opens this. */}
+        <details className="disclosure rounded-lg border border-stone-200 px-3 py-2">
+          <summary className="text-sm font-medium text-stone-700">
+            Different rates by service
+          </summary>
+
+          <div className="mt-3 space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-stone-500 mb-1">By category</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {Object.values(ServiceCategory).map((category) => (
+                  <label key={category} className="text-xs">
+                    <span className="block text-stone-500 mb-1">
+                      {SERVICE_CATEGORY_LABEL[category]}
+                    </span>
+                    <input
+                      name={`rateCategory_${category}`}
+                      inputMode="decimal"
+                      defaultValue={initial.ratesByCategory[category] ?? ""}
+                      placeholder="%"
+                      className="w-full border border-stone-200 rounded-lg px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {services.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-stone-500 mb-1">
+                  By service — beats the category above
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {services.map((service) => (
+                    <label key={service.id} className="flex items-center gap-2 text-xs">
+                      <input
+                        name={`rateService_${service.id}`}
+                        inputMode="decimal"
+                        defaultValue={initial.ratesByService[service.id] ?? ""}
+                        placeholder="%"
+                        aria-label={`Commission for ${service.name}`}
+                        className="w-16 border border-stone-200 rounded-lg px-2 py-1.5 text-sm"
+                      />
+                      <span className="text-stone-600">{service.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-stone-400">
+              A blank box is no rate at all, not zero: the service&apos;s rate is used, then its
+              category&apos;s, then this person&apos;s, then the shop&apos;s {defaultCommission}%.
+            </p>
+          </div>
+        </details>
 
         <div className="text-sm">
           <span className="block font-medium text-stone-700 mb-1">Roles</span>

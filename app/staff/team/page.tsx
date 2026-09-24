@@ -205,6 +205,7 @@ export default async function StaffTeamPage() {
           streak: row.streak,
           avgTurnaroundMins: row.avgTurnaroundMins,
           commissionPercent: row.commissionPercent,
+          effectiveRatePercent: row.effectiveRatePercent,
           payWeek: formatCents(row.payWeekCents),
           payMonth: formatCents(row.payMonthCents),
           badges: row.badges,

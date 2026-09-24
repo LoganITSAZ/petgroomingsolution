@@ -482,14 +482,33 @@ export default async function AnalyticsPage(props: PageProps) {
                       <td className="px-3 py-2 text-right text-stone-500">
                         {row.avgTurnaroundMins != null ? `${row.avgTurnaroundMins}m` : "—"}
                       </td>
+                      {/* The blended rate is what the month's work actually
+                          paid at; the base is only the fallback for a line
+                          with no exception of its own. */}
                       <td className="px-3 py-2 text-right text-stone-500">
-                        {row.commissionPercent}%
+                        {row.effectiveRatePercent != null &&
+                        Math.round(row.effectiveRatePercent * 10) !==
+                          Math.round(row.commissionPercent * 10) ? (
+                          <>
+                            {row.effectiveRatePercent.toFixed(1)}%
+                            <span className="block text-[10px] text-stone-400">
+                              base {row.commissionPercent}%
+                            </span>
+                          </>
+                        ) : (
+                          `${row.commissionPercent}%`
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right text-stone-700">
                         {formatCents(row.payTodayCents)}
                       </td>
                       <td className="px-3 py-2 text-right font-semibold text-stone-900">
                         {formatCents(row.payWeekCents)}
+                        {row.payMonthFlooredByCents > 0 && (
+                          <span className="block text-[10px] font-medium text-stone-400">
+                            30d lifted {formatCents(row.payMonthFlooredByCents)}
+                          </span>
+                        )}
                       </td>
                       {/* Beside the commission estimate, never inside it: a tip
                           is the customer's, and commission is the shop's. */}

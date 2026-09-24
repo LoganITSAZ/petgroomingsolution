@@ -18,7 +18,7 @@ gets cheaper in, not a promise.
 | Grid view of stations | `/staff/appointments` draws the floor as five stages with the station on the chip ([components/FloorBoard.tsx](components/FloorBoard.tsx)) |
 | Multi-groomer rotas | `StaffShift` rows, `/admin/schedule` to edit and `/staff/schedule` to read, with overtime and thin-day advice ([lib/schedule.ts](lib/schedule.ts)) |
 | Automated rebooking triggers | `rebookingJob` on the scheduled runner, cadence per customer from their own history ([lib/rebooking.ts](lib/rebooking.ts)), `featureRebookingPrompts` |
-| Commission payroll (the simple half) | `Staff.commissionPercent` over `SystemConfig.defaultCommissionPercent`, on the list price of services finished; `/staff/analytics` |
+| Variable commission | A rate per service or per category (`StaffCommissionRate`) over the person's own over the shop default, plus `Staff.hourlyRateCents` as a floor on scheduled hours ([lib/commission.ts](lib/commission.ts)); still an estimate on list prices |
 | Tips | `Payment.tipCents` — recorded off the Clover terminal, in the day's takings |
 | No-show protection (the fee, not a deposit) | A seeded `Missed appointment` `Surcharge` the counter adds to the next visit, and the notice both booking forms carry ([lib/no-show.ts](lib/no-show.ts)). No card is stored |
 | Add-on prompting at checkout | The pet's own last ten visits against today's lines ([lib/add-ons.ts](lib/add-ons.ts)), on the ticket only, with the count as evidence |
@@ -39,7 +39,7 @@ On `feat/scheduled-jobs`, not merged.
 
 Fits the model as it stands.
 
-1. **Variable commission.** Today it is one percentage per groomer. A real split needs rate *per service or per category* and an hourly floor, both on `Staff`. Keep it an estimate, never payroll.
+1. **Breed fallback for first-visit duration.** [lib/visit-duration.ts](lib/visit-duration.ts) learns from a pet's own measured visits. Below `MIN_VISITS_FOR_DURATION` there is nothing to learn from, so a first visit falls back to the flat sum of service durations — breed, coat and weight are what a groomer would guess from instead.
 
 ## Needs a decision
 
@@ -139,7 +139,7 @@ sizes hold; only the calendar moves.
 | ~~5~~ | ~~Automated voice alerts~~ | M | Shipped; same Twilio POST shape as `lib/sms.ts`, own flag |
 | ~~6~~ | ~~E-signatures, second and third documents~~ | M | Shipped; documents are rows, the signature is a `Photo` |
 | ~~7~~ | ~~Calendar month/week grid~~ | M | Shipped; the Week and Month views of the appointments list |
-| 8 | Variable commission | L | Rate per service or category, plus an hourly floor, both on `Staff` |
+| ~~8~~ | ~~Variable commission~~ | L | Shipped; the rate is a fallback chain, the floor reads scheduled hours |
 | 9 | Breed fallback for first-visit duration | M | Only matters for a pet with fewer than `MIN_VISITS_FOR_DURATION` visits |
 | 10 | Reserve with Google | L | Waiting on a season of online booking, not on effort |
 
