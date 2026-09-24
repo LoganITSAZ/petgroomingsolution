@@ -4,6 +4,8 @@ import {
   learnedDuration,
   MIN_DRIFT_MINS,
   MIN_VISITS_FOR_DURATION,
+  breedDuration,
+  breedReason,
   overrunsFrom,
   typicalOverrunMins,
 } from "./visit-duration";
@@ -87,5 +89,42 @@ describe("durationReason", () => {
       "Booked 20 min longer than the 60 min catalog slot: this pet's last 5 visits ran that way."
     );
     expect(durationReason(60, 45, 4)).toContain("15 min shorter");
+  });
+});
+
+describe("breedDuration", () => {
+  it("stands aside with no guide figure", () => {
+    expect(breedDuration(60, null)).toBe(60);
+    expect(breedDuration(60, 0)).toBe(60);
+  });
+
+  it("leaves a short booking alone — the guide describes a full groom", () => {
+    expect(breedDuration(15, 120)).toBe(15);
+  });
+
+  it("takes the breed figure for a groom-length slot", () => {
+    expect(breedDuration(90, 120)).toBe(120);
+  });
+
+  it("refuses a figure more than double the slot rather than clamping it", () => {
+    expect(breedDuration(60, 150)).toBe(60);
+  });
+
+  it("never books under half the catalog slot", () => {
+    expect(breedDuration(120, 40)).toBe(60);
+  });
+
+  it("ignores drift inside the noise", () => {
+    expect(breedDuration(120, 125)).toBe(120);
+  });
+
+  it("books shorter when the breed is quicker", () => {
+    expect(breedDuration(120, 90)).toBe(90);
+  });
+
+  it("says why, and only when something moved", () => {
+    expect(breedReason(90, 120, "Poodle")).toContain("30 min longer");
+    expect(breedReason(90, 120, "Poodle")).toContain("Poodle");
+    expect(breedReason(90, 90, "Poodle")).toBeNull();
   });
 });

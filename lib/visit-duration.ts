@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { FINISHED_STATUSES } from "@/lib/analytics";
+import { guidesForBreeds } from "@/lib/breeds";
 
 /**
  * How long this pet actually takes, rather than how long the catalog says.
@@ -13,6 +14,11 @@ import { FINISHED_STATUSES } from "@/lib/analytics";
  * This is that observation fed back into the booking. It is a suggestion the
  * shop can overwrite — `durationMins` stays editable on the appointment, and
  * an explicit duration from a caller always wins.
+ *
+ * A first visit has nothing of its own to learn from, so the breed guide's own
+ * `typicalMins` — which the shop already typed and already reads at the
+ * station — stands in until the pet has a history. The pet always beats the
+ * breed: a Poodle with three measured visits is groomed on its own numbers.
  */
 
 /** Below this many measured visits, an overrun is one bad afternoon. */
@@ -99,6 +105,38 @@ export function durationReason(
   return `Booked ${Math.abs(drift)} min ${direction} than the ${baseMins} min catalog slot: this pet's last ${visitCount} visits ran that way.`;
 }
 
+/**
+ * The breed figure is a *full groom*, so it may only move a booking long
+ * enough to be one. Without this a 15 minute nail trim on a Poodle would book
+ * for half an hour because the breed takes two.
+ */
+const MIN_BREED_BASE_RATIO = 0.5;
+
+/**
+ * The slot a breed guide argues for.
+ *
+ * Pure. Returns the catalog figure when there is no guide, when the guide has
+ * no time on it, when the booking is too short to be the groom the guide
+ * describes, or when the difference is inside the noise. The ratio guard is
+ * also the ceiling — a figure more than double the slot fails it outright —
+ * so only the floor is applied here.
+ */
+export function breedDuration(baseMins: number, typicalMins: number | null | undefined): number {
+  if (typicalMins == null || typicalMins <= 0) return baseMins;
+  if (baseMins < typicalMins * MIN_BREED_BASE_RATIO) return baseMins;
+  if (Math.abs(typicalMins - baseMins) < MIN_DRIFT_MINS) return baseMins;
+  const adjusted = Math.round(typicalMins / STEP_MINS) * STEP_MINS;
+  const floor = Math.max(STEP_MINS, Math.round(baseMins / 2 / STEP_MINS) * STEP_MINS);
+  return Math.max(adjusted, floor);
+}
+
+/** How a breed adjustment reads in an audit row, or null when nothing moved. */
+export function breedReason(baseMins: number, breedMins: number, breed: string): string | null {
+  if (breedMins === baseMins) return null;
+  const drift = breedMins - baseMins;
+  return `Booked ${Math.abs(drift)} min ${drift > 0 ? "longer" : "shorter"} than the ${baseMins} min catalog slot: no measured visits for this pet yet, and the shop's ${breed} guide says this long.`;
+}
+
 /** The last measured visits for a pet. Ten is a season of grooms, not a career. */
 export async function petOverruns(petId: string, take = 10): Promise<number[]> {
   const visits = await prisma.appointment.findMany({
@@ -129,6 +167,16 @@ export interface LearnedSlot {
 /** The slot to book for this pet, with the sentence explaining any change. */
 export async function learnedSlotForPet(petId: string, baseMins: number): Promise<LearnedSlot> {
   const overruns = await petOverruns(petId);
-  const mins = learnedDuration(baseMins, typicalOverrunMins(overruns));
-  return { mins, reason: durationReason(baseMins, mins, overruns.length) };
+  const typical = typicalOverrunMins(overruns);
+  if (typical != null) {
+    const mins = learnedDuration(baseMins, typical);
+    return { mins, reason: durationReason(baseMins, mins, overruns.length) };
+  }
+
+  // Nothing measured on this pet: fall back to the breed the shop wrote down.
+  const pet = await prisma.pet.findUnique({ where: { id: petId }, select: { breed: true } });
+  if (!pet?.breed) return { mins: baseMins, reason: null };
+  const guide = (await guidesForBreeds([pet.breed])).get(pet.breed.trim().toLowerCase());
+  const mins = breedDuration(baseMins, guide?.typicalMins);
+  return { mins, reason: breedReason(baseMins, mins, guide?.breed ?? pet.breed) };
 }

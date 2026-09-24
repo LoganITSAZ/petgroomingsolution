@@ -25,6 +25,7 @@ gets cheaper in, not a promise.
 | Automated voice alerts | `featureVoiceCalls` — a spoken Twilio call for the dog being ready and for a groom that has to change, with `Customer.voiceOptOut` as its own consent ([lib/voice.ts](lib/voice.ts)) |
 | Calendar week and month grid | The Week and Month views of `/staff/appointments` draw the same query as a calendar; the grid arithmetic is day keys in [lib/calendar-grid.ts](lib/calendar-grid.ts) |
 | Documents and e-signatures | `ShopDocument` rows replace the two waiver columns — a waiver, a matting release, a medical consent, each versioned on its own; a drawn signature plus a typed name stored as a `Photo` ([lib/documents.ts](lib/documents.ts), [components/SignaturePad.tsx](components/SignaturePad.tsx)) |
+| Breed fallback for a first visit | `breedDuration()` books a pet with no measured history on the shop's own `BreedGuide.typicalMins`, guarded to groom-length slots ([lib/visit-duration.ts](lib/visit-duration.ts)) |
 | Two-way SMS, one question wide | `/api/sms/inbound` — Twilio signature verified, the sending number matched to that customer's open consent request, YES/NO written to the same two columns the counter writes ([lib/sms-inbound.ts](lib/sms-inbound.ts)) |
 
 ## In flight
@@ -32,14 +33,13 @@ gets cheaper in, not a promise.
 On `feat/scheduled-jobs`, not merged.
 
 - **Immunization & vaccine tracking.** `VaccineRequirement` / `PetVaccination`, requirements edited in Shop Settings, `featureVaccinationGate` plus `vaccinationGateBlocks` to refuse a customer-facing booking or walk-in on an expired certificate ([lib/vaccinations.ts](lib/vaccinations.ts)). Staff are never refused; the arrival card on the dashboard carries the pet's own "bring proof of vaccination" line instead. Complete — merges with the branch.
-- **Breed- & weight-based time logic.** [lib/visit-duration.ts](lib/visit-duration.ts) suggests a duration from the pet's own measured visits (`MIN_VISITS_FOR_DURATION`), overriding the flat sum of service durations. It is per *pet*, not per breed — a pet with three visits beats any breed average. Breed/coat/weight is the fallback for a first visit and is not built.
+- **Breed- & weight-based time logic.** [lib/visit-duration.ts](lib/visit-duration.ts) suggests a duration from the pet's own measured visits (`MIN_VISITS_FOR_DURATION`), overriding the flat sum of service durations. It is per *pet*, not per breed — a pet with three visits beats any breed average. Breed is the fallback for a first visit and is built — `breedDuration()` on main.
 - **Automated pickup and reminder messages.** `reminderJob`, `digestJob`, `slotOfferJob` on the runner; `NotificationLog` keeps what went out.
 
 ## Next
 
-Fits the model as it stands.
-
-1. **Breed fallback for first-visit duration.** [lib/visit-duration.ts](lib/visit-duration.ts) learns from a pet's own measured visits. Below `MIN_VISITS_FOR_DURATION` there is nothing to learn from, so a first visit falls back to the flat sum of service durations — breed, coat and weight are what a groomer would guess from instead.
+Empty. Everything that fits the model as it stands has shipped; what is left is
+in **Needs a decision** below, which is the point of that bucket.
 
 ## Needs a decision
 
@@ -140,7 +140,7 @@ sizes hold; only the calendar moves.
 | ~~6~~ | ~~E-signatures, second and third documents~~ | M | Shipped; documents are rows, the signature is a `Photo` |
 | ~~7~~ | ~~Calendar month/week grid~~ | M | Shipped; the Week and Month views of the appointments list |
 | ~~8~~ | ~~Variable commission~~ | L | Shipped; the rate is a fallback chain, the floor reads scheduled hours |
-| 9 | Breed fallback for first-visit duration | M | Only matters for a pet with fewer than `MIN_VISITS_FOR_DURATION` visits |
+| ~~9~~ | ~~Breed fallback for first-visit duration~~ | M | Shipped; the pet beats the breed, and the guide's figure was already typed |
 | 10 | Reserve with Google | L | Waiting on a season of online booking, not on effort |
 
 Everything recommended against above is absent from this table on purpose.
