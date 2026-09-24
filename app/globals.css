@@ -69,6 +69,20 @@
     --ink: 245 244 242;
     --muted: 171 167 162;
     --line: 70 67 61;
+    /* The brand ramp needs the same treatment, and it is the half that was
+       missing: back-office and portal screens paint from these fallbacks
+       rather than from an inline theme, so a dark card kept the light-mode
+       cream tint and the light-mode brown type on it — a `text-brand-text`
+       label at about 2:1 and a `bg-brand-100` panel at about 2.2:1. These are
+       themeStyle(darkTokens(AMBER)) from lib/themes.ts, which is what the
+       public site emits for the same amber; the fills (500/700/900) are the
+       colour itself and are unchanged. */
+    --brand-100: 65 49 29;
+    --brand-300: 118 77 28;
+    --brand-600: 184 93 13;
+    --brand-on-600: 255 255 255;
+    --brand-on-700: 255 255 255;
+    --brand-text: 207 138 92;
   }
 
   /* ── Dark surfaces ──────────────────────────────────────────────────────

@@ -16,7 +16,7 @@ export default function Stars({
 }) {
   return (
     <span className={`inline-flex items-center gap-0.5 ${className}`}>
-      <span aria-hidden="true" className="tracking-[0.1em] text-brand-600">
+      <span aria-hidden="true" className="tracking-[0.1em] text-brand-text">
         {"★".repeat(rating)}
         <span className="opacity-25">{"★".repeat(RATING_MAX - rating)}</span>
       </span>

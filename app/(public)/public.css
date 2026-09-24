@@ -85,18 +85,6 @@
   line-height: 1.55;
 }
 #public-root .disclosure > summary { min-height: 2.75rem; }
-#public-root .public-about-hero {
-  margin: 2rem auto 0;
-  max-width: 72rem;
-  color: rgb(var(--ink));
-  border-bottom: 1px solid rgb(var(--line));
-}
-#public-root .public-about-hero > .absolute { display: none; }
-#public-root .public-about-hero p { color: rgb(var(--muted)); }
-#public-root .public-about-cta {
-  background: rgb(var(--brand-700));
-}
-#public-root .public-about-cta > .absolute { display: none; }
 #public-root .public-footer {
   margin-top: 2rem;
   padding-block: 3.5rem;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { THEME_PRESETS, resolveTheme, brandText, darkTokens, type ThemeTokens } from "@/lib/themes";
+import { THEME_PRESETS, resolveTheme, brandText, darkTokens, onBrand, readableFill, type ThemeTokens } from "@/lib/themes";
 
 /**
  * A shop can pick any of these themes, and now any of them in either mode.
@@ -21,6 +21,14 @@ function contrast(a: string, b: string): number {
   return (high + 0.05) / (low + 0.05);
 }
 
+/** A translucent fill composited over the surface behind it. */
+function over(fill: string, ground: string, alpha: number): string {
+  return fill
+    .split(" ")
+    .map((channel, index) => Math.round(Number(channel) * alpha + Number(ground.split(" ")[index]) * (1 - alpha)))
+    .join(" ");
+}
+
 function readablePairs(tokens: ThemeTokens): [string, number][] {
   return [
     ["ink on surface", contrast(tokens.ink, tokens.surface)],
@@ -29,6 +37,15 @@ function readablePairs(tokens: ThemeTokens): [string, number][] {
     ["muted on page", contrast(tokens.muted, tokens.pageBg)],
     ["brand text on surface", contrast(brandText(tokens), tokens.surface)],
     ["footer ink on footer", contrast(tokens.footerInk, tokens.footerBg)],
+    // The pale end of the ramp is a background, not a fill: every tinted card,
+    // badge and toolbar on the public site is brand-100 at some opacity over
+    // the surface, with ordinary type on top.
+    ["ink on brand tint", contrast(tokens.ink, over(tokens.brand100, tokens.surface, 0.65))],
+    ["muted on brand tint", contrast(tokens.muted, over(tokens.brand100, tokens.surface, 0.5))],
+    ["brand text on brand tint", contrast(brandText(tokens), over(tokens.brand100, tokens.surface, 0.65))],
+    // And the dark end is a fill with a derived foreground on it.
+    ["on-600 on brand 600", contrast(onBrand(readableFill(tokens.brand600, tokens.ink), tokens.ink), readableFill(tokens.brand600, tokens.ink))],
+    ["on-700 on brand 700", contrast(onBrand(readableFill(tokens.brand700, tokens.ink), tokens.ink), readableFill(tokens.brand700, tokens.ink))],
   ];
 }
 

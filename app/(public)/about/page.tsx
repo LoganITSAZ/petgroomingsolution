@@ -2,7 +2,9 @@ import { publicMetadata } from "@/lib/seo";
 import { seoOverride } from "@/lib/seo-pages";
 import { geocode } from "@/lib/maps";
 import { getConfig } from "@/lib/config";
+import OfficeIcon from "@/components/OfficeIcon";
 import Link from "next/link";
+import styles from "./about.module.css";
 
 export async function generateMetadata() {
   const config = await getConfig();
@@ -10,92 +12,67 @@ export async function generateMetadata() {
   return publicMetadata(config, "/about", await seoOverride("/about"), await geocode(config.shopAddress));
 }
 
+const CLAIMS: [string, string][] = [
+  ["A gentler pace", "No pet is rushed through. We work to the animal in front of us."],
+  ["Experienced hands", "Groomers who keep learning, on every coat and every temperament."],
+  ["Comfort first", "Nervous, elderly and first-time pets get the same patient handling."],
+];
+
 export default async function AboutPage() {
   const config = await getConfig();
+  const shopName = config.shopName ?? "Gentle Groomer";
 
   return (
     <div className="public-shell min-h-screen">
-      {/* Hero */}
-      <section className="public-about-hero relative overflow-hidden px-6 pb-12 pt-16 text-brand-on-700">
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900" />
-        <div className="absolute -right-20 top-0 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute -bottom-24 -left-12 text-[13rem] leading-none text-white/[0.07]" aria-hidden="true">🐾</div>
-        <div className="relative mx-auto max-w-4xl text-center">
-          <p className="mb-5 text-sm font-semibold tracking-tight text-brand-on-700">
-            Professional Pet Grooming
-          </p>
-          <h1 className="text-4xl font-black leading-tight md:text-6xl">
-            About {config.shopName}
-          </h1>
-          <p className="mt-3 text-brand-on-700 text-lg max-w-2xl mx-auto leading-relaxed">
-            Where every pet is treated with patience, care, and a whole lot of love.
-          </p>
-        </div>
-      </section>
+      <div className={styles.page}>
+        <article className={styles.panel}>
+          {/* Heading and story share a baseline rather than stacking apart. */}
+          <header className={styles.masthead}>
+            <div>
+              <h1 className={styles.title}>We take our time.</h1>
+              <span className={styles.shop}>About {shopName}</span>
+            </div>
+            <p className={styles.opening}>
+              {shopName} was founded on a simple belief: every pet deserves to be groomed by
+              someone who genuinely loves animals. We started as a single-table operation and
+              grew into a neighborhood studio — the approach never changed.
+            </p>
+          </header>
 
-      {/* Our Story */}
-      {/*
-        One page, one panel. The story, what the shop stands for and the way
-        out to the services were three surfaces stacked down the page; they are
-        bands of one panel now.
-      */}
-      <section className="px-6 pb-16 pt-8">
-        <div className="glass-panel mx-auto max-w-3xl overflow-hidden rounded-3xl">
-          <div className="p-7 md:p-10">
-          <p className="public-eyebrow mb-4">The Gentle Groomer way</p>
-          <h2 className="public-section-title mb-5">Our Story</h2>
-          <div className="space-y-4 text-muted leading-relaxed">
+          <div className={styles.story}>
             <p>
-              {config.shopName ?? "Gentle Groomer"} was founded on a simple belief: every pet
-              deserves to be groomed by someone who genuinely loves animals. We started as a small,
-              single-table operation and have grown into a trusted neighborhood grooming studio — but
-              our approach has never changed.
+              We don&apos;t rush your pet through the process. From the first brush stroke to the
+              final spritz, we pay attention to how your pet is feeling and adjust as we go. A dog
+              who needs a break gets one, and a cat who has had enough of the dryer tells us so.
             </p>
             <p>
-              We take our time. We don&apos;t rush your pet through the process. From the first
-              brush stroke to the final spritz, we pay attention to how your pet is feeling and
-              adjust our approach accordingly. Nervous animals, elderly pets, and first-timers all
-              get the same patient, gentle handling.
-            </p>
-            <p>
-              Our groomers are experienced, passionate, and committed to continuing education — so
-              your pet always gets the benefit of the latest techniques and best practices in pet
-              care.
+              Our groomers are experienced and committed to continuing education, so your pet gets
+              the benefit of current techniques — and we tell you plainly what we found and what we
+              did, every visit.
             </p>
           </div>
-          <div className="mt-8 grid gap-3 border-t border-line pt-6 sm:grid-cols-3">
-            {[
-              ["A gentler pace", "Time and attention for every visit."],
-              ["Experienced hands", "Thoughtful care from start to finish."],
-              ["Comfort first", "A calm approach for every personality."],
-            ].map(([title, description]) => (
-              <div key={title} className="rounded-2xl bg-brand-100/25 p-4">
-                <p className="text-sm font-bold text-ink">{title}</p>
-                <p className="mt-1 text-xs leading-relaxed text-muted">{description}</p>
+
+          <dl className={styles.claims}>
+            {CLAIMS.map(([claim, detail]) => (
+              <div key={claim} className={styles.claim}>
+                <dt>{claim}</dt>
+                <dd>{detail}</dd>
               </div>
             ))}
-          </div>
-          </div>
+          </dl>
 
-          {/* The way out, as the panel's last band rather than a card of its own. */}
-          <div className="public-about-cta relative overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-brand-900 px-6 py-12 text-center text-brand-on-700">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.22),transparent_48%)]" />
-            <div className="relative">
-              <p className="mb-3 text-xs font-bold tracking-tight text-brand-on-700">A calm visit starts here</p>
-              <h2 className="mb-2 text-2xl font-black">See what we offer</h2>
-              <p className="mb-6 text-sm text-brand-on-700">
-                Browse our grooming, bathing and add-on services with current pricing.
+          <div className={styles.cta}>
+            <div className={styles.ctaPaw} aria-hidden="true"><OfficeIcon name="paw" /></div>
+            <div>
+              <h2>See what a visit includes.</h2>
+              <p className={styles.ctaNote}>
+                Grooming, bathing and add-on services, with current pricing.
               </p>
-              <Link
-                href="/services"
-                className="inline-flex items-center justify-center rounded-xl bg-surface px-7 py-3 text-sm font-bold text-brand-text shadow-lg transition hover:-translate-y-0.5 hover:bg-brand-100/40"
-              >
-                View Our Services
-              </Link>
             </div>
+            <Link href="/services" className={styles.ctaLink}>View our services</Link>
           </div>
-        </div>
-      </section>
+        </article>
+      </div>
     </div>
   );
 }

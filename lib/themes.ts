@@ -432,6 +432,15 @@ export function onBrand(fill: string, ink: string): string {
   return contrast(fill, white) >= contrast(fill, ink) ? white : ink;
 }
 
+/** A translucent fill composited over what sits behind it. */
+function over(fill: string, ground: string, alpha: number): string {
+  const behind = ground.split(" ");
+  return fill
+    .split(" ")
+    .map((channel, index) => Math.round(Number(channel) * alpha + Number(behind[index]) * (1 - alpha)))
+    .join(" ");
+}
+
 function scale(triplet: string, factor: number): string {
   return triplet
     .split(" ")
@@ -481,9 +490,14 @@ export function readableFill(fill: string, ink: string): string {
  */
 export function brandText(tokens: ThemeTokens): string {
   const darken = luminance(tokens.surface) > 0.18;
+  // Brand type rarely sits on the bare surface: the badges and tinted cards it
+  // heads are brand-100 over that surface, which moves the ground away from
+  // white in light mode and towards it in dark. Clear AA on both grounds, or
+  // the one pair that is always a heading is the one pair that fails.
+  const grounds = [tokens.surface, over(tokens.brand100, tokens.surface, 0.65)];
   let current = tokens.brand700;
   for (let step = 0; step < 24; step++) {
-    if (contrast(current, tokens.surface) >= 4.5) break;
+    if (grounds.every((ground) => contrast(current, ground) >= 4.5)) break;
     current = scale(current, darken ? 0.9 : 1.12);
   }
   return current;
@@ -500,10 +514,19 @@ export function brandText(tokens: ThemeTokens): string {
  * fails is a preset to hand-tune, not a reason to loosen this.
  */
 export function darkTokens(tokens: ThemeTokens): ThemeTokens {
+  const surface = "33 32 29";
   return {
     ...tokens,
+    // The pale end of the ramp is not a colour, it is a background: every
+    // tinted badge, card and toolbar on the site is brand-100 (and its border
+    // brand-300) over the surface. Carried across unchanged it stays cream
+    // under a near-white ink — about 2.2:1 — so it is re-derived as the same
+    // brand mixed towards the dark surface. The fills (500/600/700) are the
+    // theme's actual colour and survive untouched.
+    brand100: over(tokens.brand500, surface, 0.16),
+    brand300: over(tokens.brand500, surface, 0.42),
     pageBg: "19 18 17",
-    surface: "33 32 29",
+    surface,
     ink: "245 244 242",
     muted: "171 167 162",
     line: "70 67 61",
