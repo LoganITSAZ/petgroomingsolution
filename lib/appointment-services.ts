@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { serviceFloorCents } from "@/lib/pricing";
+import { quoteLine, serviceFloorCents } from "@/lib/pricing";
+import { sizeCutoffs, sizePet, type PetSize, type SizedPet } from "@/lib/pet-size";
+import { guidesForBreeds } from "@/lib/breeds";
 import type { ServiceOption } from "@/components/ServicePicker";
 import { Species, type ServiceType } from "@prisma/client";
 import { getConfig } from "@/lib/config";
@@ -20,23 +22,41 @@ export interface ResolvedServices {
     serviceId: string;
     serviceType: ServiceType;
     priceCents: number | null;
+    sizeTier: PetSize | null;
     sortOrder: number;
   }[];
+}
+
+/** A pet's size for quoting, from its own weight or its breed's. */
+export async function sizePetById(petId: string): Promise<SizedPet | null> {
+  const pet = await prisma.pet.findUnique({
+    where: { id: petId },
+    select: { species: true, breed: true, weightLbs: true },
+  });
+  if (!pet) return null;
+  const [config, guides] = await Promise.all([getConfig(), guidesForBreeds([pet.breed])]);
+  const guide = pet.breed ? guides.get(pet.breed.trim().toLowerCase()) : undefined;
+  return sizePet(pet, guide, sizeCutoffs(config));
 }
 
 /**
  * Turn selected catalog ids into line items, in the order they were picked.
  * The same catalog row cannot be added twice; two different services that
  * share a reporting type (a dog groom and a cat groom are both FULL_GROOM) can
- * both be booked. Unknown ids are dropped.
+ * both be booked. Unknown ids are dropped. With a pet, size-priced lines are
+ * quoted at that pet's size.
  */
 export async function resolveSelectedServices(
-  serviceIds: string[]
+  serviceIds: string[],
+  petId?: string | null
 ): Promise<ResolvedServices | null> {
   const ids = serviceIds.map((id) => id.trim()).filter(Boolean);
   if (ids.length === 0) return null;
 
-  const services = await prisma.service.findMany({ where: { id: { in: ids } } });
+  const [services, sized] = await Promise.all([
+    prisma.service.findMany({ where: { id: { in: ids } } }),
+    petId ? sizePetById(petId) : null,
+  ]);
   const byId = new Map(services.map((service) => [service.id, service]));
 
   const lines: ResolvedServices["lines"] = [];
@@ -49,7 +69,7 @@ export async function resolveSelectedServices(
     lines.push({
       serviceId: service.id,
       serviceType: service.type,
-      priceCents: serviceFloorCents(service),
+      ...quoteLine(service, sized?.size ?? null),
       sortOrder: lines.length,
     });
   }

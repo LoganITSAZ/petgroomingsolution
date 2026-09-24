@@ -358,8 +358,16 @@ export async function updateServices(formData: FormData): Promise<void> {
   await requireStaff();
 
   const appointmentId = (formData.get("appointmentId") as string | null) ?? "";
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    select: { petId: true },
+  });
+  // A visit that no longer exists has nothing to re-quote; the page's existing
+  // message is the nearest honest one.
+  if (!appointment) back(appointmentId, "?error=no_services");
   const services = await resolveSelectedServices(
-    formData.getAll("serviceIds").map((value) => String(value))
+    formData.getAll("serviceIds").map((value) => String(value)),
+    appointment.petId
   );
   if (!services) back(appointmentId, "?error=no_services");
 

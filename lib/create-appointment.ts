@@ -1,9 +1,10 @@
 import { AppointmentStatus, AppointmentType, Prisma, ServiceType } from "@prisma/client";
-import { resolveSelectedServices, sendBookingNotifications } from "@/lib/appointment-services";
+import { resolveSelectedServices, sendBookingNotifications, sizePetById } from "@/lib/appointment-services";
 import { validateBookingTime, type BookingRefusalCode } from "@/lib/booking-validation";
 import { getConfig } from "@/lib/config";
 import { kennelDemand } from "@/lib/kennels";
-import { serviceFloorCents } from "@/lib/pricing";
+import type { PetSize } from "@/lib/pet-size";
+import { quoteLine } from "@/lib/pricing";
 import { bookingRateSnapshot } from "@/lib/pricing-tiers";
 import { prisma } from "@/lib/prisma";
 import type { BusinessHours } from "@/lib/shop-hours";
@@ -155,7 +156,7 @@ export async function createAppointment(
     }
   }
 
-  const resolved = await resolveSelectedServices(input.serviceIds ?? []);
+  const resolved = await resolveSelectedServices(input.serviceIds ?? [], input.petId);
   if (input.serviceIds?.length && !resolved) {
     return { ok: false, code: "NO_SERVICES", message: "No such services." };
   }
@@ -168,6 +169,7 @@ export async function createAppointment(
     serviceId: string | null;
     serviceType: ServiceType;
     priceCents: number | null;
+    sizeTier: PetSize | null;
     sortOrder: number;
   }[] = resolved?.lines ?? [];
   const serviceType = resolved?.primaryType ?? input.serviceType;
@@ -176,15 +178,20 @@ export async function createAppointment(
   }
 
   if (lines.length === 0) {
-    const catalogService = await prisma.service.findFirst({
-      where: { type: serviceType, isActive: true },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    });
+    const [catalogService, sized] = await Promise.all([
+      prisma.service.findFirst({
+        where: { type: serviceType, isActive: true },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      }),
+      sizePetById(input.petId),
+    ]);
     lines = [
       {
         serviceId: catalogService?.id ?? null,
         serviceType,
-        priceCents: catalogService ? serviceFloorCents(catalogService) : null,
+        ...(catalogService
+          ? quoteLine(catalogService, sized?.size ?? null)
+          : { priceCents: null, sizeTier: null }),
         sortOrder: 0,
       },
     ];
