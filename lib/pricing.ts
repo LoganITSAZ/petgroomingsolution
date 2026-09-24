@@ -1,4 +1,5 @@
 import { PricingMode, ServiceCategory, ServiceType, type Service } from "@prisma/client";
+import type { PetSize } from "@/lib/pet-size";
 
 /** Money is stored in cents everywhere. Format whole dollars, cents only when non-zero. */
 export function formatCents(cents: number | null | undefined): string {
@@ -73,6 +74,27 @@ export function isSizePriced(service: PricedService): boolean {
 export function serviceFloorCents(service: PricedService): number | null {
   const prices = servicePrices(service);
   return prices.length > 0 ? prices[0] : null;
+}
+
+const SIZE_COLUMN: Record<PetSize, keyof PricedService> = {
+  SMALL: "priceSmallCents",
+  MEDIUM: "priceMediumCents",
+  LARGE: "priceLargeCents",
+  XL: "priceXlCents",
+};
+
+/**
+ * What one booked line costs for a pet of this size. The size is recorded only
+ * when it set the price — a flat service, an unknown size or a size the shop
+ * left unpriced all quote the floor, as every line did before sizes existed.
+ */
+export function quoteLine(
+  service: PricedService,
+  size: PetSize | null
+): { priceCents: number | null; sizeTier: PetSize | null } {
+  const atSize = size && isSizePriced(service) ? service[SIZE_COLUMN[size]] : null;
+  if (size && atSize != null) return { priceCents: atSize, sizeTier: size };
+  return { priceCents: serviceFloorCents(service), sizeTier: null };
 }
 
 /** Shops quote in round money — every derived price lands on a $5 step. */

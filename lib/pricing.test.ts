@@ -4,6 +4,7 @@ import {
   parseDollarsToCents,
   tiersFromBase,
   roundToStep,
+  quoteLine,
 } from './pricing';
 
 describe('pricing logic', () => {
@@ -84,3 +85,38 @@ describe('pricing logic', () => {
   });
 });
 
+describe("quoteLine", () => {
+  const sized = {
+    priceSmallCents: 4500,
+    priceMediumCents: 6000,
+    priceLargeCents: null,
+    priceXlCents: 10000,
+    priceFlatCents: null,
+    priceMaxCents: null,
+  };
+  const flat = {
+    priceSmallCents: null,
+    priceMediumCents: null,
+    priceLargeCents: null,
+    priceXlCents: null,
+    priceFlatCents: 1500,
+    priceMaxCents: null,
+  };
+
+  it("prices a size-priced service at the pet's size", () => {
+    expect(quoteLine(sized, "MEDIUM")).toEqual({ priceCents: 6000, sizeTier: "MEDIUM" });
+    expect(quoteLine(sized, "XL")).toEqual({ priceCents: 10000, sizeTier: "XL" });
+  });
+
+  it("falls back to the floor when the size has no price", () => {
+    expect(quoteLine(sized, "LARGE")).toEqual({ priceCents: 4500, sizeTier: null });
+  });
+
+  it("falls back to the floor when the size is unknown", () => {
+    expect(quoteLine(sized, null)).toEqual({ priceCents: 4500, sizeTier: null });
+  });
+
+  it("ignores size on a flat service", () => {
+    expect(quoteLine(flat, "XL")).toEqual({ priceCents: 1500, sizeTier: null });
+  });
+});
