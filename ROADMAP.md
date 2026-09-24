@@ -23,6 +23,7 @@ gets cheaper in, not a promise.
 | No-show protection (the fee, not a deposit) | A seeded `Missed appointment` `Surcharge` the counter adds to the next visit, and the notice both booking forms carry ([lib/no-show.ts](lib/no-show.ts)). No card is stored |
 | Add-on prompting at checkout | The pet's own last ten visits against today's lines ([lib/add-ons.ts](lib/add-ons.ts)), on the ticket only, with the count as evidence |
 | Automated voice alerts | `featureVoiceCalls` — a spoken Twilio call for the dog being ready and for a groom that has to change, with `Customer.voiceOptOut` as its own consent ([lib/voice.ts](lib/voice.ts)) |
+| Calendar week and month grid | The Week and Month views of `/staff/appointments` draw the same query as a calendar; the grid arithmetic is day keys in [lib/calendar-grid.ts](lib/calendar-grid.ts) |
 | Documents and e-signatures | `ShopDocument` rows replace the two waiver columns — a waiver, a matting release, a medical consent, each versioned on its own; a drawn signature plus a typed name stored as a `Photo` ([lib/documents.ts](lib/documents.ts), [components/SignaturePad.tsx](components/SignaturePad.tsx)) |
 | Two-way SMS, one question wide | `/api/sms/inbound` — Twilio signature verified, the sending number matched to that customer's open consent request, YES/NO written to the same two columns the counter writes ([lib/sms-inbound.ts](lib/sms-inbound.ts)) |
 
@@ -39,7 +40,6 @@ On `feat/scheduled-jobs`, not merged.
 Fits the model as it stands.
 
 1. **Variable commission.** Today it is one percentage per groomer. A real split needs rate *per service or per category* and an hourly floor, both on `Staff`. Keep it an estimate, never payroll.
-2. **Calendar month/week grid.** `/admin/schedule` is a week of staff rows; a booked-appointments grid is a second view over data already queried.
 
 ## Needs a decision
 
@@ -138,7 +138,7 @@ sizes hold; only the calendar moves.
 | ~~4~~ | ~~Consent reply webhook~~ | M | Shipped; signature verification was not optional |
 | ~~5~~ | ~~Automated voice alerts~~ | M | Shipped; same Twilio POST shape as `lib/sms.ts`, own flag |
 | ~~6~~ | ~~E-signatures, second and third documents~~ | M | Shipped; documents are rows, the signature is a `Photo` |
-| 7 | Calendar month/week grid | M | A second view over data already queried |
+| ~~7~~ | ~~Calendar month/week grid~~ | M | Shipped; the Week and Month views of the appointments list |
 | 8 | Variable commission | L | Rate per service or category, plus an hourly floor, both on `Staff` |
 | 9 | Breed fallback for first-visit duration | M | Only matters for a pet with fewer than `MIN_VISITS_FOR_DURATION` visits |
 | 10 | Reserve with Google | L | Waiting on a season of online booking, not on effort |

@@ -8,6 +8,7 @@ import {
   formatStatus,
   shopDayKey,
   shopDayRange,
+  shopDayRangeForKey,
 } from "@/lib/utils";
 import { checkInWithKennel, moveStatus } from "./actions";
 import CheckInDialog from "@/components/CheckInDialog";
@@ -33,6 +34,8 @@ import { isEnabled } from "@/lib/features";
 import { rebookingEvidence, rebookingList } from "@/lib/rebooking";
 import FilterAutoSubmit from "@/components/FilterAutoSubmit";
 import DateJump from "@/components/DateJump";
+import AppointmentCalendar from "@/components/AppointmentCalendar";
+import { shiftDayKey, unitBounds } from "@/lib/calendar-grid";
 import { PageShell, PageSection, StatStrip } from "@/components/ui";
 
 // Screen readers announce the title first; without one every page in the
@@ -55,8 +58,8 @@ const IN_SHOP: AppointmentStatus[] = [
 
 const VIEWS = {
   day: "Day",
-  week: "7 Day",
-  month: "30 Day",
+  week: "Week",
+  month: "Month",
 } as const;
 type View = keyof typeof VIEWS;
 
@@ -122,13 +125,6 @@ function queryString(filters: Filters, patch: Partial<Filters> = {}): string {
   return qs ? `?${qs}` : "";
 }
 
-/** Shift a YYYY-MM-DD key by whole days. */
-function shiftDay(dayKey: string, days: number): string {
-  const date = new Date(`${dayKey}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
 interface PageProps {
   searchParams: Promise<Partial<Record<keyof Filters, string>> & { error?: string }>;
 }
@@ -136,7 +132,7 @@ interface PageProps {
 export default async function StaffAppointmentsPage(props: PageProps) {
   const searchParams = await props.searchParams;
   const todayKey = shopDayKey();
-  const tomorrowKey = shiftDay(todayKey, 1);
+  const tomorrowKey = shiftDayKey(todayKey, 1);
 
   const filters: Filters = {
     view: (searchParams.view as View) in VIEWS ? (searchParams.view as View) : "day",
@@ -161,15 +157,22 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     return <RebookingBoard config={config} />;
   }
 
-  // Range for the chosen view, always resolved in shop time.
+  /*
+   * Range for the chosen view, always resolved in shop time. A week and a month
+   * are the *calendar* week and month holding the chosen day rather than 7 or 30
+   * days from it — a grid draws Sunday to Saturday, and a range that started
+   * mid-week would leave the first row half empty and the last row spilling.
+   */
   const dayStart = shopDayRange(new Date(`${filters.date}T12:00:00Z`)).start;
   const dayEnd = shopDayRange(new Date(`${filters.date}T12:00:00Z`)).end;
+  const bounds = unitBounds(filters.date, filters.view === "week" ? "week" : "month");
   const range: Prisma.DateTimeFilter =
     filters.view === "day"
       ? { gte: dayStart, lt: dayEnd }
-      : filters.view === "week"
-        ? { gte: dayStart, lt: new Date(dayStart.getTime() + 7 * 86400000) }
-        : { gte: dayStart, lt: new Date(dayStart.getTime() + 30 * 86400000) };
+      : {
+          gte: shopDayRangeForKey(bounds.first)!.start,
+          lt: shopDayRangeForKey(bounds.last)!.end,
+        };
 
   const statuses = GROUP_FILTER[filters.group];
 
@@ -376,7 +379,7 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     filters.view === "day" ? (
       <div className="flex items-center gap-1">
         <Link
-          href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, -1) })}`}
+          href={`/staff/appointments${queryString(filters, { date: shiftDayKey(filters.date, -1) })}`}
           aria-label="Previous day"
           className="px-2 py-1 rounded-lg text-stone-500 hover:bg-white hover:text-stone-800 transition-colors"
         >
@@ -399,7 +402,7 @@ export default async function StaffAppointmentsPage(props: PageProps) {
           "w-56"
         )}
         <Link
-          href={`/staff/appointments${queryString(filters, { date: shiftDay(filters.date, 1) })}`}
+          href={`/staff/appointments${queryString(filters, { date: shiftDayKey(filters.date, 1) })}`}
           aria-label="Next day"
           className="px-2 py-1 rounded-lg text-stone-500 hover:bg-white hover:text-stone-800 transition-colors"
         >
@@ -407,10 +410,44 @@ export default async function StaffAppointmentsPage(props: PageProps) {
         </Link>
       </div>
     ) : (
-      datePicker(
-        `From ${formatShopDate(dayStart, { weekday: "long", month: "long", day: "numeric" })}`,
-        "w-64"
-      )
+      /* The unit being read, stepped a whole week or month at a time — the
+         grid's rows are the calendar's, so the arrows have to move by the
+         calendar too. */
+      <div className="flex items-center gap-1">
+        <Link
+          href={`/staff/appointments${queryString(filters, {
+            date: shiftDayKey(bounds.first, -1),
+          })}`}
+          aria-label={`Previous ${filters.view}`}
+          className="px-2 py-1 rounded-lg text-stone-500 hover:bg-white hover:text-stone-800 transition-colors"
+        >
+          ←
+        </Link>
+        {datePicker(
+          filters.view === "week"
+            ? `${formatShopDate(shopDayRangeForKey(bounds.first)!.start, {
+                month: "short",
+                day: "numeric",
+              })} – ${formatShopDate(shopDayRangeForKey(bounds.last)!.start, {
+                month: "short",
+                day: "numeric",
+              })}`
+            : formatShopDate(shopDayRangeForKey(bounds.first)!.start, {
+                month: "long",
+                year: "numeric",
+              }),
+          "w-56"
+        )}
+        <Link
+          href={`/staff/appointments${queryString(filters, {
+            date: shiftDayKey(bounds.last, 1),
+          })}`}
+          aria-label={`Next ${filters.view}`}
+          className="px-2 py-1 rounded-lg text-stone-500 hover:bg-white hover:text-stone-800 transition-colors"
+        >
+          →
+        </Link>
+      </div>
     );
 
   const newVisit = (
@@ -500,8 +537,35 @@ export default async function StaffAppointmentsPage(props: PageProps) {
           </FilterAutoSubmit>
         </form>
 
-        {/* List — takes whatever height is left and scrolls inside the card */}
-        {appointments.length === 0 ? (
+        {/*
+          A range is drawn, not listed. The grid is the same rows the list
+          would have shown — no second query — and it carries no stage moves:
+          those belong to the day being worked, one tab to the left.
+        */}
+        {filters.view !== "day" ? (
+          <PageSection
+            title={filters.view === "week" ? "Week" : "Month"}
+            hint={`${appointments.length} visits`}
+            grow
+            scroll
+            padded={false}
+          >
+            <AppointmentCalendar
+              anchorKey={filters.date}
+              unit={filters.view === "week" ? "week" : "month"}
+              visits={appointments.map((appt) => ({
+                id: appt.id,
+                scheduledAt: appt.scheduledAt,
+                status: appt.status,
+                petName: appt.pet.name,
+                staffName: appt.staff?.name ?? null,
+              }))}
+              dayHref={(dayKey) =>
+                `/staff/appointments${queryString(filters, { view: "day", date: dayKey })}`
+              }
+            />
+          </PageSection>
+        ) : appointments.length === 0 ? (
           <PageSection grow className="text-center text-sm">
             <p className="text-stone-500">
               {isFiltered
