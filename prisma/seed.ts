@@ -262,6 +262,7 @@ async function main() {
         "Allow drying time — the undercoat holds a lot of water",
       ].join("\n"),
       typicalMins: 120,
+      typicalWeightLbs: 65,
     },
     {
       breed: "German Shepherd",
@@ -275,6 +276,7 @@ async function main() {
         "Expect a long dry; damp undercoat causes hot spots",
       ].join("\n"),
       typicalMins: 100,
+      typicalWeightLbs: 75,
     },
     {
       breed: "Shih Tzu",
@@ -288,6 +290,7 @@ async function main() {
         "Face, feet and sanitary tidy matter more than length to most owners",
       ].join("\n"),
       typicalMins: 90,
+      typicalWeightLbs: 12,
     },
     {
       breed: "Yorkshire Terrier",
@@ -301,6 +304,7 @@ async function main() {
         "Confirm face length with the owner before starting",
       ].join("\n"),
       typicalMins: 75,
+      typicalWeightLbs: 6,
     },
     {
       breed: "Labrador Retriever",
@@ -314,6 +318,7 @@ async function main() {
         "Nails are often thick and need a grinder to finish",
       ].join("\n"),
       typicalMins: 60,
+      typicalWeightLbs: 65,
     },
     {
       breed: "Australian Shepherd",
@@ -327,6 +332,7 @@ async function main() {
         "Do not shave — the coat regrows unevenly",
       ].join("\n"),
       typicalMins: 100,
+      typicalWeightLbs: 50,
     },
     {
       breed: "Schnauzer",
@@ -353,6 +359,7 @@ async function main() {
         "White coat shows every miss — rinse thoroughly",
       ].join("\n"),
       typicalMins: 90,
+      typicalWeightLbs: 7,
     },
     {
       breed: "Persian",
@@ -392,6 +399,13 @@ async function main() {
       update: { photoUrl: guide.photoUrl },
       create: guide,
     });
+    // Same for the typical weight, but never over a figure the shop typed.
+    if ("typicalWeightLbs" in guide) {
+      await prisma.breedGuide.updateMany({
+        where: { breed: guide.breed, typicalWeightLbs: null },
+        data: { typicalWeightLbs: guide.typicalWeightLbs },
+      });
+    }
   }
   console.log(`✓ ${breedGuides.length} breed guides`);
 

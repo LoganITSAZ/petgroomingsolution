@@ -37,6 +37,11 @@ export async function saveBreedGuide(formData: FormData): Promise<void> {
   if (typicalMins != null && (!Number.isInteger(typicalMins) || typicalMins <= 0)) {
     done("?error=bad_minutes");
   }
+  const weightRaw = ((formData.get("typicalWeightLbs") as string | null) ?? "").trim();
+  const typicalWeightLbs = weightRaw ? Number(weightRaw) : null;
+  if (typicalWeightLbs != null && (!Number.isFinite(typicalWeightLbs) || typicalWeightLbs <= 0)) {
+    done("?error=bad_weight");
+  }
 
   const data = {
     breed,
@@ -47,6 +52,7 @@ export async function saveBreedGuide(formData: FormData): Promise<void> {
       : Species.DOG,
     coat: Object.values(CoatType).includes(coatRaw as CoatType) ? (coatRaw as CoatType) : null,
     typicalMins,
+    typicalWeightLbs,
     photoUrl: photoRaw || null,
   };
 

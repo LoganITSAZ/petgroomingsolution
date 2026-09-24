@@ -20,6 +20,7 @@ const ERRORS: Record<string, string> = {
   summary_required: "Write a one-line summary of the coat.",
   duplicate: "There is already a guide for that breed.",
   bad_minutes: "Typical time must be a whole number of minutes.",
+  bad_weight: "Typical weight must be a positive number of pounds.",
   bad_photo: "A photo link has to start with http:// or https://.",
 };
 
@@ -29,7 +30,7 @@ const inputClass =
 function GuideFields({ guide }: { guide?: BreedGuide }) {
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
         <label className="text-sm">
           <span className="block font-medium text-stone-700 mb-1">Breed</span>
           <input name="breed" required defaultValue={guide?.breed ?? ""} className={inputClass} />
@@ -63,6 +64,18 @@ function GuideFields({ guide }: { guide?: BreedGuide }) {
             defaultValue={guide?.typicalMins ?? ""}
             className={inputClass}
           />
+        </label>
+        <label className="text-sm">
+          <span className="block font-medium text-stone-700 mb-1">Typical weight (lb)</span>
+          <input
+            name="typicalWeightLbs"
+            inputMode="decimal"
+            defaultValue={guide?.typicalWeightLbs ?? ""}
+            className={inputClass}
+          />
+          <span className="block text-xs text-stone-500 mt-1">
+            Sizes a dog nobody has weighed. Leave blank for breeds that come in several sizes.
+          </span>
         </label>
       </div>
 
@@ -186,6 +199,7 @@ export default async function BreedGuidesPage(props: PageProps) {
                   {formatSpecies(guide.species)}
                   {guide.coat && ` · ${formatCoatType(guide.coat)}`}
                   {guide.typicalMins && ` · ${guide.typicalMins} min`}
+                  {guide.typicalWeightLbs && ` · ~${guide.typicalWeightLbs} lb`}
                   {` · ${tipLines(guide).length} tips`}
                 </span>
               </summary>
