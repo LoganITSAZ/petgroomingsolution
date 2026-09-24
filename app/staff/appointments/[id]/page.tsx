@@ -40,6 +40,8 @@ import { photoUrl } from "@/lib/photos";
 import { consentState, groomRecordSummary, lastGroomRecordForPet } from "@/lib/visit-record";
 import VisitPhotoStrip from "@/components/VisitPhotoStrip";
 import { getConfig } from "@/lib/config";
+import { guidesForBreeds } from "@/lib/breeds";
+import { describeSize, sizeCutoffs, sizeName, sizePet } from "@/lib/pet-size";
 import { isEnabled } from "@/lib/features";
 import { ticketFromRow } from "@/lib/ticket";
 import { TicketPanel } from "@/components/Ticket";
@@ -241,6 +243,13 @@ export default async function AppointmentDetailPage(props: PageProps) {
   const previousGroom = await lastGroomRecordForPet(appointment.petId, appointment.id);
   const consent = consentState(appointment);
   const config = await getConfig();
+  const breedGuide = appointment.pet.breed
+    ? (await guidesForBreeds([appointment.pet.breed])).get(appointment.pet.breed.trim().toLowerCase())
+    : undefined;
+  const sizeLine = describeSize(
+    sizePet(appointment.pet, breedGuide, sizeCutoffs(config)),
+    appointment.pet.species
+  );
 
   const next = nextStatus(appointment.status);
   const arrival =
@@ -406,7 +415,11 @@ export default async function AppointmentDetailPage(props: PageProps) {
                   <p className="text-stone-700">
                     {formatSpecies(appointment.pet.species)}
                     {appointment.pet.breed ? ` · ${appointment.pet.breed}` : ""}
-                    {appointment.pet.weightLbs ? ` · ${appointment.pet.weightLbs} lbs` : ""}
+                    {sizeLine
+                      ? ` · ${sizeLine}`
+                      : appointment.pet.weightLbs
+                        ? ` · ${appointment.pet.weightLbs} lb`
+                        : ""}
                   </p>
                 </div>
                 <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
@@ -679,7 +692,11 @@ export default async function AppointmentDetailPage(props: PageProps) {
                     )}
                   </span>
                   <span className="text-stone-500 whitespace-nowrap">
-                    {line.priceCents != null ? `from ${formatCents(line.priceCents)}` : "—"}
+                    {line.priceCents == null
+                      ? "—"
+                      : line.sizeTier
+                        ? `${formatCents(line.priceCents)} · ${sizeName(line.sizeTier)}`
+                        : `from ${formatCents(line.priceCents)}`}
                   </span>
                 </li>
               ))}

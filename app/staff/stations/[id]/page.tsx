@@ -17,6 +17,7 @@ import { guidesForBreeds, tipLines } from "@/lib/breeds";
 import { groomRecordSummary, lastGroomRecordsForPets } from "@/lib/visit-record";
 import { lastAfterPhotoForPets } from "@/lib/visit-photos";
 import { getConfig } from "@/lib/config";
+import { describeSize, sizeCutoffs, sizePet } from "@/lib/pet-size";
 import { VACCINE_LEVEL_LABEL, checksForPets } from "@/lib/vaccinations";
 import {
   formatCoatType,
@@ -140,6 +141,7 @@ export default async function StaffStationDetailPage(props: PageProps) {
   // Shots, one pair of queries for the whole station. Stated, never enforced:
   // the pet is on the table.
   const config = await getConfig();
+  const cutoffs = sizeCutoffs(config);
   const vaccinationChecks = await checksForPets(
     occupants.map((appt) => appt.pet.id),
     config
@@ -413,7 +415,14 @@ export default async function StaffStationDetailPage(props: PageProps) {
                                 formatSpecies(appt.pet.species),
                                 appt.pet.breed,
                                 appt.pet.coatType ? `${formatCoatType(appt.pet.coatType)} coat` : null,
-                                appt.pet.weightLbs ? `${appt.pet.weightLbs} lbs` : null,
+                                describeSize(
+                                  sizePet(
+                                    appt.pet,
+                                    appt.pet.breed ? guides.get(appt.pet.breed.trim().toLowerCase()) : undefined,
+                                    cutoffs
+                                  ),
+                                  appt.pet.species
+                                ) ?? (appt.pet.weightLbs ? `${appt.pet.weightLbs} lb` : null),
                               ]
                                 .filter(Boolean)
                                 .join(" · ")}
