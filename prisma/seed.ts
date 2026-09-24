@@ -399,13 +399,6 @@ async function main() {
       update: { photoUrl: guide.photoUrl },
       create: guide,
     });
-    // Same for the typical weight, but never over a figure the shop typed.
-    if ("typicalWeightLbs" in guide) {
-      await prisma.breedGuide.updateMany({
-        where: { breed: guide.breed, typicalWeightLbs: null },
-        data: { typicalWeightLbs: guide.typicalWeightLbs },
-      });
-    }
   }
   console.log(`✓ ${breedGuides.length} breed guides`);
 

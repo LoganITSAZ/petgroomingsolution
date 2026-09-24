@@ -56,17 +56,29 @@ export interface SizedPet {
   estimated: boolean;
 }
 
+const VARIETY = /\b(toy|mini|miniature|teacup|micro|giant)\b/i;
+
+/**
+ * The guide match is loose, so "Miniature Australian Shepherd" finds
+ * "Australian Shepherd" — and its 50 lb would quote a 25 lb dog at Large. A
+ * pet named as a size variety borrows only its own variety's guide.
+ */
+function guideFits(petBreed: string | null | undefined, guideBreed: string | undefined): boolean {
+  if (!petBreed || !VARIETY.test(petBreed)) return true;
+  return guideBreed?.trim().toLowerCase() === petBreed.trim().toLowerCase();
+}
+
 /** Dogs only. Null when there is no weight to go on. */
 export function sizePet(
-  pet: { species: string; weightLbs: number | null },
-  guide: { typicalWeightLbs: number | null } | null | undefined,
+  pet: { species: string; weightLbs: number | null; breed?: string | null },
+  guide: { breed?: string; typicalWeightLbs: number | null } | null | undefined,
   cutoffs: SizeCutoffs
 ): SizedPet | null {
   if (pet.species !== "DOG") return null;
   if (pet.weightLbs != null && pet.weightLbs > 0) {
     return { size: sizeForWeight(pet.weightLbs, cutoffs), lbs: pet.weightLbs, estimated: false };
   }
-  const typical = guide?.typicalWeightLbs;
+  const typical = guideFits(pet.breed, guide?.breed) ? guide?.typicalWeightLbs : null;
   if (typical != null && typical > 0) {
     return { size: sizeForWeight(typical, cutoffs), lbs: typical, estimated: true };
   }

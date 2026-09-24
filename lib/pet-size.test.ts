@@ -79,6 +79,29 @@ describe("sizePet", () => {
       estimated: true,
     });
   });
+
+  it("does not lend a breed's weight to a smaller variety matched loosely", () => {
+    const aussie = { breed: "Australian Shepherd", typicalWeightLbs: 50 };
+    expect(
+      sizePet({ species: "DOG", weightLbs: null, breed: "Miniature Australian Shepherd" }, aussie, cutoffs)
+    ).toBeNull();
+    expect(sizePet({ species: "DOG", weightLbs: null, breed: "Toy Aussie" }, aussie, cutoffs)).toBeNull();
+    expect(
+      sizePet({ species: "DOG", weightLbs: null, breed: "Mini Golden Retriever" }, { breed: "Golden Retriever", typicalWeightLbs: 65 }, cutoffs)
+    ).toBeNull();
+  });
+
+  it("uses a variety's own guide, and a typed weight on any variety", () => {
+    expect(
+      sizePet({ species: "DOG", weightLbs: null, breed: "miniature schnauzer" }, { breed: "Miniature Schnauzer", typicalWeightLbs: 15 }, cutoffs)
+    ).toEqual({ size: "MEDIUM", lbs: 15, estimated: true });
+    expect(
+      sizePet({ species: "DOG", weightLbs: 25, breed: "Mini Aussie" }, { breed: "Australian Shepherd", typicalWeightLbs: 50 }, cutoffs)
+    ).toEqual({ size: "MEDIUM", lbs: 25, estimated: false });
+    expect(
+      sizePet({ species: "DOG", weightLbs: null, breed: "Labrador" }, { breed: "Labrador Retriever", typicalWeightLbs: 65 }, cutoffs)
+    ).toEqual({ size: "XL", lbs: 65, estimated: true });
+  });
 });
 
 describe("labels", () => {
