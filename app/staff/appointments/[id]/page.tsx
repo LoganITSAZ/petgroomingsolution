@@ -38,6 +38,7 @@ import InsightList from "@/components/InsightList";
 import { customerInsights, petInsights } from "@/lib/insights";
 import { photoUrl } from "@/lib/photos";
 import { consentState, groomRecordSummary, lastGroomRecordForPet } from "@/lib/visit-record";
+import { describeVisitTime, visitTime } from "@/lib/visit-time";
 import VisitPhotoStrip from "@/components/VisitPhotoStrip";
 import { getConfig } from "@/lib/config";
 import { guidesForBreeds } from "@/lib/breeds";
@@ -177,6 +178,7 @@ export default async function AppointmentDetailPage(props: PageProps) {
     },
   });
   if (!appointment) notFound();
+  const timeLine = describeVisitTime(visitTime(appointment.statusHistory, new Date()));
 
   const [stations, groomers, serviceOptions, allKennels, surchargeOptions] = await Promise.all([
     prisma.station.findMany({
@@ -1132,6 +1134,7 @@ export default async function AppointmentDetailPage(props: PageProps) {
           <h2 className="font-bold text-stone-700 text-xs tracking-tight mb-3">
             Status history
           </h2>
+          {timeLine && <p className="mb-3 text-xs text-stone-500">{timeLine}</p>}
           {appointment.statusHistory.length === 0 ? (
             <p className="text-sm text-stone-400">No status changes recorded.</p>
           ) : (

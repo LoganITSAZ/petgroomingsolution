@@ -3,6 +3,7 @@ import { formatCents } from "@/lib/pricing";
 import { formatRole, formatServiceType, formatShopDate } from "@/lib/utils";
 import { shopInsights } from "@/lib/insights";
 import { MIN_COHORT_SIZE, RETURN_WINDOW_DAYS, retention } from "@/lib/retention";
+import { visitTimeSummary } from "@/lib/visit-time-queries";
 import InsightList from "@/components/InsightList";
 import Link from "next/link";
 import { Meter, PageShell, PageSection } from "@/components/ui";
@@ -58,7 +59,7 @@ export default async function AnalyticsPage(props: PageProps) {
   const requested = Number(searchParams.range);
   const rangeDays = (RANGES as readonly number[]).includes(requested) ? requested : 30;
 
-  const [shop, leaderboard, insights, config, comeback] = await Promise.all([
+  const [shop, leaderboard, insights, config, comeback, visitTimes] = await Promise.all([
     getShopAnalytics(rangeDays),
     getLeaderboard(),
     shopInsights(),
@@ -66,6 +67,7 @@ export default async function AnalyticsPage(props: PageProps) {
     // Not bound to the range control above it: a cohort's window is 90 days,
     // so "the last 7 days" is not a question this one can be asked.
     retention(),
+    visitTimeSummary(rangeDays),
   ]);
   // Off, and the taken column is a row of zeroes describing a feature the shop
   // does not use.
@@ -307,6 +309,25 @@ export default async function AnalyticsPage(props: PageProps) {
           </>
         )}
       </PageSection>
+
+      {/* Where a visit's time goes. No figure yet, no band. */}
+      {visitTimes.some((stage) => stage.medianMins != null) && (
+        <PageSection
+          title="Visit Time"
+          hint={`Median per finished visit, last ${rangeDays} days`}
+          bodyClassName="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3"
+        >
+          {visitTimes.map((stage) => (
+            <div key={stage.bucket} className="rounded-lg bg-well px-3 py-2 ring-1 ring-well-line">
+              <p className="text-3xl font-black leading-none tracking-tight tabular-nums text-stone-900">
+                {stage.medianMins == null ? "—" : `${stage.medianMins} min`}
+              </p>
+              <p className="mt-1 text-[11px] font-semibold text-stone-500">{stage.label}</p>
+              <p className="text-[11px] text-stone-400">{stage.evidence}</p>
+            </div>
+          ))}
+        </PageSection>
+      )}
 
       {/* Customers */}
       <PageSection tone="muted" bodyClassName="grid grid-cols-2 sm:grid-cols-4 gap-3">
