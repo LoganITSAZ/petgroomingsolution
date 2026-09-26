@@ -6,6 +6,7 @@ import { MIN_VISITS_FOR_PATTERN, customerRhythm, rhythmsFor } from "@/lib/rhythm
 import { shopAnomalies } from "@/lib/anomalies";
 import { snoozedInsightIds, withoutSnoozed } from "@/lib/insight-decisions";
 import { demandForecast } from "@/lib/demand";
+import { priceInsightsNow } from "@/lib/money-per-minute-queries";
 import { kennelDemand } from "@/lib/kennels";
 import { formatCents } from "@/lib/pricing";
 import { formatServiceType, formatShopDate, SHOP_TIMEZONE, shopDayRange } from "@/lib/utils";
@@ -251,7 +252,7 @@ export async function shopInsights(): Promise<Insight[]> {
   const config = await getConfig();
   const graceDays = config.rebookingGraceDays;
 
-  const [dueCustomers, noShowRisk, forecast, attachments, hours, walkInShare, anomalies, demand] =
+  const [dueCustomers, noShowRisk, forecast, attachments, hours, walkInShare, anomalies, demand, pricing] =
     await Promise.all([
     // Customers with history but nothing booked, ordered by how overdue.
     prisma.customer.findMany({
@@ -280,6 +281,8 @@ export async function shopInsights(): Promise<Insight[]> {
     shopAnomalies(),
     // And what is coming that nobody has booked yet.
     demandForecast(),
+    // Where an hour of the shop's time earns least against its price.
+    priceInsightsNow(),
   ]);
 
   // A change leads the list: "no-shows have doubled" outranks every standing
@@ -405,6 +408,8 @@ export async function shopInsights(): Promise<Insight[]> {
       });
     }
   }
+
+  insights.push(...pricing);
 
   // Last, over everything above: an observation somebody has already acted on
   // is not news. Applied here rather than at the screen so the dashboard and
