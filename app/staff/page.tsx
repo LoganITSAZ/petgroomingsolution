@@ -16,6 +16,7 @@ import { DashboardRefresh } from "@/components/DashboardRefresh";
 import { PICKUP_LEVEL_LABEL, PICKUP_LEVEL_CLASS, pickupWatchlist } from "@/lib/pickups";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
+import { joinPetNames, waitingOn } from "@/lib/visit-time";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -53,6 +54,7 @@ export default async function StaffDashboard(props: {
       select: {
         id: true,
         status: true,
+        customerId: true,
         staffId: true,
         scheduledAt: true,
         checkedInAt: true,
@@ -102,6 +104,16 @@ export default async function StaffDashboard(props: {
    */
   const stationsById = new Map(stations.map((station) => [station.id, station]));
   const pickupsById = new Map(pickups.pets.map((pet) => [pet.appointmentId, pet]));
+  // A finished dog whose sibling is still being worked on is held back, and
+  // its chip says who for — the owner is told when the last one is done.
+  const heldFor = (appointment: { id: string; customerId: string }) => {
+    const names = waitingOn(
+      todayAppointments
+        .filter((visit) => visit.customerId === appointment.customerId && visit.id !== appointment.id)
+        .map((visit) => ({ status: visit.status, petName: visit.pet.name }))
+    );
+    return names.length ? `Waiting for ${joinPetNames(names).names}` : "Notify owner";
+  };
   const boardPets = todayAppointments
     .filter((appointment) => boardColumnFor(appointment.status) !== null)
     .sort((a, b) => boardWaitingSince(a) - boardWaitingSince(b) || a.id.localeCompare(b.id))
@@ -123,7 +135,7 @@ export default async function StaffDashboard(props: {
         severity: alert.severity,
       })),
       pickupNote: appointment.status === AppointmentStatus.COMPLETE
-        ? { label: "Notify owner", className: "bg-amber-100 text-amber-800" }
+        ? { label: heldFor(appointment), className: "bg-amber-100 text-amber-800" }
         : (() => {
             const pickup = pickupsById.get(appointment.id);
             return pickup ? {
