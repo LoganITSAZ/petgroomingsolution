@@ -30,6 +30,15 @@ describe("overrunsFrom", () => {
     // A zero would pull a real habit back towards the catalog figure.
     expect(overrunsFrom([visit(null, 90), visit(60, 90, null), visit(60, 90)])).toEqual([30]);
   });
+
+  it("measures hands-on time when the history had it, not the wait around it", () => {
+    // Checked in to finished took 150 minutes; the groom itself took 70.
+    expect(overrunsFrom([{ ...visit(60, 150), workedMins: 70 }])).toEqual([10]);
+  });
+
+  it("falls back to check-in to finish when hands-on time was not measured", () => {
+    expect(overrunsFrom([{ ...visit(60, 90), workedMins: null }])).toEqual([30]);
+  });
 });
 
 describe("typicalOverrunMins", () => {

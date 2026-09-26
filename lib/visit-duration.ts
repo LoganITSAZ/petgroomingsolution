@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { FINISHED_STATUSES } from "@/lib/analytics";
 import { guidesForBreeds } from "@/lib/breeds";
+import { visitTime, workedMins } from "@/lib/visit-time";
 
 /**
  * How long this pet actually takes, rather than how long the catalog says.
@@ -40,6 +41,8 @@ export interface MeasuredVisit {
   finishedAt: Date;
   /** What the slot was booked for. */
   durationMins: number | null;
+  /** Bath, drying and table from the status history; null when not measured. */
+  workedMins?: number | null;
 }
 
 /**
@@ -51,11 +54,13 @@ export interface MeasuredVisit {
  */
 export function overrunsFrom(visits: MeasuredVisit[]): number[] {
   return visits
-    .filter((visit) => visit.checkedInAt != null && visit.durationMins != null)
+    .filter((visit) => visit.durationMins != null && (visit.workedMins != null || visit.checkedInAt != null))
     .map((visit) => {
-      const actual = Math.round(
-        (visit.finishedAt.getTime() - (visit.checkedInAt as Date).getTime()) / 60_000
-      );
+      // Hands-on time when the history measured it; otherwise turnaround,
+      // which counts the wait for the owner as groom and is why the clamp exists.
+      const actual =
+        visit.workedMins ??
+        Math.round((visit.finishedAt.getTime() - (visit.checkedInAt as Date).getTime()) / 60_000);
       return actual - (visit.durationMins as number);
     })
     .filter((drift) => Number.isFinite(drift));
@@ -81,10 +86,11 @@ export function typicalOverrunMins(overruns: number[]): number | null {
 /**
  * The booked duration this pet's own history argues for.
  *
- * Clamped to half and double the catalog figure. A pet that once sat in the
- * shop all afternoon waiting for its owner has a huge measured "overrun" —
- * turnaround is check-in to finish, not blade time — and without a ceiling one
- * such day would book the next groom for four hours and swallow the diary.
+ * Clamped to half and double the catalog figure. Hands-on time is measured
+ * from the status history where it can be, but a visit from before that, or
+ * one whose stages were not tapped, still falls back to check-in to finish —
+ * and one afternoon waiting for an owner must not book the next groom for
+ * four hours.
  */
 export function learnedDuration(baseMins: number, overrunMins: number | null): number {
   if (overrunMins == null) return baseMins;
@@ -141,11 +147,18 @@ export function breedReason(baseMins: number, breedMins: number, breed: string):
 export async function petOverruns(petId: string, take = 10): Promise<number[]> {
   const visits = await prisma.appointment.findMany({
     where: { petId, status: { in: FINISHED_STATUSES }, checkedInAt: { not: null } },
-    select: { checkedInAt: true, completedAt: true, durationMins: true, updatedAt: true },
+    select: {
+      checkedInAt: true,
+      completedAt: true,
+      durationMins: true,
+      updatedAt: true,
+      statusHistory: { select: { status: true, changedAt: true } },
+    },
     orderBy: { scheduledAt: "desc" },
     take,
   });
 
+  const now = new Date();
   return overrunsFrom(
     visits.map((visit) => ({
       checkedInAt: visit.checkedInAt,
@@ -154,6 +167,7 @@ export async function petOverruns(petId: string, take = 10): Promise<number[]> {
       // existed.
       finishedAt: visit.completedAt ?? visit.updatedAt,
       durationMins: visit.durationMins,
+      workedMins: workedMins(visitTime(visit.statusHistory, now)),
     }))
   );
 }
