@@ -210,7 +210,7 @@ export function priceInsights(summary: MoneyPerHour): Insight[] {
         insight: {
           id: `price-breed:${breed.key}`,
           tone: "opportunity",
-          title: `${breed.label} on ${row.label} earn ${perHour(breed.rateCents)} against ${perHour(row.rateCents)} for the ${row.size ? "size" : "service"}`,
+          title: `${breed.label} on ${row.label} earns ${perHour(breed.rateCents)} against ${perHour(row.rateCents)} for the ${row.size ? "size" : "service"}`,
           detail: `About ${formatCents(breed.suggestCents)} more per visit would bring them level.`,
           evidence: breed.evidence,
           href: "/admin/services",

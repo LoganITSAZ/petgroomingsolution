@@ -161,7 +161,7 @@ describe("priceInsights", () => {
     expect(priceInsights(summary)).toEqual([
       expect.objectContaining({
         id: "price-breed:groom:LARGE:goldendoodle",
-        title: "Goldendoodle on Full groom, Large earn $48/hr against $66/hr for the size",
+        title: "Goldendoodle on Full groom, Large earns $48/hr against $66/hr for the size",
         detail: "About $20 more per visit would bring them level.",
       }),
     ]);
