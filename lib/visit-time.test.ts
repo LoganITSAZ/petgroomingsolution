@@ -60,6 +60,29 @@ describe("visitTime", () => {
     expect(time.suspect).toBe(false);
   });
 
+  it("keeps the real time in a stage a double-tap also passed through", () => {
+    // Drying 20, table tapped twice by mistake, back to drying 10, then the table 50.
+    const history = [
+      row("CHECKED_IN", 0),
+      row("IN_PROGRESS", 10),
+      row("DRYING", 40),
+      row("FINISHING", 60),
+      row("DRYING", 60.1),
+      row("FINISHING", 70),
+      row("COMPLETE", 120),
+    ];
+    const time = visitTime(history, at(125));
+    expect(time.mins.drying).toBe(30);
+    expect(time.mins.table).toBe(50);
+    expect(workedMins(time)).toBe(110);
+  });
+
+  it("measures no wait for the household as zero, not unmeasured", () => {
+    // A lone dog: finishing moves it to ready in the same instant.
+    const history = [row("CHECKED_IN", 0), row("FINISHING", 10), row("COMPLETE", 60), row("READY_PICKUP", 60.001)];
+    expect(visitTime(history, at(90)).mins.household).toBe(0);
+  });
+
   it("calls a forgotten overnight tap unmeasured", () => {
     // Collected at 5pm, Picked Up tapped at 9am the next day.
     const history = [row("CHECKED_IN", 0), row("FINISHING", 10), row("COMPLETE", 60), row("READY_PICKUP", 480), row("PICKED_UP", 1440)];

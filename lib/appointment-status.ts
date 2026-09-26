@@ -6,7 +6,7 @@ import { smsReadyForPickup } from "@/lib/sms";
 import { voiceReadyForPickup } from "@/lib/voice";
 import { getConfig } from "@/lib/config";
 import { AppointmentStatus } from "@prisma/client";
-import { formatVisitEvent, shopDayRange } from "@/lib/utils";
+import { formatVisitEvent, shopDayKey, shopDayRange } from "@/lib/utils";
 import { householdReadyToTell } from "@/lib/visit-time";
 import { OCCUPYING_STATUSES } from "@/lib/stations";
 import { syncRewardForVisit } from "@/lib/rewards";
@@ -121,12 +121,18 @@ async function tellHouseholdIfReady(
   visit: { customerId: string; scheduledAt: Date },
   staffId?: string | null
 ): Promise<string[]> {
+  // Tidying a past day tells nobody: those dogs went home long ago.
+  if (shopDayKey(visit.scheduledAt) !== shopDayKey(new Date())) return [];
   const { start, end } = shopDayRange(visit.scheduledAt);
   const household = await prisma.appointment.findMany({
     where: { customerId: visit.customerId, scheduledAt: { gte: start, lt: end } },
-    select: { id: true, status: true },
+    select: { id: true, status: true, statusHistory: { where: { status: AppointmentStatus.READY_PICKUP }, select: { id: true }, take: 1 } },
   });
-  const ready = householdReadyToTell(household);
+  // A visit already told stays where staff put it: taking an early "ready"
+  // back to complete must not bounce it and ring the owner a second time.
+  const ready = householdReadyToTell(household).filter(
+    (id) => !household.find((member) => member.id === id)?.statusHistory.length
+  );
   for (const id of ready) {
     await applyStatus({ appointmentId: id, status: AppointmentStatus.READY_PICKUP, note: "Household finished", staffId });
   }

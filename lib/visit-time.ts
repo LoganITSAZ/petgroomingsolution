@@ -65,6 +65,7 @@ export function visitTime(history: HistoryRow[], now: Date): VisitTime {
   const raw: Partial<Record<TimeBucket, number | null>> = {};
   let openBucket: TimeBucket | null = null;
   let suspect = false;
+  const spoiled = new Set<TimeBucket>();
 
   rows.forEach((current, index) => {
     const bucket = BUCKET_OF[current.status];
@@ -79,8 +80,20 @@ export function visitTime(history: HistoryRow[], now: Date): VisitTime {
     if (WORK_BUCKETS.includes(bucket) && (crossesDay || overCap)) suspect = true;
 
     // One bad segment spoils the stage: half a figure reads as a fast groom.
-    if (raw[bucket] === null) return;
-    raw[bucket] = length < MIN_SEGMENT_MINS || crossesDay || overCap ? null : (raw[bucket] ?? 0) + length;
+    if (spoiled.has(bucket)) return;
+    if (crossesDay || overCap) {
+      spoiled.add(bucket);
+      raw[bucket] = null;
+      return;
+    }
+    // A click-through marks the stage entered and adds nothing, so a real
+    // segment either side of a double-tap still counts. Finishing moves a
+    // lone dog to ready in the same instant, so no household wait is a real 0.
+    if (length < MIN_SEGMENT_MINS && bucket !== "household") {
+      if (!(bucket in raw)) raw[bucket] = null;
+      return;
+    }
+    raw[bucket] = (raw[bucket] ?? 0) + length;
   });
 
   const mins: Partial<Record<TimeBucket, number | null>> = {};
