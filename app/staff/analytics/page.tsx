@@ -4,6 +4,7 @@ import { formatRole, formatServiceType, formatShopDate } from "@/lib/utils";
 import { shopInsights } from "@/lib/insights";
 import { MIN_COHORT_SIZE, RETURN_WINDOW_DAYS, retention } from "@/lib/retention";
 import { visitTimeSummary } from "@/lib/visit-time-queries";
+import { moneyPerHourSummary } from "@/lib/money-per-minute-queries";
 import InsightList from "@/components/InsightList";
 import Link from "next/link";
 import { Meter, PageShell, PageSection } from "@/components/ui";
@@ -59,7 +60,7 @@ export default async function AnalyticsPage(props: PageProps) {
   const requested = Number(searchParams.range);
   const rangeDays = (RANGES as readonly number[]).includes(requested) ? requested : 30;
 
-  const [shop, leaderboard, insights, config, comeback, visitTimes] = await Promise.all([
+  const [shop, leaderboard, insights, config, comeback, visitTimes, perHour] = await Promise.all([
     getShopAnalytics(rangeDays),
     getLeaderboard(),
     shopInsights(),
@@ -68,6 +69,7 @@ export default async function AnalyticsPage(props: PageProps) {
     // so "the last 7 days" is not a question this one can be asked.
     retention(),
     visitTimeSummary(rangeDays),
+    moneyPerHourSummary(rangeDays),
   ]);
   // Off, and the taken column is a row of zeroes describing a feature the shop
   // does not use.
@@ -326,6 +328,66 @@ export default async function AnalyticsPage(props: PageProps) {
               <p className="text-[11px] text-stone-400">{stage.evidence}</p>
             </div>
           ))}
+        </PageSection>
+      )}
+
+      {/* What an hour of the shop's time earns. Nothing measured, no band. */}
+      {perHour.shopVisits > 0 && (
+        <PageSection
+          title="Money per Hour"
+          hint={`Ticket per hands-on hour, last ${rangeDays} days · list prices before discounts`}
+        >
+          <p className="mb-3 text-sm text-stone-600">
+            <span className="text-2xl font-black tabular-nums text-stone-900">
+              {formatCents(perHour.shopRateCents)}/hr
+            </span>{" "}
+            across the shop · {perHour.shopVisits} visits ·{" "}
+            <Link href="/admin/services" className="underline hover:text-stone-800">
+              set prices
+            </Link>
+          </p>
+          {perHour.rows.length > 0 && (
+            <div className="border border-stone-200 rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-well text-stone-500 text-[10px] tracking-tight">
+                    <tr>
+                      <th scope="col" className="px-3 py-2 text-left">Service</th>
+                      <th scope="col" className="px-3 py-2 text-right">Rate</th>
+                      <th scope="col" className="px-3 py-2 text-right">Hands-on</th>
+                      <th scope="col" className="px-3 py-2 text-right">Ticket</th>
+                      <th scope="col" className="px-3 py-2 text-right">Visits</th>
+                      <th scope="col" className="px-3 py-2 text-right">Suggested</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {perHour.rows.map((row) => (
+                      <tr key={row.key}>
+                        <td className="px-3 py-2 font-semibold text-stone-900">{row.label}</td>
+                        <td className="px-3 py-2 text-right font-bold text-stone-900 tabular-nums">
+                          {row.rateCents == null ? "—" : `${formatCents(row.rateCents)}/hr`}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {row.medianMins == null ? "—" : `${row.medianMins} min`}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{formatCents(row.medianTicketCents)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {row.rateCents == null ? (
+                            <span className="text-[11px] text-stone-400">{row.evidence}</span>
+                          ) : (
+                            row.visits
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right font-semibold text-stone-900 tabular-nums">
+                          {row.suggestCents == null ? "" : `+${formatCents(row.suggestCents)}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </PageSection>
       )}
 
