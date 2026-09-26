@@ -122,7 +122,7 @@ export async function changeAppointmentStatus({
       await sendReadyForPickup({
         to: updated.customer.email,
         ownerName: `${updated.customer.firstName} ${updated.customer.lastName}`,
-        petName: updated.pet.name,
+        pets: [updated.pet.name],
         findings,
         hasPhotos: sharedPhotos > 0,
       }).catch(console.error);
@@ -132,7 +132,7 @@ export async function changeAppointmentStatus({
       const config = await getConfig();
       await smsReadyForPickup({
         to: updated.customer.phone,
-        petName: updated.pet.name,
+        pets: [updated.pet.name],
         shopName: config.shopName,
         phone: config.shopPhone,
         hasFindings: findings.length > 0,
@@ -146,7 +146,7 @@ export async function changeAppointmentStatus({
       const config = await getConfig();
       await voiceReadyForPickup({
         to: updated.customer.phone,
-        petName: updated.pet.name,
+        pets: [updated.pet.name],
         shopName: config.shopName,
       }).catch(console.error);
     }

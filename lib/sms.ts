@@ -1,5 +1,6 @@
 import { getConfig } from "@/lib/config";
 import { toE164 } from "@/lib/phone";
+import { joinPetNames } from "@/lib/visit-time";
 
 /**
  * Text messages, through Twilio's REST API.
@@ -76,13 +77,13 @@ export async function sendSms(to: string | null | undefined, body: string): Prom
  */
 export async function smsReadyForPickup({
   to,
-  petName,
+  pets,
   shopName,
   phone,
   hasFindings = false,
 }: {
   to: string | null | undefined;
-  petName: string;
+  pets: string[];
   shopName: string;
   phone?: string | null;
   hasFindings?: boolean;
@@ -90,8 +91,9 @@ export async function smsReadyForPickup({
   // The findings themselves go in the email and are read out at the counter.
   // A text says there are some: a segment is 160 characters, and a groomer's
   // note about an ear is not worth cutting in half to save a phone call.
+  const { names, verb } = joinPetNames(pets);
   const body =
-    `${petName} is ready for pickup at ${shopName}.` +
+    `${names} ${verb} ready for pickup at ${shopName}.` +
     (hasFindings ? ` We noticed a couple of things to mention when you collect.` : "") +
     (phone ? ` Questions? ${phone}` : "") +
     ` Reply STOP to opt out.`;

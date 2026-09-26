@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { getConfig } from "@/lib/config";
 import { DEFAULT_SHOP_NAME, SHOP_MAIL_DOMAIN } from "@/lib/branding";
 import { formatShopDate, formatShopTime } from "@/lib/utils";
+import { joinPetNames } from "@/lib/visit-time";
 
 /**
  * Lazily constructed Resend client.
@@ -246,13 +247,13 @@ function escapeHtml(text: string): string {
 export async function sendReadyForPickup({
   to,
   ownerName,
-  petName,
+  pets,
   findings = [],
   hasPhotos = false,
 }: {
   to: string;
   ownerName: string;
-  petName: string;
+  pets: string[];
   findings?: string[];
   /** Photos are linked, never attached: the portal already gates the bytes. */
   hasPhotos?: boolean;
@@ -267,14 +268,15 @@ export async function sendReadyForPickup({
   }
 
   const from = await getFrom();
+  const { names, verb } = joinPetNames(pets);
 
   await resend.emails.send({
     from,
     to,
-    subject: `${petName} is ready for pickup! 🐾`,
+    subject: `${names} ${verb} ready for pickup! 🐾`,
     html: `
       <p>Hi ${escapeHtml(ownerName)},</p>
-      <p><strong>${escapeHtml(petName)}</strong> is all done and ready to be picked up!</p>
+      <p><strong>${escapeHtml(names)}</strong> ${verb} all done and ready to be picked up!</p>
       <p>Please come by at your earliest convenience.</p>
       ${
         findings.length
@@ -286,7 +288,7 @@ export async function sendReadyForPickup({
       }
       ${
         hasPhotos
-          ? `<p>We took a few photos of ${escapeHtml(petName)} today — they are on your visit in the customer portal.</p>`
+          ? `<p>We took a few photos of ${escapeHtml(names)} today — they are on your visit in the customer portal.</p>`
           : ""
       }
       ${config.shopPhone ? `<p>Questions? Call us at ${escapeHtml(config.shopPhone)}.</p>` : ""}

@@ -1,5 +1,6 @@
 import { getConfig } from "@/lib/config";
 import { toE164 } from "@/lib/phone";
+import { joinPetNames } from "@/lib/visit-time";
 
 /**
  * Automated calls, through the same Twilio REST API the texts go out on.
@@ -87,14 +88,15 @@ export async function placeCall(to: string | null | undefined, message: string):
  */
 export async function voiceReadyForPickup({
   to,
-  petName,
+  pets,
   shopName,
 }: {
   to: string | null | undefined;
-  petName: string;
+  pets: string[];
   shopName: string;
 }): Promise<boolean> {
-  return placeCall(to, `Hello, this is ${shopName}. ${petName} is finished and ready to collect. Thank you.`);
+  const { names, verb } = joinPetNames(pets);
+  return placeCall(to, `Hello, this is ${shopName}. ${names} ${verb} finished and ready to collect. Thank you.`);
 }
 
 /**
