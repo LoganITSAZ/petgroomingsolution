@@ -70,10 +70,12 @@ finishing it.
 
 ### The suggestion
 
-`roundToStep(benchmarkRate × medianMins / 60 − medianTicket)` — the extra a
+`benchmarkRate × medianMins / 60 − medianTicket` — the extra a
 typical visit in the group would need to earn the benchmark rate for its
-median hands-on time, rounded to the price list's `$5` step. Shown only when
-it rounds above zero. For a row it reads as the price; for a breed, as a fee:
+median hands-on time, rounded to the nearest `PRICE_STEP_CENTS` ($5).
+Rounded with `Math.round`, not `roundToStep()`: that one never returns less than
+$5, and a gap that rounds to nothing must suggest nothing. Shown only when it
+rounds above zero. For a row it reads as the price; for a breed, as a fee:
 
 - Row: "Full groom, XL earns $52/hr against the shop's $71/hr. At the shop
   rate the time is worth about $165 against a typical $120 today — about $45
