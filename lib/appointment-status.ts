@@ -6,14 +6,16 @@ import { smsReadyForPickup } from "@/lib/sms";
 import { voiceReadyForPickup } from "@/lib/voice";
 import { getConfig } from "@/lib/config";
 import { AppointmentStatus } from "@prisma/client";
-import { formatVisitEvent } from "@/lib/utils";
+import { formatVisitEvent, shopDayRange } from "@/lib/utils";
+import { householdReadyToTell } from "@/lib/visit-time";
 import { OCCUPYING_STATUSES } from "@/lib/stations";
 import { syncRewardForVisit } from "@/lib/rewards";
 
 /**
  * One place where a status change happens, so the API route, the kiosk and the
  * staff screens all produce the same side effects: an audit row, the station
- * display refresh, the kennel release, and the pickup email.
+ * display refresh, the kennel release, and — once the last dog of a household
+ * is done — the message telling the owner.
  */
 
 /** A pet that has left, or never arrived, holds nothing. */
@@ -60,17 +62,15 @@ async function ownerVisibleFindings(appointmentId: string): Promise<string[]> {
   );
 }
 
-export async function changeAppointmentStatus({
-  appointmentId,
-  status,
-  note,
-  staffId,
-}: {
+type StatusChange = {
   appointmentId: string;
   status: AppointmentStatus;
   note?: string;
   staffId?: string | null;
-}) {
+};
+
+/** The change and its side effects on the floor. Tells nobody. */
+async function applyStatus({ appointmentId, status, note, staffId }: StatusChange) {
   const now = new Date();
 
   const updated = await prisma.appointment.update({
@@ -108,49 +108,112 @@ export async function changeAppointmentStatus({
     if (freedStationId) await broadcastKennelBoard(freedStationId);
   }
 
-  // Notification failures must never fail the status change. Both channels are
-  // tried: the shop switches each on independently, and a customer who reads
-  // neither email nor text is no reason for the pet to sit uncollected.
-  if (status === AppointmentStatus.READY_PICKUP) {
-    const findings = await ownerVisibleFindings(updated.id);
-    // Linked, not attached: the bytes stay behind /api/photos/[id].
-    const sharedPhotos = await prisma.visitPhoto.count({
-      where: { appointmentId: updated.id, ownerVisible: true },
-    });
+  return updated;
+}
 
-    if (updated.customer.email) {
-      await sendReadyForPickup({
-        to: updated.customer.email,
-        ownerName: `${updated.customer.firstName} ${updated.customer.lastName}`,
-        pets: [updated.pet.name],
-        findings,
-        hasPhotos: sharedPhotos > 0,
-      }).catch(console.error);
-    }
+/**
+ * Dogs from one home go home together, so the owner is told once, when the
+ * last of them is done. Runs after every change, which is what lets a sibling
+ * cancelled or marked a no-show release the dogs waiting on it. Returns the
+ * visits it moved.
+ */
+async function tellHouseholdIfReady(
+  visit: { customerId: string; scheduledAt: Date },
+  staffId?: string | null
+): Promise<string[]> {
+  const { start, end } = shopDayRange(visit.scheduledAt);
+  const household = await prisma.appointment.findMany({
+    where: { customerId: visit.customerId, scheduledAt: { gte: start, lt: end } },
+    select: { id: true, status: true },
+  });
+  const ready = householdReadyToTell(household);
+  for (const id of ready) {
+    await applyStatus({ appointmentId: id, status: AppointmentStatus.READY_PICKUP, note: "Household finished", staffId });
+  }
+  return ready;
+}
 
-    if (updated.customer.phone && !updated.customer.smsOptOut) {
-      const config = await getConfig();
-      await smsReadyForPickup({
-        to: updated.customer.phone,
-        pets: [updated.pet.name],
-        shopName: config.shopName,
-        phone: config.shopPhone,
-        hasFindings: findings.length > 0,
-      }).catch(console.error);
-    }
+/**
+ * One email, one text and one call for every dog that just became ready.
+ * Notification failures must never fail the status change. Every channel is
+ * tried: the shop switches each on independently, and a customer who reads
+ * neither email nor text is no reason for the pet to sit uncollected.
+ */
+async function notifyReady(
+  customer: {
+    firstName: string; lastName: string; phone: string | null; email: string | null;
+    smsOptOut: boolean; voiceOptOut: boolean;
+  },
+  appointmentIds: string[]
+) {
+  const visits = await prisma.appointment.findMany({
+    where: { id: { in: appointmentIds } },
+    select: { id: true, pet: { select: { name: true } } },
+    orderBy: { checkedInAt: "asc" },
+  });
+  const pets = visits.map((visit) => visit.pet.name);
+  // With more than one dog, a finding has to say whose ear it was.
+  const findings = (
+    await Promise.all(
+      visits.map(async (visit) =>
+        (await ownerVisibleFindings(visit.id)).map((finding) => (visits.length > 1 ? `${visit.pet.name}: ${finding}` : finding))
+      )
+    )
+  ).flat();
+  // Linked, not attached: the bytes stay behind /api/photos/[id].
+  const sharedPhotos = await prisma.visitPhoto.count({
+    where: { appointmentId: { in: appointmentIds }, ownerVisible: true },
+  });
 
-    // The oldest notification a grooming shop has: the phone rings and somebody
-    // says the dog is done. Its own flag and its own opt-out, so a household
-    // that only wants a text still only gets one.
-    if (updated.customer.phone && !updated.customer.voiceOptOut) {
-      const config = await getConfig();
-      await voiceReadyForPickup({
-        to: updated.customer.phone,
-        pets: [updated.pet.name],
-        shopName: config.shopName,
-      }).catch(console.error);
-    }
+  if (customer.email) {
+    await sendReadyForPickup({
+      to: customer.email,
+      ownerName: `${customer.firstName} ${customer.lastName}`,
+      pets,
+      findings,
+      hasPhotos: sharedPhotos > 0,
+    }).catch(console.error);
   }
 
-  return updated;
+  const config = await getConfig();
+
+  if (customer.phone && !customer.smsOptOut) {
+    await smsReadyForPickup({
+      to: customer.phone,
+      pets,
+      shopName: config.shopName,
+      phone: config.shopPhone,
+      hasFindings: findings.length > 0,
+    }).catch(console.error);
+  }
+
+  // The oldest notification a grooming shop has: the phone rings and somebody
+  // says the dog is done. Its own flag and its own opt-out, so a household
+  // that only wants a text still only gets one.
+  if (customer.phone && !customer.voiceOptOut) {
+    await voiceReadyForPickup({
+      to: customer.phone,
+      pets,
+      shopName: config.shopName,
+    }).catch(console.error);
+  }
+}
+
+export async function changeAppointmentStatus(change: StatusChange) {
+  const before = await prisma.appointment.findUnique({
+    where: { id: change.appointmentId },
+    select: { status: true },
+  });
+  const updated = await applyStatus(change);
+  const told = await tellHouseholdIfReady(updated, change.staffId);
+
+  // Only a visit that moved is news: a re-save of ready-for-pickup, or a
+  // sibling already told, sends nothing. The manual action still tells the
+  // owner early by hand.
+  const pressedReady =
+    change.status === AppointmentStatus.READY_PICKUP && before?.status !== AppointmentStatus.READY_PICKUP;
+  const moved = pressedReady ? [updated.id, ...told] : told;
+  if (moved.length) await notifyReady(updated.customer, moved);
+
+  return told.includes(updated.id) ? { ...updated, status: AppointmentStatus.READY_PICKUP } : updated;
 }
