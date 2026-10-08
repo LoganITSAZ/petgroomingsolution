@@ -6,6 +6,7 @@ import { MIN_VISITS_FOR_PATTERN, customerRhythm, rhythmsFor } from "@/lib/rhythm
 import { shopAnomalies } from "@/lib/anomalies";
 import { snoozedInsightIds, withoutSnoozed } from "@/lib/insight-decisions";
 import { demandForecast } from "@/lib/demand";
+import { fitInsightsNow, petFitInsights } from "@/lib/groomer-fit-queries";
 import { priceInsightsNow } from "@/lib/money-per-minute-queries";
 import { kennelDemand } from "@/lib/kennels";
 import { formatCents } from "@/lib/pricing";
@@ -151,7 +152,7 @@ export async function petInsights(petId: string): Promise<Insight[]> {
     });
   }
 
-  return insights;
+  return [...insights, ...(await petFitInsights(petId))];
 }
 
 // ─── Shop-level ──────────────────────────────────────────────
@@ -252,7 +253,7 @@ export async function shopInsights(): Promise<Insight[]> {
   const config = await getConfig();
   const graceDays = config.rebookingGraceDays;
 
-  const [dueCustomers, noShowRisk, forecast, attachments, hours, walkInShare, anomalies, demand, pricing] =
+  const [dueCustomers, noShowRisk, forecast, attachments, hours, walkInShare, anomalies, demand, pricing, fit] =
     await Promise.all([
     // Customers with history but nothing booked, ordered by how overdue.
     prisma.customer.findMany({
@@ -283,6 +284,8 @@ export async function shopInsights(): Promise<Insight[]> {
     demandForecast(),
     // Where an hour of the shop's time earns least against its price.
     priceInsightsNow(),
+    // Where a groomer's errors on a breed run clearly above the shop's.
+    fitInsightsNow(),
   ]);
 
   // A change leads the list: "no-shows have doubled" outranks every standing
@@ -410,6 +413,7 @@ export async function shopInsights(): Promise<Insight[]> {
   }
 
   insights.push(...pricing);
+  insights.push(...fit);
 
   // Last, over everything above: an observation somebody has already acted on
   // is not news. Applied here rather than at the screen so the dashboard and

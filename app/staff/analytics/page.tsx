@@ -5,6 +5,8 @@ import { shopInsights } from "@/lib/insights";
 import { MIN_COHORT_SIZE, RETURN_WINDOW_DAYS, retention } from "@/lib/retention";
 import { visitTimeSummary } from "@/lib/visit-time-queries";
 import { moneyPerHourSummary } from "@/lib/money-per-minute-queries";
+import { groomerStrengths } from "@/lib/groomer-fit-queries";
+import { pct, type StrengthAxis, type StrengthRow } from "@/lib/groomer-fit";
 import InsightList from "@/components/InsightList";
 import Link from "next/link";
 import { Meter, PageShell, PageSection } from "@/components/ui";
@@ -37,6 +39,17 @@ export const dynamic = "force-dynamic";
 
 const RANGES = [7, 30, 90] as const;
 
+const STRENGTH_AXES: { axis: StrengthAxis; label: string }[] = [
+  { axis: "breed", label: "By Breed" },
+  { axis: "size", label: "By Size" },
+  { axis: "coat", label: "By Coat" },
+];
+
+const STRENGTH_FLAG: Record<NonNullable<StrengthRow["flag"]>, { label: string; className: string }> = {
+  strength: { label: "Strength", className: "bg-green-100 text-green-800" },
+  watch: { label: "Watch", className: "bg-red-100 text-red-700" },
+};
+
 function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
@@ -60,7 +73,7 @@ export default async function AnalyticsPage(props: PageProps) {
   const requested = Number(searchParams.range);
   const rangeDays = (RANGES as readonly number[]).includes(requested) ? requested : 30;
 
-  const [shop, leaderboard, insights, config, comeback, visitTimes, perHour] = await Promise.all([
+  const [shop, leaderboard, insights, config, comeback, visitTimes, perHour, strengths] = await Promise.all([
     getShopAnalytics(rangeDays),
     getLeaderboard(),
     shopInsights(),
@@ -70,6 +83,7 @@ export default async function AnalyticsPage(props: PageProps) {
     retention(),
     visitTimeSummary(rangeDays),
     moneyPerHourSummary(rangeDays),
+    groomerStrengths(),
   ]);
   // Off, and the taken column is a row of zeroes describing a feature the shop
   // does not use.
@@ -388,6 +402,56 @@ export default async function AnalyticsPage(props: PageProps) {
               </div>
             </div>
           )}
+        </PageSection>
+      )}
+
+      {/* Who is good at what, against the shop. No cell with three visits, no band. */}
+      {STRENGTH_AXES.some(({ axis }) => strengths[axis].length > 0) && (
+        <PageSection title="Groomer Strengths" hint="Errors and hands-on minutes against the shop, last 12 months">
+          {STRENGTH_AXES.filter(({ axis }) => strengths[axis].length > 0).map(({ axis, label }) => (
+            <details key={axis} className="disclosure border-t border-stone-100 first:border-t-0">
+              <summary className="py-2 text-sm font-semibold text-stone-800">{label}</summary>
+              <div className="mb-3 border border-stone-200 rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-well text-stone-500 text-[10px] tracking-tight">
+                      <tr>
+                        <th scope="col" className="px-3 py-2 text-left">Groomer</th>
+                        <th scope="col" className="px-3 py-2 text-left">Group</th>
+                        <th scope="col" className="px-3 py-2 text-right">Visits</th>
+                        <th scope="col" className="px-3 py-2 text-right">Errors</th>
+                        <th scope="col" className="px-3 py-2 text-right">Hands-on</th>
+                        <th scope="col" className="px-3 py-2 text-right"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {strengths[axis].map((row) => (
+                        <tr key={row.key}>
+                          <td className="px-3 py-2 font-semibold text-stone-900">{row.staffName}</td>
+                          <td className="px-3 py-2">{row.group}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{row.visits}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {pct(row.rate)} <span className="text-stone-400">vs {pct(row.shopRate)}</span>
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {row.medianMins == null ? "—" : `${row.medianMins} min`}{" "}
+                            {row.shopMedianMins != null && <span className="text-stone-400">vs {row.shopMedianMins}</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {row.flag && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${STRENGTH_FLAG[row.flag].className}`}>
+                                {STRENGTH_FLAG[row.flag].label}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </details>
+          ))}
         </PageSection>
       )}
 

@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { AppointmentStatus, StationRole } from "@prisma/client";
+import { guidesForBreeds } from "@/lib/breeds";
+import { bookingGroomer } from "@/lib/groomer-fit";
+import { fitSamples, guideIdFor } from "@/lib/groomer-fit-queries";
 import { floorRoster, availableStaff, type FloorMember } from "@/lib/presence";
 import { OCCUPYING_STATUSES, WORK_STATION_ROLES } from "@/lib/stations";
 
@@ -36,11 +39,13 @@ async function waitingPets() {
     },
     select: {
       id: true,
+      petId: true,
+      serviceType: true,
       checkedInAt: true,
       scheduledAt: true,
       status: true,
       staffId: true,
-      pet: { select: { name: true, hasBiteHistory: true } },
+      pet: { select: { name: true, hasBiteHistory: true, breed: true } },
       customer: {
         select: { firstName: true, lastName: true, preferredStaffId: true },
       },
@@ -69,7 +74,7 @@ function allowedAtStation(member: FloorMember, allowedRoles: string[]): boolean 
  * minutes, not a menu of overlapping options.
  */
 export async function assignmentSuggestions(): Promise<Suggestion[]> {
-  const [stations, occupied, roster, waiting] = await Promise.all([
+  const [stations, occupied, roster, waiting, samples] = await Promise.all([
     prisma.station.findMany({
       where: { isActive: true, role: { in: WORK_STATION_ROLES } },
       select: { id: true, name: true, role: true, allowedRoles: true },
@@ -81,11 +86,14 @@ export async function assignmentSuggestions(): Promise<Suggestion[]> {
     }),
     floorRoster(),
     waitingPets(),
+    fitSamples(),
   ]);
 
   const busyStations = new Set(occupied.map((visit) => visit.stationId as string));
   const openStations = stations.filter((station) => !busyStations.has(station.id));
   const free = availableStaff(roster);
+  const guides = await guidesForBreeds(waiting.map((visit) => visit.pet.breed));
+  const candidates = free.map((member) => ({ id: member.id, name: member.name }));
 
   const suggestions: Suggestion[] = [];
   const usedStaff = new Set<string>();
@@ -96,6 +104,18 @@ export async function assignmentSuggestions(): Promise<Suggestion[]> {
 
     for (const visit of waiting) {
       if (usedPets.has(visit.id)) continue;
+      // Who suits this pet: the measured fit, else the owner's choice, else
+      // who usually grooms it — among the people free right now.
+      const pick = bookingGroomer(
+        {
+          petId: visit.petId,
+          guideId: guideIdFor(guides, visit.pet.breed),
+          serviceType: visit.serviceType,
+          preferredStaffId: visit.customer.preferredStaffId,
+          candidates,
+        },
+        samples
+      );
 
       for (const member of free) {
         if (usedStaff.has(member.id)) continue;
@@ -105,9 +125,9 @@ export async function assignmentSuggestions(): Promise<Suggestion[]> {
         let score = 0;
 
         // The pet's own groomer is the strongest signal there is.
-        if (visit.customer.preferredStaffId === member.id) {
+        if (pick?.staffId === member.id) {
           score += 50;
-          reasons.push("their usual groomer");
+          reasons.push(pick.reason);
         }
         // An assignment already made should be honoured, not overridden.
         if (visit.staffId === member.id) {
