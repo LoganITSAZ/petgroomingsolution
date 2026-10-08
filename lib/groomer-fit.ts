@@ -1,6 +1,8 @@
 import { STATUS_FLOW } from "@/lib/appointment-flow";
-import type { PetSize } from "@/lib/pet-size";
+import type { Insight } from "@/lib/insights";
+import { sizeName, type PetSize } from "@/lib/pet-size";
 import { MIN_VISITS_FOR_PATTERN, median } from "@/lib/rhythm";
+import { formatCoatType, formatServiceType, formatShopDate } from "@/lib/utils";
 
 /**
  * Which groomer suits which pet, judged on the rows the shop already writes.
@@ -222,4 +224,104 @@ export function bookingGroomer(question: FitQuestion, samples: FitSample[]): Gro
   if (preferred && !gated.has(preferred)) return pick(preferred, "owner's preference");
   if (usual && usualId && !gated.has(usualId)) return pick(usualId, `groomed ${usual.count} of last ${usual.of}`);
   return null;
+}
+
+/** One warning per groomer, breed and service that fails the gate; the worst three. */
+export function fitInsights(samples: FitSample[], names: Map<string, string>): Insight[] {
+  const groups = new Map<string, FitSample[]>();
+  for (const s of samples) {
+    if (!s.guideId) continue;
+    const key = `${s.guideId}:${s.serviceType}`;
+    groups.set(key, [...(groups.get(key) ?? []), s]);
+  }
+
+  const found: { rate: number; insight: Insight }[] = [];
+  groups.forEach((group, key) => {
+    const shop = fitStats(group);
+    for (const staffId of Array.from(new Set(group.map((s) => s.staffId)))) {
+      const mine = group.filter((s) => s.staffId === staffId);
+      const stats = fitStats(mine);
+      if (!errorGate(stats, shop)) continue;
+      const { guideName, serviceType } = mine[0];
+      const errors = mine
+        .filter((s) => s.errors.length > 0)
+        .sort((a, b) => a.finishedAt.getTime() - b.finishedAt.getTime())
+        .map((s) => `${formatShopDate(s.finishedAt, { month: "short", day: "numeric" })}: ${s.errors.map((c) => CAUSE_LABEL[c]).join(", ")}`);
+      found.push({
+        rate: stats.rate,
+        insight: {
+          id: `fit:${staffId}:${key}`,
+          tone: "warning",
+          title: `${names.get(staffId) ?? "A groomer"}: ${stats.errorVisits} of ${stats.visits} ${guideName} ${formatServiceType(serviceType).toLowerCase()} visits had an error`,
+          detail: `New ${guideName} bookings go to someone else while this holds. Worth a look at what was logged.`,
+          evidence: `${errors.join(" · ")} · shop rate ${pct(shop.rate)}, last 12 months`,
+          href: "/staff/analytics",
+        },
+      });
+    }
+  });
+
+  return found
+    .sort((a, b) => b.rate - a.rate)
+    .slice(0, MAX_FIT_INSIGHTS)
+    .map((f) => f.insight);
+}
+
+export type StrengthAxis = "breed" | "size" | "coat";
+
+export interface StrengthRow {
+  key: string;
+  staffName: string;
+  group: string;
+  visits: number;
+  rate: number;
+  shopRate: number;
+  medianMins: number | null;
+  shopMedianMins: number | null;
+  flag: "strength" | "watch" | null;
+}
+
+function axisOf(s: FitSample, axis: StrengthAxis): { key: string; label: string } | null {
+  if (axis === "breed") return s.guideId ? { key: s.guideId, label: s.guideName ?? s.guideId } : null;
+  if (axis === "size") return s.sizeTier ? { key: s.sizeTier, label: sizeName(s.sizeTier) } : null;
+  return s.coatType ? { key: s.coatType, label: formatCoatType(s.coatType) } : null;
+}
+
+/** Each groomer against the shop, per breed, size or coat. Cells under three visits are left out. */
+export function strengthRows(samples: FitSample[], names: Map<string, string>, axis: StrengthAxis): StrengthRow[] {
+  const groups = new Map<string, { label: string; samples: FitSample[] }>();
+  for (const s of samples) {
+    const g = axisOf(s, axis);
+    if (!g) continue;
+    const entry = groups.get(g.key) ?? { label: g.label, samples: [] };
+    entry.samples.push(s);
+    groups.set(g.key, entry);
+  }
+
+  const rows: StrengthRow[] = [];
+  groups.forEach(({ label, samples: group }, groupKey) => {
+    const shop = fitStats(group);
+    for (const staffId of Array.from(new Set(group.map((s) => s.staffId)))) {
+      const stats = fitStats(group.filter((s) => s.staffId === staffId));
+      if (stats.visits < MIN_FIT_VISITS) continue;
+      const faster =
+        stats.measured >= MIN_FIT_VISITS &&
+        stats.medianMins != null &&
+        shop.medianMins != null &&
+        beats(stats.medianMins, shop.medianMins);
+      rows.push({
+        key: `${groupKey}:${staffId}`,
+        staffName: names.get(staffId) ?? "Former staff",
+        group: label,
+        visits: stats.visits,
+        rate: stats.rate,
+        shopRate: shop.rate,
+        medianMins: stats.medianMins,
+        shopMedianMins: shop.medianMins,
+        flag: errorGate(stats, shop) ? "watch" : faster && stats.rate <= shop.rate ? "strength" : null,
+      });
+    }
+  });
+
+  return rows.sort((a, b) => a.group.localeCompare(b.group) || a.staffName.localeCompare(b.staffName));
 }

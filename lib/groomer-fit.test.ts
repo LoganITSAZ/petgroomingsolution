@@ -3,9 +3,11 @@ import {
   bookingGroomer,
   errorCauses,
   errorGate,
+  fitInsights,
   fitStats,
   foldRedoMins,
   speedWinner,
+  strengthRows,
   usualGroomer,
   type FitQuestion,
   type FitSample,
@@ -220,5 +222,75 @@ describe("bookingGroomer", () => {
       staffId: "sam",
       reason: "owner's preference",
     });
+  });
+});
+
+describe("fitInsights", () => {
+  const names = new Map([
+    ["sam", "Sam"],
+    ["ana", "Ana"],
+    ["kim", "Kim"],
+  ]);
+  const shopBase = (guideId: string, guideName: string) => many(40, { staffId: "ana", guideId, guideName, petId: "p" });
+
+  it("raises one warning per gated groomer, breed and service, with a stable id", () => {
+    const samples = [
+      ...shopBase("doodle", "Goldendoodle"),
+      ...many(5, { staffId: "sam" }),
+      sample({ staffId: "sam", errors: ["COMPLAINT"], finishedAt: new Date("2026-03-03T18:00:00Z") }),
+      sample({ staffId: "sam", errors: ["REDO_VISIT", "INJURY"], finishedAt: new Date("2026-04-12T18:00:00Z") }),
+    ];
+    const [insight, ...rest] = fitInsights(samples, names);
+    expect(rest).toEqual([]);
+    expect(insight).toMatchObject({
+      id: "fit:sam:doodle:FULL_GROOM",
+      tone: "warning",
+      title: "Sam: 2 of 7 Goldendoodle full groom visits had an error",
+      evidence: "Mar 3: complaint · Apr 12: redo booked, injury · shop rate 4%, last 12 months", // 2 of 47
+    });
+  });
+
+  it("keeps the worst three", () => {
+    // Per guide: 3 clean + 2..5 bites — rates 2/5, 3/6, 4/7, 5/8, so d is worst.
+    const samples = ["a", "b", "c", "d"].flatMap((guideId, g) => [
+      ...many(40, { staffId: "zed", guideId, guideName: guideId }),
+      ...many(3, { staffId: "sam", guideId, guideName: guideId }),
+      ...many(2 + g, { staffId: "sam", guideId, guideName: guideId, errors: ["BITE"] }),
+    ]);
+    const insights = fitInsights(samples, new Map([...names, ["zed", "Zed"]]));
+    expect(insights.map((i) => i.id)).toEqual(["fit:sam:d:FULL_GROOM", "fit:sam:c:FULL_GROOM", "fit:sam:b:FULL_GROOM"]);
+  });
+
+  it("says nothing about a pet with no breed guide", () => {
+    expect(fitInsights(many(6, { staffId: "sam", guideId: null, errors: ["BITE"] }), names)).toEqual([]);
+  });
+});
+
+describe("strengthRows", () => {
+  const names = new Map([
+    ["sam", "Sam"],
+    ["ana", "Ana"],
+  ]);
+
+  it("flags a groomer faster than the shop with no worse error rate as a strength", () => {
+    const samples = [...many(3, { staffId: "sam", workedMins: 40 }), ...many(9, { staffId: "ana", workedMins: 80 })];
+    const rows = strengthRows(samples, names, "breed");
+    expect(rows.find((r) => r.staffName === "Sam")).toMatchObject({ group: "Goldendoodle", visits: 3, medianMins: 40, shopMedianMins: 80, flag: "strength" });
+    expect(rows.find((r) => r.staffName === "Ana")?.flag).toBeNull();
+  });
+
+  it("flags a gated groomer to watch", () => {
+    const samples = [...many(30, { staffId: "ana" }), ...many(2, { staffId: "sam" }), ...many(2, { staffId: "sam", errors: ["BITE"] })];
+    expect(strengthRows(samples, names, "breed").find((r) => r.staffName === "Sam")?.flag).toBe("watch");
+  });
+
+  it("groups by size and coat, and leaves out cells under three visits", () => {
+    const samples = [...many(3, { staffId: "sam", sizeTier: "SMALL" }), ...many(2, { staffId: "ana", sizeTier: "SMALL" })];
+    expect(strengthRows(samples, names, "size").map((r) => [r.staffName, r.group])).toEqual([["Sam", "Small"]]);
+    expect(strengthRows(samples, names, "coat").map((r) => r.group)).toEqual(["Curly"]);
+  });
+
+  it("skips samples with no value for the axis", () => {
+    expect(strengthRows(many(3, { coatType: null }), names, "coat")).toEqual([]);
   });
 });
