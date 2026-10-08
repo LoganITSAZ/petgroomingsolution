@@ -446,6 +446,10 @@ export async function logVisitEvent(formData: FormData): Promise<void> {
     back(appointmentId, "?error=bad_event", returnTo(formData));
   }
   const eventType = eventTypeRaw as VisitEventType;
+  // A complaint with no words is a mark nobody can act on a week later.
+  if (eventType === VisitEventType.COMPLAINT && !note) {
+    back(appointmentId, "?error=complaint_note", returnTo(formData));
+  }
 
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },

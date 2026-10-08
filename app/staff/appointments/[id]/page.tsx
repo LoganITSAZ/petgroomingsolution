@@ -116,6 +116,7 @@ const ERRORS: Record<string, string> = {
   kennel_occupied: "That kennel already holds another pet.",
   kennel_out_of_service: "That kennel is out of service.",
   bad_event: "Pick a valid event type.",
+  complaint_note: "Say what the owner complained about.",
   no_consent_note: "Say what the owner is being asked to approve.",
   bad_consent_answer: "Record the owner's answer as approved or declined.",
   not_floor_staff:

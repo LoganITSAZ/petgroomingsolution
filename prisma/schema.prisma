@@ -936,6 +936,7 @@ model Appointment {
   petId           String
   stationId       String? // assigned when pet arrives / checked in
   staffId         String? // assigned groomer
+  redoOfId        String? // the visit this one redoes — always the root visit
   scheduledAt     DateTime // date + time of appointment (= arrival time for walk-ins)
   appointmentType AppointmentType   @default(APPOINTMENT)
   status          AppointmentStatus @default(SCHEDULED)
@@ -970,6 +971,8 @@ model Appointment {
   services      AppointmentService[]
   statusHistory AppointmentStatusHistory[]
   visitEvents   VisitEvent[]
+  redoOf        Appointment?               @relation("Redo", fields: [redoOfId], references: [id], onDelete: SetNull)
+  redos         Appointment[]              @relation("Redo")
   photos        VisitPhoto[]
   // The compartment this pet is in, once it has been put away.
   kennelId      String?
@@ -995,6 +998,7 @@ model Appointment {
 
   @@index([scheduledAt, status])
   @@index([stationId, status])
+  @@index([redoOfId])
   @@map("appointments")
 }
 
@@ -1203,6 +1207,8 @@ enum VisitEventType {
   MATTING_FOUND // unexpected matting discovered mid-groom
   EQUIPMENT_ISSUE // clippers, dryer, etc. problem
   OTHER // catch-all, use note field for details
+  COMPLAINT // the owner complained about the groom; note says what
+  REDO // a fix done at the counter, on the visit it fixes
 }
 
 // Photographs of one day's work. They hang off the visit, not the pet:

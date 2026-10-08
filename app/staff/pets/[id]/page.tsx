@@ -38,6 +38,8 @@ const visitEventLabel: Record<string, string> = {
   MATTING_FOUND: "Matting Found",
   EQUIPMENT_ISSUE: "Equipment Issue",
   OTHER: "Other",
+  COMPLAINT: "Complaint",
+  REDO: "Redo",
 };
 
 const visitEventColor: Record<string, string> = {
@@ -48,6 +50,8 @@ const visitEventColor: Record<string, string> = {
   MATTING_FOUND: "bg-yellow-100 text-yellow-700",
   EQUIPMENT_ISSUE: "bg-stone-100 text-stone-600",
   OTHER: "bg-stone-100 text-stone-500",
+  COMPLAINT: "bg-red-100 text-red-700",
+  REDO: "bg-orange-100 text-orange-700",
 };
 
 interface PageProps {
