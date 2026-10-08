@@ -5,7 +5,7 @@ import { AppointmentStatus, StationRole } from "@prisma/client";
  * component) and the server both work from the same list instead of keeping
  * private copies that drift.
  */
-const STATUS_FLOW: AppointmentStatus[] = [
+export const STATUS_FLOW: AppointmentStatus[] = [
   AppointmentStatus.CHECKED_IN,
   AppointmentStatus.IN_PROGRESS,
   AppointmentStatus.DRYING,
