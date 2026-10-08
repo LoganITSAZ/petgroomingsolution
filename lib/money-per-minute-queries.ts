@@ -1,6 +1,8 @@
+import { AppointmentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { FINISHED_STATUSES } from "@/lib/analytics";
 import { guidesForBreeds } from "@/lib/breeds";
+import { foldRedoMins } from "@/lib/groomer-fit";
 import type { Insight } from "@/lib/insights";
 import {
   PRICE_WINDOW_DAYS,
@@ -24,7 +26,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export async function pricedVisits(rangeDays: number, now: Date = new Date()): Promise<PricedVisit[]> {
   const since = new Date(now.getTime() - rangeDays * DAY_MS);
   const visits = await prisma.appointment.findMany({
-    where: { status: { in: FINISHED_STATUSES }, scheduledAt: { gte: since, lte: now } },
+    where: { status: { in: FINISHED_STATUSES }, scheduledAt: { gte: since, lte: now }, redoOfId: null },
     select: {
       statusHistory: { select: { status: true, changedAt: true } },
       services: {
@@ -46,6 +48,11 @@ export async function pricedVisits(rangeDays: number, now: Date = new Date()): P
         },
       },
       appointmentSurcharges: { select: { amountCents: true } },
+      // A redo is not a cheap visit: its time belongs to the one it fixes.
+      redos: {
+        where: { status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW] } },
+        select: { statusHistory: { select: { status: true, changedAt: true } } },
+      },
       pet: { select: { breed: true } },
     },
   });
@@ -53,7 +60,10 @@ export async function pricedVisits(rangeDays: number, now: Date = new Date()): P
   const guides = await guidesForBreeds(visits.map((visit) => visit.pet.breed));
 
   return visits.flatMap((visit): PricedVisit[] => {
-    const worked = workedMins(visitTime(visit.statusHistory, now));
+    const worked = foldRedoMins(
+      workedMins(visitTime(visit.statusHistory, now)),
+      visit.redos.map((redo) => workedMins(visitTime(redo.statusHistory, now)))
+    );
     if (worked == null) return [];
     // Before discounts, and never the tip: see lib/money-per-minute.ts.
     const ticket = ticketFor({
