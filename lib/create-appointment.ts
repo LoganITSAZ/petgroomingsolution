@@ -2,13 +2,13 @@ import { AppointmentStatus, AppointmentType, Prisma, ServiceType } from "@prisma
 import { resolveSelectedServices, sendBookingNotifications, sizePetById } from "@/lib/appointment-services";
 import { validateBookingTime, type BookingRefusalCode } from "@/lib/booking-validation";
 import { getConfig } from "@/lib/config";
+import { bookingGroomerFor } from "@/lib/groomer-fit-queries";
 import { kennelDemand } from "@/lib/kennels";
 import type { PetSize } from "@/lib/pet-size";
 import { quoteLine } from "@/lib/pricing";
 import { bookingRateSnapshot } from "@/lib/pricing-tiers";
 import { prisma } from "@/lib/prisma";
 import type { BusinessHours } from "@/lib/shop-hours";
-import { defaultAssignment } from "@/lib/stations";
 import {
   checksForPet,
   vaccinationBlockers,
@@ -63,6 +63,8 @@ export type CreateAppointmentInput = {
   /** Staff id for the audit row; null for a customer-made booking. */
   changedById?: string | null;
   note?: string;
+  /** The finished visit this one redoes, always the root of the chain. */
+  redoOfId?: string | null;
 };
 
 export type CreateAppointmentFailure = {
@@ -213,29 +215,14 @@ export async function createAppointment(
     }
   }
 
-  // Bookings do not ask for a groomer or a station: the customer's preferred
-  // groomer picks both, and the groomer's own station follows.
-  //
-  // Derived per FIELD, not per object. Naming a groomer while leaving the
-  // station blank must still pick up that groomer's default station — the
-  // station follows the person, which is the whole point of the rule. An
-  // explicit value still wins for the field it was given for.
-  const derived =
-    input.staffId === undefined || input.stationId === undefined
-      ? await defaultAssignment(input.customerId)
-      : { staffId: null, stationId: null };
-
-  const staffId = input.staffId === undefined ? derived.staffId : input.staffId;
-
-  // The station follows the groomer, so a derived station is only right when
-  // the derived groomer is the one actually taking the visit. Staff naming a
-  // different groomer must not inherit the preferred groomer's table.
-  const stationId =
-    input.stationId === undefined
-      ? staffId !== null && staffId === derived.staffId
-        ? derived.stationId
-        : null
-      : input.stationId;
+  // Bookings do not ask for a groomer: the pet's best fit takes it, else the
+  // owner's preference, else whoever usually grooms it. The station is never
+  // derived — a pet is placed when it arrives, and one with nowhere to stand
+  // waits in a kennel. An explicit value still wins.
+  const pick =
+    input.staffId === undefined ? await bookingGroomerFor(input.petId, serviceType) : null;
+  const staffId = input.staffId === undefined ? (pick?.staffId ?? null) : input.staffId;
+  const stationId = input.stationId ?? null;
 
   const assignment = { staffId, stationId };
 
@@ -272,6 +259,7 @@ export async function createAppointment(
         checkedInAt: status === AppointmentStatus.CHECKED_IN ? new Date() : null,
         pricingTierId: rate.pricingTierId,
         pricingDiscountCents: rate.pricingDiscountCents,
+        redoOfId: input.redoOfId ?? null,
         services: { create: lines },
       },
       include: APPOINTMENT_INCLUDE,
@@ -284,7 +272,13 @@ export async function createAppointment(
         changedById: input.changedById ?? null,
         // The adjusted slot explains itself in the audit trail rather than
         // silently differing from what the price list says.
-        note: [input.note ?? "Appointment created", slot.reason].filter(Boolean).join(" "),
+        note: [
+          input.note ?? "Appointment created",
+          slot.reason,
+          pick ? `Groomer: ${pick.staffName}, ${pick.reason}.` : null,
+        ]
+          .filter(Boolean)
+          .join(" "),
       },
     });
 

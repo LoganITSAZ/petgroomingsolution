@@ -4,6 +4,7 @@ import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
 import { AppointmentStatus, StaffRole, VisitEventType, VisitPhotoKind } from "@prisma/client";
 import { WORK_STATION_ROLES } from "@/lib/stations";
+import { FINISHED_STATUSES } from "@/lib/analytics";
 import { nextStatus } from "@/lib/appointment-flow";
 import { getServiceOptions } from "@/lib/appointment-services";
 import {
@@ -1128,6 +1129,14 @@ export default async function AppointmentDetailPage(props: PageProps) {
               station display.
             </p>
           </form>
+          {FINISHED_STATUSES.includes(appointment.status) && (
+            <Link
+              href={`/staff/appointments/new?customerId=${appointment.customerId}&petId=${appointment.petId}&redoOf=${appointment.redoOfId ?? appointment.id}`}
+              className="mt-3 inline-block text-sm font-semibold text-amber-700 hover:underline"
+            >
+              Book a redo
+            </Link>
+          )}
         </section>
 
         {/* Audit trail */}

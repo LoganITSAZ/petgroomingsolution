@@ -92,51 +92,6 @@ export async function stationHasRoom(
 }
 
 /**
- * Who should take this visit, and where.
- *
- * Customers are attached to a groomer, and groomers to a station, so neither
- * has to be chosen when the appointment is made. The station is only used when
- * it still has room and the groomer is allowed to work it.
- */
-export async function defaultAssignment(customerId: string): Promise<{
-  staffId: string | null;
-  stationId: string | null;
-}> {
-  const customer = await prisma.customer.findUnique({
-    where: { id: customerId },
-    select: {
-      preferredStaff: {
-        select: {
-          id: true,
-          isActive: true,
-          roles: true,
-          defaultStation: {
-            select: { id: true, isActive: true, role: true, allowedRoles: true },
-          },
-        },
-      },
-    },
-  });
-
-  const staff = customer?.preferredStaff;
-  if (!staff || !staff.isActive) return { staffId: null, stationId: null };
-
-  const station = staff.defaultStation;
-  if (!station || !station.isActive || !isWorkStation(station.role)) {
-    return { staffId: staff.id, stationId: null };
-  }
-  if (
-    station.allowedRoles.length > 0 &&
-    !station.allowedRoles.some((role) => staff.roles.includes(role))
-  ) {
-    return { staffId: staff.id, stationId: null };
-  }
-
-  const hasRoom = await stationHasRoom(station.id);
-  return { staffId: staff.id, stationId: hasRoom ? station.id : null };
-}
-
-/**
  * Stations are named after the work they do, so adding one needs no typing.
  * The shop can still rename any of them.
  */

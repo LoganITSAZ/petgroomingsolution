@@ -8,7 +8,8 @@ import { AppointmentType, CoatType, PetSex, Species } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { capacityConflicts, kennelAvailableFor } from "@/lib/kennels";
-import { formatShopTime24, shopDayKey, shopDayRange } from "@/lib/utils";
+import { formatShopDate, formatShopTime24, shopDayKey, shopDayRange } from "@/lib/utils";
+import { FINISHED_STATUSES } from "@/lib/analytics";
 import { shopDateTimeLocal } from "@/lib/shop-time";
 import { getServiceOptions } from "@/lib/appointment-services";
 import { createAppointment } from "@/lib/create-appointment";
@@ -22,7 +23,7 @@ import { VaccinationWarning } from "@/components/Vaccinations";
 export const metadata = { title: "New Appointment" };
 
 interface PageProps {
-  searchParams: Promise<{ customerId?: string; petId?: string }>;
+  searchParams: Promise<{ customerId?: string; petId?: string; redoOf?: string }>;
 }
 
 export default async function NewStaffAppointmentPage(props: PageProps) {
@@ -32,7 +33,17 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
     redirect("/login");
   }
 
-  const { customerId, petId } = searchParams;
+  const { customerId, petId, redoOf } = searchParams;
+
+  // "Book a redo" on a finished visit lands here. Only a finished visit of
+  // this pet can be redone; anything else is ignored rather than refused.
+  const redoOriginal =
+    redoOf && petId
+      ? await prisma.appointment.findFirst({
+          where: { id: redoOf, petId, status: { in: FINISHED_STATUSES } },
+          select: { id: true, scheduledAt: true, pet: { select: { name: true } } },
+        })
+      : null;
 
   const [customers, pets, serviceOptions] = await Promise.all([
     prisma.customer.findMany({
@@ -176,6 +187,17 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
       if (!owned) throw new Error("That pet belongs to a different customer");
     }
 
+    // A redo books against the visit it fixes, which is what charges the
+    // error to that visit's groomer. Re-checked here: the field is posted.
+    const redoOfId = field("redoOfId");
+    if (redoOfId) {
+      const original = await prisma.appointment.findFirst({
+        where: { id: redoOfId, petId, status: { in: FINISHED_STATUSES } },
+        select: { id: true },
+      });
+      if (!original) throw new Error("A redo has to be of a finished visit of the same pet");
+    }
+
     // One visit, one or more services. The first pick is the primary service,
     // and the duration is their sum — both resolved by `createAppointment`.
     const serviceIds = formData.getAll("serviceIds").map((value) => String(value));
@@ -212,6 +234,7 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
       enforceCustomerRules: false,
       changedById: session.user.id,
       note: "Appointment created by staff",
+      redoOfId: redoOfId || null,
     });
     if (!result.ok) throw new Error(result.message);
 
@@ -228,6 +251,13 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
         <form action={createStaffAppointment} className="space-y-3">
           {vaccinationChecks.some((check) => check.level !== "current") && (
             <VaccinationWarning checks={vaccinationChecks} petName={vaccinationPet} />
+          )}
+
+          {redoOriginal && (
+            <p className="rounded-lg border border-well-line bg-well px-3 py-2 text-sm text-stone-700">
+              <input type="hidden" name="redoOfId" value={redoOriginal.id} />
+              Redo of {redoOriginal.pet.name}&rsquo;s {formatShopDate(redoOriginal.scheduledAt)} visit.
+            </p>
           )}
 
           {missed && (
