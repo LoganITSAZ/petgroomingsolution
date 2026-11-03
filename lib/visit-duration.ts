@@ -181,9 +181,12 @@ export interface LearnedSlot {
 /** The slot to book for this pet, with the sentence explaining any change. */
 export async function learnedSlotForPet(petId: string, baseMins: number): Promise<LearnedSlot> {
   const overruns = await petOverruns(petId);
-  const typical = typicalOverrunMins(overruns);
-  if (typical != null) {
-    const mins = learnedDuration(baseMins, typical);
+  // Enough measured visits is the answer, even when they say "no change" —
+  // a pet that runs on time has taught the shop its slot, so the breed guide
+  // has nothing left to say about it.
+  if (overruns.length >= MIN_VISITS_FOR_DURATION) {
+    const typical = typicalOverrunMins(overruns);
+    const mins = typical == null ? baseMins : learnedDuration(baseMins, typical);
     return { mins, reason: durationReason(baseMins, mins, overruns.length) };
   }
 
