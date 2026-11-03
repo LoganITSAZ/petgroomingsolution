@@ -138,7 +138,7 @@
 #public-root .public-hero { position: relative; gap: clamp(2rem, 5vw, 5rem); }
 #public-root .public-hero h1 { font-size: clamp(3rem, 6.5vw, 5.5rem); line-height: 1.02; letter-spacing: -0.06em; }
 #public-root .public-hero > div { min-width: 0; }
-#public-root .public-hero .glass-feature {
+#public-root .public-visit-card.glass-feature {
   border: 1px solid rgb(var(--line));
   border-radius: 1.75rem;
   box-shadow: 0 24px 64px -40px rgb(var(--brand-900) / 0.4);

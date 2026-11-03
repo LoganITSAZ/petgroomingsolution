@@ -6,8 +6,11 @@
 .hero h1 span { color: rgb(var(--brand-text)); }
 .hero > div > p:last-child { max-width: 34rem; color: rgb(var(--muted)); line-height: 1.8; }
 .panel { min-width: 0; }
-.explorer { display: grid; grid-template-columns: 270px minmax(0, 1fr); align-items: start; gap: 1.5rem; }
-.preferences { padding: 1.5rem; background: rgb(var(--surface)); border: 1px solid rgb(var(--line)); border-radius: 1.25rem; }
+/* Same shape as /contact's plan-your-visit module: the filters panel sits on
+   top, and the menu is tucked under its right edge and slides out from behind
+   it as the menu scrolls into view. The panel's shadow separates the two. */
+.explorer { display: grid; grid-template-columns: 270px minmax(0, 1fr); align-items: start; }
+.preferences { position: relative; z-index: 1; box-shadow: 0 18px 40px -22px rgb(var(--brand-900) / 0.35); padding: 1.5rem; background: rgb(var(--surface)); border: 1px solid rgb(var(--line)); border-radius: 1.25rem; }
 .title { font-family: var(--font-display), serif; font-size: 1.8rem; font-weight: 600; letter-spacing: -0.04em; margin: 0.6rem 0; }
 .intro, .hint { color: rgb(var(--muted)); font-size: 0.8125rem; line-height: 1.75; }
 .fieldset { min-width: 0; margin-top: 1.75rem; }
@@ -26,7 +29,7 @@
 .note > span { font-size: 1.5rem; }
 .note p { font-size: 0.8125rem; font-weight: 600; line-height: 1.7; }
 .note p span { font-weight: 400; color: rgb(var(--muted)); }
-.menu { min-width: 0; padding: 2rem; background: rgb(var(--surface)); border: 1px solid rgb(var(--line)); border-radius: 1.25rem; box-shadow: 0 16px 48px -36px rgb(var(--brand-900) / 0.18); }
+.menu { min-width: 0; margin: 1.5rem 0 0 -2.5rem; padding: 2rem 2rem 2rem 4.5rem; background: rgb(var(--surface)); border: 1px solid rgb(var(--line)); border-radius: 1.25rem; box-shadow: 0 16px 48px -36px rgb(var(--brand-900) / 0.18); }
 .menuHeading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .menuHeading h3 { font-family: var(--font-display), serif; font-size: 1.75rem; letter-spacing: -0.04em; margin-top: 0.4rem; }
 .menuHeading > p { color: rgb(var(--muted)); font-size: 0.75rem; padding: 0.4rem 0.65rem; border: 1px solid rgb(var(--line)); border-radius: 999px; white-space: nowrap; }
@@ -58,12 +61,20 @@
 .help p { margin-top: 0.5rem; color: rgb(var(--muted)); font-size: 0.875rem; line-height: 1.75; }
 .help a { display: inline-flex; align-items: center; gap: 1.5rem; min-height: 44px; flex-shrink: 0; color: rgb(var(--brand-text)); font-size: 0.875rem; font-weight: 600; }
 .help a:hover { text-decoration: underline; text-underline-offset: 4px; }
+@keyframes menuSlideOut { from { transform: translateX(-40%); clip-path: inset(0 100% 0 0); } to { transform: none; clip-path: inset(0); } }
+@keyframes menuSlideDown { from { transform: translateY(-3rem); clip-path: inset(0 0 100% 0); } to { transform: none; clip-path: inset(0); } }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .menu { animation: menuSlideOut linear both; animation-timeline: view(); animation-range: entry 10% entry 50%; }
+  }
+}
 @media (min-width: 901px) and (min-height: 950px) {
   .preferences { position: sticky; top: 6rem; }
 }
 @media (max-width: 900px) {
-  .explorer { grid-template-columns: 230px minmax(0, 1fr); gap: 1rem; }
-  .preferences, .menu { padding: 1.25rem; }
+  .explorer { grid-template-columns: 230px minmax(0, 1fr); }
+  .preferences { padding: 1.25rem; }
+  .menu { padding: 1.25rem 1.25rem 1.25rem 3.75rem; }
   .service { gap: 1rem; }
   .price > span { font-size: 1.05rem; }
   .price { max-width: 9rem; }
@@ -73,6 +84,8 @@
   .page { padding-top: 2rem; }
   .hero { display: block; margin-bottom: 1.75rem; }
   .explorer { grid-template-columns: minmax(0, 1fr); }
+  .menu { margin: -2.5rem 0.5rem 0; padding: 3.75rem 1.25rem 1.25rem; }
+  @supports (animation-timeline: view()) { @media (prefers-reduced-motion: no-preference) { .menu { animation-name: menuSlideDown; } } }
   .preferences { display: grid; grid-template-columns: minmax(0, 1fr); }
   .title { font-size: 1.5rem; }
   .intro { margin-bottom: 0.25rem; }

@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ContactForm from "./ContactForm";
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+beforeAll(() => {
+  // jsdom has no modal half of <dialog>; enough here to mount and toggle.
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) { this.open = true; };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) { this.open = false; };
+});
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.location.hash = ""; });
 it("keeps the message after a delivery failure and clears it after success", async () => {
   const fetch = vi.fn().mockResolvedValueOnce({ ok: false, json: async () => ({ error: "Delivery failed" }) }).mockResolvedValueOnce({ ok: true, json: async () => ({ message: "Thanks, we received it." }) });
   vi.stubGlobal("fetch", fetch);
+  window.location.hash = "#contact-form";
   render(<ContactForm enabled requirePhone={false} />);
   fireEvent.change(screen.getByLabelText("Your name"), { target: { value: "Sam" } });
   fireEvent.change(screen.getByLabelText("Your email"), { target: { value: "sam@example.com" } });

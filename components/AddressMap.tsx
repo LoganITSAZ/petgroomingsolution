@@ -21,6 +21,8 @@ interface AddressMapProps {
   compact?: boolean;
   /** Let the map break through a padded parent card to become a feature. */
   edgeToEdge?: boolean;
+  /** Repeat the OpenStreetMap credit in the link row, for a page that lays the row over the map's own. */
+  credit?: boolean;
 }
 
 export default async function AddressMap({
@@ -31,6 +33,7 @@ export default async function AddressMap({
   className = "",
   compact = false,
   edgeToEdge = false,
+  credit = false,
 }: AddressMapProps) {
   if (!address || address.trim() === "") return null;
 
@@ -91,6 +94,16 @@ export default async function AddressMap({
         >
           Open larger map ↗
         </a>
+        {credit && (
+          <a
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-muted hover:underline"
+          >
+            © OpenStreetMap contributors
+          </a>
+        )}
       </div>
     </div>
   );
