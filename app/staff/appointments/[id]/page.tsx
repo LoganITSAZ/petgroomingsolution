@@ -116,6 +116,8 @@ const ERRORS: Record<string, string> = {
   kennel_missing: "That kennel no longer exists.",
   kennel_occupied: "That kennel already holds another pet.",
   kennel_out_of_service: "That kennel is out of service.",
+  kennels_full: "Every kennel is full. A pet with no station has to wait behind a door.",
+  kennel_required: "This pet has no station, so it stays in a kennel. Move it to another door or a station instead.",
   bad_event: "Pick a valid event type.",
   complaint_note: "Say what the owner complained about.",
   no_consent_note: "Say what the owner is being asked to approve.",

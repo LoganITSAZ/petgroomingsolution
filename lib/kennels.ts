@@ -102,6 +102,25 @@ export function compartmentRoom(
   return { ok: inside < limit, limit, sharedHousehold, inside };
 }
 
+/**
+ * Which door of one unit a pet goes behind, in the unit's own order.
+ *
+ * A door already holding only this household comes first — dogs from one home
+ * share on purpose — then the first door with room. Null when none has room.
+ */
+export function pickDoor<T extends { appointments: { customerId: string | null }[] }>(
+  doors: T[],
+  customerId: string | null,
+  limits: { perCompartment: number; householdMax: number }
+): T | null {
+  const withRoom = doors
+    .map((door) => ({ door, room: compartmentRoom(
+      door.appointments.map((pet) => pet.customerId ?? ""), customerId, limits.perCompartment, limits.householdMax
+    ) }))
+    .filter(({ room }) => room.ok);
+  return (withRoom.find(({ room }) => room.sharedHousehold) ?? withRoom[0])?.door ?? null;
+}
+
 export interface GridSyncResult {
   created: number;
   removed: number;
@@ -219,6 +238,75 @@ export async function kennelHasRoom(
   exceptAppointmentId?: string
 ): Promise<boolean> {
   return (await kennelRoomFor(kennelId, exceptAppointmentId)).ok;
+}
+
+/**
+ * A pet in the building is always somewhere: at a station, or behind a door.
+ * This is the one question every path asks before it leaves a pet with
+ * neither.
+ */
+export function isWaitingUnplaced(appointment: {
+  status: AppointmentStatus;
+  stationId: string | null;
+  kennelId: string | null;
+}): boolean {
+  return (
+    KENNELABLE_STATUSES.includes(appointment.status) &&
+    !appointment.stationId &&
+    !appointment.kennelId
+  );
+}
+
+/**
+ * Put a pet behind the first door with room for *it*, banks in name order and
+ * doors in reading order — the same rule as placing a pet on a bank at the
+ * counter. A pet already behind a door stays there.
+ *
+ * False only when the shop has kennels and every one is full. A shop with no
+ * kennel rows has nowhere to put a waiting pet, and that is silence, not a
+ * refusal.
+ */
+export async function placeInKennel(appointmentId: string): Promise<boolean> {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    select: { kennelId: true, customerId: true },
+  });
+  if (!appointment || appointment.kennelId) return true;
+
+  const banks = await prisma.station.findMany({
+    where: { isActive: true, role: StationRole.KENNEL },
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      ...LIMIT_SELECT,
+      kennels: {
+        where: { isActive: true },
+        orderBy: [{ row: "asc" }, { column: "asc" }],
+        select: {
+          id: true,
+          appointments: {
+            where: { status: { in: KENNELABLE_STATUSES }, NOT: { id: appointmentId } },
+            select: { customerId: true },
+          },
+        },
+      },
+    },
+  });
+  if (!banks.some((bank) => bank.kennels.length > 0)) return true;
+
+  for (const bank of banks) {
+    const limits = stationLimits(bank);
+    const door = pickDoor(bank.kennels, appointment.customerId, limits);
+    if (door) {
+      await prisma.appointment.update({
+        where: { id: appointmentId },
+        data: { kennelId: door.id, kenneledAt: new Date() },
+      });
+      await broadcastKennelBoard(bank.id);
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

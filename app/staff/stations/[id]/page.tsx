@@ -61,6 +61,8 @@ const ERRORS: Record<string, string> = {
   kennel_occupied:
     "That kennel is full. A compartment only takes more than the shop's rule when every pet inside is from the same household.",
   kennel_out_of_service: "That kennel is out of service.",
+  kennel_required:
+    "A pet in there has no station to go to. Move it to another door or a station before emptying this one.",
   appointment_not_found: "That visit no longer exists.",
   not_in_shop: "That pet is not checked in, so it cannot be kennelled.",
   bad_event: "Pick a valid event type.",

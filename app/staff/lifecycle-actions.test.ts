@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 
 it("checks an arrival in and starts bathing in one assignment", async () => {
-  expect(await assignLifecycleDestination("a1", "station:s1")).toEqual({ ok: true, columnKey: "bath" });
+  expect(await assignLifecycleDestination("a1", "station:s1")).toEqual({ ok: true, columnKey: "bath", placedAt: "Bath 1" });
   expect(mocks.requireStaff).toHaveBeenCalled();
   const data = mocks.appointment.update.mock.calls[0][0].data;
   expect(data).toMatchObject({ stationId: "s1", kennelId: null, status: "IN_PROGRESS", checkedInAt: expect.any(Date) });
@@ -33,7 +33,7 @@ it("checks an arrival in and starts bathing in one assignment", async () => {
 });
 
 it("assigns an arrival to a kennel in Waiting", async () => {
-  expect(await assignLifecycleDestination("a1", "kennel:k1")).toEqual({ ok: true, columnKey: "waiting" });
+  expect(await assignLifecycleDestination("a1", "kennel:k1")).toEqual({ ok: true, columnKey: "waiting", placedAt: "Bank 1 · A1" });
   expect(mocks.appointment.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ kennelId: "k1", stationId: null, status: "CHECKED_IN" }) }));
 });
 
@@ -41,7 +41,7 @@ it("moves a waiting pet to grooming and releases its kennel", async () => {
   const checkedInAt = new Date("2026-09-17T10:00:00Z");
   mocks.appointment.findUnique.mockResolvedValue({ status: "CHECKED_IN", customerId: "owner1", checkedInAt, kennel: { stationId: "bank1" }, stationId: null });
   mocks.station.findUnique.mockResolvedValue({ name: "Table 1", role: "GROOMER", isActive: true, allowedRoles: [] });
-  expect(await assignLifecycleDestination("a1", "station:s1")).toEqual({ ok: true, columnKey: "grooming" });
+  expect(await assignLifecycleDestination("a1", "station:s1")).toEqual({ ok: true, columnKey: "grooming", placedAt: "Table 1" });
   expect(mocks.appointment.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "FINISHING", kennelId: null, checkedInAt }) }));
   expect(mocks.broadcast).toHaveBeenCalledWith("bank1");
 });
@@ -65,5 +65,32 @@ it("rejects incompatible staff and stale appointment states", async () => {
   expect((await assignLifecycleDestination("a1", "station:s1")).ok).toBe(false);
   mocks.appointment.findUnique.mockResolvedValue({ status: "PICKED_UP" });
   expect((await assignLifecycleDestination("a1", "kennel:k1")).ok).toBe(false);
+  expect(mocks.appointment.update).not.toHaveBeenCalled();
+});
+
+it("takes the first door with room for this pet when a whole bank is the destination", async () => {
+  const bank = {
+    id: "bank1", name: "Kennel Bank 1", role: "KENNEL", isActive: true,
+    kennelCapacityPerCompartment: 1, kennelHouseholdMaxPerCompartment: 2,
+    kennels: [
+      { id: "kA1", label: "A1", appointments: [{ customerId: "someone-else" }] },
+      { id: "kA2", label: "A2", appointments: [] },
+    ],
+  };
+  mocks.station.findUnique.mockResolvedValue(bank);
+  expect(await assignLifecycleDestination("a1", "kennelbank:bank1")).toEqual({ ok: true, columnKey: "waiting", placedAt: "Kennel Bank 1 · A2" });
+  expect(mocks.appointment.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ kennelId: "kA2", status: "CHECKED_IN" }) }));
+
+  // A door already holding this household wins over an empty one.
+  mocks.station.findUnique.mockResolvedValueOnce({ ...bank, kennels: [
+    { id: "kA1", label: "A1", appointments: [] },
+    { id: "kA2", label: "A2", appointments: [{ customerId: "owner1" }] },
+  ] });
+  expect(await assignLifecycleDestination("a1", "kennelbank:bank1")).toEqual({ ok: true, columnKey: "waiting", placedAt: "Kennel Bank 1 · A2" });
+
+  // Every door taken by another household: refused, and nothing is written.
+  mocks.appointment.update.mockClear();
+  mocks.station.findUnique.mockResolvedValue({ ...bank, kennels: [bank.kennels[0]] });
+  expect((await assignLifecycleDestination("a1", "kennelbank:bank1")).ok).toBe(false);
   expect(mocks.appointment.update).not.toHaveBeenCalled();
 });

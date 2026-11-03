@@ -61,6 +61,13 @@ export async function releaseKennel(formData: FormData): Promise<void> {
   const kennel = await prisma.kennel.findUnique({ where: { id: kennelId } });
   if (!kennel) redirect("/staff/stations?error=kennel_not_found");
 
+  // Only pets standing at a station can leave the door; the rest would be
+  // waiting with nowhere to be.
+  const stranded = await prisma.appointment.count({
+    where: { kennelId: kennel.id, status: { in: KENNELABLE_STATUSES }, stationId: null },
+  });
+  if (stranded > 0) back(kennel.stationId, "?error=kennel_required");
+
   await prisma.appointment.updateMany({
     where: { kennelId: kennel.id, status: { in: KENNELABLE_STATUSES } },
     data: { kennelId: null, kenneledAt: null },

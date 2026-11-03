@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { STATION_APPOINTMENT_SELECT, broadcastToStation } from "@/lib/station-events";
-import { broadcastKennelBoard, releaseKennelForAppointment } from "@/lib/kennels";
+import { broadcastKennelBoard, isWaitingUnplaced, placeInKennel, releaseKennelForAppointment } from "@/lib/kennels";
 import { sendReadyForPickup } from "@/lib/email";
 import { smsReadyForPickup } from "@/lib/sms";
 import { voiceReadyForPickup } from "@/lib/voice";
@@ -97,6 +97,10 @@ async function applyStatus({ appointmentId, status, note, staffId }: StatusChang
   });
 
   if (updated.stationId) await broadcastStationBoard(updated.stationId);
+
+  // Whatever path checked the pet in, a pet with no station waits behind a
+  // door. Best effort here; the screens that can refuse check for room first.
+  if (isWaitingUnplaced(updated)) await placeInKennel(updated.id);
 
   // The punch card follows the visit: finishing earns one, cancelling or a
   // no-show takes it back. Idempotent, so the three finished statuses in a row

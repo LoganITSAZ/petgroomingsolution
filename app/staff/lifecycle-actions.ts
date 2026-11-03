@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaff } from "@/lib/auth-guards";
 import { broadcastStationBoard } from "@/lib/appointment-status";
-import { broadcastKennelBoard, compartmentRoom, KENNELABLE_STATUSES, stationLimits } from "@/lib/kennels";
+import { broadcastKennelBoard, compartmentRoom, KENNELABLE_STATUSES, pickDoor, stationLimits } from "@/lib/kennels";
 import { OCCUPYING_STATUSES } from "@/lib/stations";
 
 /** Check in and place a pet atomically, including capacity and audit history. */
@@ -13,10 +13,12 @@ export async function assignLifecycleDestination(appointmentId: string, destinat
   ok: boolean;
   error?: string;
   columnKey?: string;
+  /** Where the pet went, down to the door the server chose. */
+  placedAt?: string;
 }> {
   const staffId = await requireStaff();
   const [kind, id] = destination.split(":");
-  if (!id || !["kennel", "station"].includes(kind)) return { ok: false, error: "Choose a kennel, bathing, or grooming station." };
+  if (!id || !["kennel", "kennelbank", "station"].includes(kind)) return { ok: false, error: "Choose a kennel, bathing, or grooming station." };
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -33,7 +35,37 @@ export async function assignLifecycleDestination(appointmentId: string, destinat
       let status: AppointmentStatus = AppointmentStatus.CHECKED_IN;
       let columnKey = "waiting";
       let destinationName = "";
-      if (kind === "kennel") {
+      if (kind === "kennelbank") {
+        /*
+         * A bank is one destination, not thirty doors: the counter places a pet
+         * onto the bank and the lowest door with room for *that* pet takes it,
+         * same rule as an assignment derived anywhere else.
+         */
+        const station = await tx.station.findUnique({
+          where: { id },
+          include: {
+            kennels: {
+              where: { isActive: true },
+              orderBy: [{ row: "asc" }, { column: "asc" }],
+              include: {
+                appointments: {
+                  where: { status: { in: KENNELABLE_STATUSES }, NOT: { id: appointmentId } },
+                  select: { customerId: true },
+                },
+              },
+            },
+          },
+        });
+        if (!station?.isActive || station.role !== StationRole.KENNEL) {
+          return { ok: false as const, error: "That kennel bank is not in service." };
+        }
+        const limits = stationLimits(station);
+        const door = pickDoor(station.kennels, appointment.customerId, limits);
+        if (!door) return { ok: false as const, error: `Every door in ${station.name} is full. Try another bank.` };
+        kennelId = door.id;
+        kennelStationId = station.id;
+        destinationName = `${station.name} · ${door.label}`;
+      } else if (kind === "kennel") {
         const kennel = await tx.kennel.findUnique({ where: { id }, include: { station: true } });
         if (!kennel?.isActive || !kennel.station.isActive || kennel.station.role !== StationRole.KENNEL) {
           return { ok: false as const, error: "That kennel is not in service." };
@@ -80,7 +112,7 @@ export async function assignLifecycleDestination(appointmentId: string, destinat
         checkedInAt: appointment.status === AppointmentStatus.SCHEDULED ? now : appointment.checkedInAt,
         statusHistory: { create: history },
       } });
-      return { ok: true as const, columnKey, stationIds: [appointment.stationId, stationId], kennelStationIds: [appointment.kennel?.stationId, kennelStationId] };
+      return { ok: true as const, columnKey, destinationName, stationIds: [appointment.stationId, stationId], kennelStationIds: [appointment.kennel?.stationId, kennelStationId] };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     if (!result.ok) return result;
     // A kiosk delivery failure must not report that a committed assignment failed.
@@ -89,7 +121,7 @@ export async function assignLifecycleDestination(appointmentId: string, destinat
       ...[...new Set(result.kennelStationIds.filter((id): id is string => !!id))].map((id) => broadcastKennelBoard(id)),
     ]);
     for (const path of ["/staff", "/staff/stations", "/staff/appointments", `/staff/appointments/${appointmentId}`]) revalidatePath(path);
-    return { ok: true, columnKey: result.columnKey };
+    return { ok: true, columnKey: result.columnKey, placedAt: result.destinationName };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
       return { ok: false, error: "Availability just changed. Please try again." };

@@ -3,7 +3,7 @@ import { resolveSelectedServices, sendBookingNotifications, sizePetById } from "
 import { validateBookingTime, type BookingRefusalCode } from "@/lib/booking-validation";
 import { getConfig } from "@/lib/config";
 import { bookingGroomerFor } from "@/lib/groomer-fit-queries";
-import { kennelDemand } from "@/lib/kennels";
+import { isWaitingUnplaced, kennelDemand, placeInKennel } from "@/lib/kennels";
 import type { PetSize } from "@/lib/pet-size";
 import { quoteLine } from "@/lib/pricing";
 import { bookingRateSnapshot } from "@/lib/pricing-tiers";
@@ -284,6 +284,10 @@ export async function createAppointment(
 
     return created;
   });
+
+  // A walk-in is already standing in the shop: with no station it waits in a
+  // kennel, same as anybody checked in at the counter.
+  if (isWaitingUnplaced(appointment)) await placeInKennel(appointment.id);
 
   // Tell the customer, by whichever channels the shop runs. Both the portal
   // and the staff form called this themselves; POST /api/appointments and the

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compartmentRoom, stationLimits } from "./kennels";
+import { compartmentRoom, pickDoor, stationLimits } from "./kennels";
 
 /**
  * The shop rule is one dog per door. The exception is a household: several
@@ -80,5 +80,19 @@ describe("stationLimits", () => {
       kennelCapacityPerCompartment: 2,
       kennelHouseholdMaxPerCompartment: 5,
     })).toEqual({ perCompartment: 2, householdMax: 5 });
+  });
+});
+
+describe("pickDoor", () => {
+  const limits = { perCompartment: 1, householdMax: 3 };
+  const door = (id: string, ...owners: string[]) => ({ id, appointments: owners.map((customerId) => ({ customerId })) });
+
+  it("puts a pet behind its own household's door before an empty one", () => {
+    expect(pickDoor([door("A1"), door("A2", "c1")], "c1", limits)?.id).toBe("A2");
+  });
+
+  it("falls back to the first door with room, and to null when none has any", () => {
+    expect(pickDoor([door("A1", "c2"), door("A2")], "c1", limits)?.id).toBe("A2");
+    expect(pickDoor([door("A1", "c2")], "c1", limits)).toBeNull();
   });
 });
