@@ -56,6 +56,8 @@ function Photo({
     );
   }
   return (
+    // Arbitrary shop-provided URLs intentionally bypass image optimization.
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={guide.photoUrl}
       alt={guide.breed}

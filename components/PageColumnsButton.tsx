@@ -7,6 +7,17 @@ import Modal from "./Modal";
 
 type Choice = { key: string; label: string; targets: HTMLElement[]; heading: HTMLElement };
 
+function ColumnControlPortal({ target, children }: { target: HTMLElement; children: React.ReactNode }) {
+  // This component mounts only after the parent discovers headings in an effect.
+  const [container] = useState(() => document.createElement("span"));
+  useEffect(() => {
+    // React owns the heading's text; the portal needs its own empty container.
+    target.appendChild(container);
+    return () => container.remove();
+  }, [target, container]);
+  return createPortal(children, container);
+}
+
 /** Column controls for server-rendered page tables and standalone lists. */
 export default function PageColumnsButton() {
   const anchor = useRef<HTMLSpanElement>(null);
@@ -75,9 +86,9 @@ export default function PageColumnsButton() {
     return heading.closest("thead") ? visibleColumns.at(-1)?.targets[0] ?? heading : heading;
   }
   return <span ref={anchor} className="contents">
-    {headings.map((heading, index) => createPortal(<button type="button" aria-label="Choose columns" title="Choose columns" aria-haspopup="dialog" onClick={() => setActiveHeading(heading)} className="float-right ml-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-stone-500 hover:bg-well hover:text-stone-800">
+    {headings.map((heading, index) => <ColumnControlPortal key={index} target={controlTarget(heading)}><button type="button" aria-label="Choose columns" title="Choose columns" aria-haspopup="dialog" onClick={() => setActiveHeading(heading)} className="float-right ml-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-stone-500 hover:bg-well hover:text-stone-800">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M15 4v16" /></svg>
-    </button>, controlTarget(heading), String(index)))}
+    </button></ColumnControlPortal>)}
     {choices.length > 0 && <Modal open={activeHeading !== null} onClose={() => setActiveHeading(null)} labelledBy={titleId}>
       <h2 id={titleId} className="text-lg font-bold text-stone-900">Choose columns</h2>
       <p className="mt-1 text-sm text-stone-500">Choose the columns or lists to show in this section.</p>
