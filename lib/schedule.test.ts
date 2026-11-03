@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatHours, hoursByStaff, type Shift } from './schedule';
+import { absenceNote, formatHours, hoursByStaff, type Shift } from './schedule';
 
 /**
  * The schedule's arithmetic. Overtime is read off scheduled hours before the week
@@ -131,5 +131,16 @@ describe('schedule hours', () => {
       expect(ada.daysWorked).toBe(1);
       expect(ada.minutes).toBe(7 * 60);
     });
+  });
+});
+
+describe('absenceNote', () => {
+  // 3 Aug, shop time is UTC-7: a 15:00Z–23:00Z shift is 8 AM to 4 PM.
+  const day = [shift('a', 3, 15, 23)];
+  it('reads the reason off the day', () => {
+    expect(absenceNote('Ada', day, new Date(Date.UTC(2026, 7, 3, 14, 0)))).toBe('Ada starts at 8:00 AM');
+    expect(absenceNote('Ada', day, new Date(Date.UTC(2026, 7, 3, 16, 0)))).toBe('Ada is on shift but not signed in');
+    expect(absenceNote('Ada', day, new Date(Date.UTC(2026, 7, 3, 23, 30)))).toBe('Ada has finished for the day');
+    expect(absenceNote('Ada', undefined)).toBe("Ada is not on today's schedule");
   });
 });

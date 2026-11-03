@@ -5,11 +5,11 @@ import { requireFeature, requireStaff } from "@/lib/auth-guards";
 import { broadcastStationBoard, changeAppointmentStatus } from "@/lib/appointment-status";
 import { BOARD_COLUMNS, nextStatus } from "@/lib/appointment-flow";
 import { resolveSelectedServices, setAppointmentServices } from "@/lib/appointment-services";
-import { broadcastKennelBoard, kennelHasRoom, KENNELABLE_STATUSES } from "@/lib/kennels";
-import { AppointmentStatus, StationRole, VisitEventType } from "@prisma/client";
+import { broadcastKennelBoard, isWaitingUnplaced, kennelHasRoom, KENNELABLE_STATUSES, placeInKennel } from "@/lib/kennels";
+import { AppointmentStatus, VisitEventType } from "@prisma/client";
 import { isFloorStaff } from "@/lib/utils";
 import { shopDateTimeLocal } from "@/lib/shop-time";
-import { OCCUPYING_STATUSES, stationHasRoom } from "@/lib/stations";
+import { stationHasRoom } from "@/lib/stations";
 import { getConfig } from "@/lib/config";
 import { deletePhotoIfUnused, storePhoto } from "@/lib/photos";
 import { readKind } from "@/lib/visit-photos";
@@ -85,32 +85,35 @@ export async function checkInWithKennel(formData: FormData): Promise<void> {
 
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
-    select: { status: true },
+    select: { status: true, stationId: true, kennel: { select: { stationId: true } } },
   });
   if (!appointment) redirect("/staff/appointments?error=not_found");
+
+  // The door is settled before the status moves, so a refused check-in leaves
+  // the visit as it was rather than a pet checked in with nowhere to wait.
+  if (kennelId) {
+    const kennel = await prisma.kennel.findUnique({ where: { id: kennelId } });
+    if (!kennel || !kennel.isActive || !(await kennelHasRoom(kennel.id, appointmentId))) {
+      redirect(`/staff/appointments/${appointmentId}?error=kennel_occupied`);
+    }
+    await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { kennelId: kennel.id, kenneledAt: new Date() },
+    });
+    await broadcastKennelBoard(kennel.stationId);
+    const previous = appointment.kennel?.stationId;
+    if (previous && previous !== kennel.stationId) await broadcastKennelBoard(previous);
+  } else if (!appointment.stationId && !(await placeInKennel(appointmentId))) {
+    redirect(`/staff/appointments/${appointmentId}?error=kennels_full`);
+  }
 
   if (appointment.status !== AppointmentStatus.CHECKED_IN) {
     await changeAppointmentStatus({
       appointmentId,
       status: AppointmentStatus.CHECKED_IN,
-      note: kennelId ? "Checked in and kennelled" : "Checked in",
+      note: appointment.stationId && !kennelId ? "Checked in" : "Checked in and kennelled",
       staffId,
     });
-  }
-
-  if (kennelId) {
-    const kennel = await prisma.kennel.findUnique({ where: { id: kennelId } });
-    if (kennel && kennel.isActive && (await kennelHasRoom(kennel.id, appointmentId))) {
-      await prisma.appointment.update({
-        where: { id: appointmentId },
-        data: { kennelId: kennel.id, kenneledAt: new Date() },
-      });
-      await broadcastKennelBoard(kennel.stationId);
-    } else {
-      // The pet is checked in either way; say why it is not behind a door.
-      revalidatePath("/staff/appointments");
-      redirect(`/staff/appointments/${appointmentId}?error=kennel_occupied`);
-    }
   }
 
   revalidatePath("/staff/appointments");
@@ -171,6 +174,13 @@ export async function updateAssignment(formData: FormData): Promise<void> {
     }
   }
 
+  if (
+    isWaitingUnplaced({ ...appointment, stationId }) &&
+    !(await placeInKennel(appointmentId))
+  ) {
+    back(appointmentId, "?error=kennels_full");
+  }
+
   await prisma.appointment.update({
     where: { id: appointmentId },
     data: {
@@ -185,69 +195,6 @@ export async function updateAssignment(formData: FormData): Promise<void> {
 
   back(appointmentId, "?saved=1");
 }
-
-/**
- * Move a pet to a station, or off every station.
- *
- * Called from the board's drag-and-drop, so it answers rather than redirects —
- * a refused drop has to say why beside the pet that was dragged. Every rule
- * the detail screen's form enforces is enforced here too: a drop is its own
- * endpoint, and the board only ever showed what was true when the page loaded.
- */
-export async function assignStation(
-  appointmentId: string,
-  stationId: string | null
-): Promise<{ ok: boolean; error?: string }> {
-  await requireStaff();
-
-  const appointment = await prisma.appointment.findUnique({
-    where: { id: appointmentId },
-    select: { stationId: true, status: true, staff: { select: { name: true, roles: true } } },
-  });
-  if (!appointment) return { ok: false, error: "That visit no longer exists." };
-  if (stationId === appointment.stationId) return { ok: true };
-
-  if (stationId) {
-    if (!OCCUPYING_STATUSES.includes(appointment.status)) {
-      return { ok: false, error: "Only a pet that is in the shop can stand at a station." };
-    }
-
-    const station = await prisma.station.findUnique({
-      where: { id: stationId },
-      select: { name: true, isActive: true, role: true, allowedRoles: true },
-    });
-    if (!station || !station.isActive) return { ok: false, error: "That station is not in service." };
-    // Kennels are filled door by door, on the stations screen.
-    if (station.role === StationRole.KENNEL) {
-      return { ok: false, error: "Kennel doors are assigned on the stations screen." };
-    }
-
-    const roles = appointment.staff?.roles ?? [];
-    if (
-      station.allowedRoles.length > 0 &&
-      roles.length > 0 &&
-      !station.allowedRoles.some((role) => roles.includes(role))
-    ) {
-      return { ok: false, error: `${appointment.staff?.name} cannot work ${station.name}.` };
-    }
-
-    if (!(await stationHasRoom(stationId, appointmentId))) {
-      return { ok: false, error: `${station.name} is already taken.` };
-    }
-  }
-
-  await prisma.appointment.update({ where: { id: appointmentId }, data: { stationId } });
-
-  // Both screens change: the one the pet left and the one it arrived at.
-  if (appointment.stationId) await broadcastStationBoard(appointment.stationId);
-  if (stationId) await broadcastStationBoard(stationId);
-
-  revalidatePath("/staff/appointments");
-  revalidatePath("/staff/stations");
-  revalidatePath("/staff");
-  return { ok: true };
-}
-
 
 /**
  * Move a pet to a column on the floor board.
@@ -281,11 +228,17 @@ export async function moveToColumn(
     where: { id: appointmentId },
     select: {
       status: true,
+      kennelId: true,
       stationId: true,
       staff: { select: { name: true, roles: true } },
     },
   });
   if (!appointment) return { ok: false, error: "That visit no longer exists." };
+
+  // A column with no station is waiting, and waiting is behind a door.
+  if (!column.stationRole && !(await placeInKennel(appointmentId))) {
+    return { ok: false, error: "Every kennel is full." };
+  }
 
   const alreadyHere =
     column.status === appointment.status || column.alsoHolds.includes(appointment.status);
@@ -389,14 +342,23 @@ export async function moveToKennel(formData: FormData): Promise<void> {
 
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
-    select: { status: true, kennelId: true, kennel: { select: { stationId: true } } },
+    select: {
+      status: true,
+      stationId: true,
+      kennelId: true,
+      kennel: { select: { stationId: true } },
+    },
   });
   if (!appointment) redirect("/staff/appointments?error=not_found");
 
   const previousStationId = appointment.kennel?.stationId ?? null;
 
-  // Empty selection takes the pet out of whatever door it is in.
+  // Empty selection takes the pet out of whatever door it is in — unless the
+  // door is the only place it is.
   if (!kennelId) {
+    if (isWaitingUnplaced({ ...appointment, kennelId: null })) {
+      back(appointmentId, "?error=kennel_required");
+    }
     if (appointment.kennelId) {
       await prisma.appointment.update({
         where: { id: appointmentId },

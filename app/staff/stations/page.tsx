@@ -286,53 +286,38 @@ export default async function StaffStationsPage(props: {
                     className="grid gap-1 mt-3"
                     style={{
                       gridTemplateColumns: `repeat(${station.kennelColumns ?? 1}, minmax(0, 1fr))`,
-                      maxWidth: `${(station.kennelColumns ?? 1) * 2.5}rem`,
                     }}
                   >
                     {station.kennels.map((kennel) => (
-                      <span
+                      <div
                         key={kennel.id}
-                        title={
-                          kennel.appointments.length > 0
-                            ? `${kennel.label}: ${kennel.appointments
-                                .map((appt) => appt.pet.name)
-                                .join(", ")}`
-                            : kennel.label
-                        }
-                        className={`h-6 rounded text-[10px] font-semibold flex items-center justify-center ${
+                        className={`min-h-12 rounded p-1 text-[10px] leading-tight ${
                           !kennel.isActive
-                            ? "bg-stone-200 text-stone-400 line-through"
+                            ? "bg-stone-200 text-stone-400"
                             : kennel.appointments.length > 0
-                              ? "bg-emerald-600 text-white"
+                              ? "bg-emerald-50 border border-emerald-300 text-stone-700"
                               : "bg-stone-100 text-stone-400"
                         }`}
                       >
-                        {kennel.label}
-                      </span>
-                    ))}
-                  </div>
-
-                  {occupied > 0 && (
-                    <ul className="mt-3 pt-3 border-t border-stone-100 space-y-1 text-xs">
-                      {station.kennels.flatMap((kennel) =>
-                        kennel.appointments.map((appt) => {
+                        <span
+                          className={`font-bold ${!kennel.isActive ? "line-through" : ""}`}
+                        >
+                          {kennel.label}
+                        </span>
+                        {kennel.appointments.map((appt) => {
                           const mins = minutesSince(appt.kenneledAt);
                           return (
-                            <li key={appt.id} className="flex justify-between gap-3">
-                              <span className="text-stone-700 truncate">
-                                <span className="font-bold">{kennel.label}</span> {appt.pet.name}
-                                {appt.staff && ` · ${appt.staff.name}`}
-                              </span>
-                              <span className="text-stone-400 whitespace-nowrap">
-                                {formatStatus(appt.status)}
-                                {mins != null && ` · ${mins} min`}
-                              </span>
-                            </li>
+                            <span key={appt.id} className="block truncate font-semibold text-emerald-900">
+                              {appt.pet.name}
+                              {mins != null && (
+                                <span className="font-normal text-emerald-700"> · {mins}m</span>
+                              )}
+                            </span>
                           );
-                        })
-                      )}
-                    </ul>
-                  )}
+                        })}
+                      </div>
+                    ))}
+                  </div>
                 </Link>
                 <DisplayLink station={station} />
                 </div>

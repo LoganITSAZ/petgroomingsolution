@@ -62,7 +62,7 @@ export interface BoardColumn {
   key: string;
   /** The shop's word for the column, and for the place a pet stands in it. */
   label: string;
-  /** What a pet becomes when it is dropped here. */
+  /** What a pet becomes when it is moved here. */
   status: AppointmentStatus;
   /** Other statuses that also belong in this column. */
   alsoHolds: AppointmentStatus[];
@@ -81,9 +81,9 @@ export interface BoardColumn {
  *
  * The order is `STATUS_FLOW`'s, not the order the stages are usually recited
  * in — a pet is dried between the bath and the table — because a board whose
- * columns disagree with the flow makes dragging left and right meaningless.
+ * columns disagree with the flow makes moving left and right meaningless.
  *
- * `stationRole` is what makes a drop one gesture instead of two: dropping into
+ * `stationRole` is what makes a move one tap instead of two: moving into
  * Bath both advances the visit and stands the pet at a free bath. Columns with
  * no role take the pet off whatever station it was holding, which is the point
  * of them — a pet waiting for its owner is not occupying a groom table.
@@ -98,7 +98,7 @@ export const BOARD_COLUMNS: BoardColumn[] = [
   },
   {
     key: "bath",
-    label: "Bath",
+    label: "Bathing",
     status: AppointmentStatus.IN_PROGRESS,
     alsoHolds: [],
     stationRole: StationRole.BATHING,
@@ -112,14 +112,14 @@ export const BOARD_COLUMNS: BoardColumn[] = [
   },
   {
     key: "grooming",
-    label: "Grooming Table",
+    label: "Grooming",
     status: AppointmentStatus.FINISHING,
     alsoHolds: [],
     stationRole: StationRole.GROOMER,
   },
   {
     key: "pickup",
-    label: "Waiting Pickup",
+    label: "Pickup",
     status: AppointmentStatus.COMPLETE,
     alsoHolds: [AppointmentStatus.READY_PICKUP],
     stationRole: null,
@@ -133,6 +133,14 @@ export function boardColumnFor(status: AppointmentStatus | string): BoardColumn 
       (column) => column.status === status || column.alsoHolds.includes(status as AppointmentStatus)
     ) ?? null
   );
+}
+
+/** Checked-in pets belong on the floor, including those still needing placement. */
+export function boardColumnForVisit(appointment: {
+  status: AppointmentStatus;
+  kennelId: string | null;
+}): BoardColumn | null {
+  return boardColumnFor(appointment.status);
 }
 
 /** Start of the current uninterrupted board stage, independent of record edits. */

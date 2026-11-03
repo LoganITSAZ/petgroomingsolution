@@ -76,18 +76,28 @@ export async function activeDocuments(): Promise<ShopDocument[]> {
  * registration for the same reason.
  */
 export async function outstandingDocuments(customerId: string): Promise<ShopDocument[]> {
+  return (await outstandingDocumentsFor([customerId])).get(customerId) ?? [];
+}
+
+/** The same question for a list of customers, in two queries rather than two per row. */
+export async function outstandingDocumentsFor(customerIds: string[]): Promise<Map<string, ShopDocument[]>> {
+  const owed = new Map<string, ShopDocument[]>();
   const config = await getConfig();
-  if (!config.featureWaiverRequired) return [];
+  if (!config.featureWaiverRequired || customerIds.length === 0) return owed;
 
   const documents = await activeDocuments();
-  if (documents.length === 0) return [];
+  if (documents.length === 0) return owed;
 
   const accepted = await prisma.documentAcceptance.findMany({
-    where: { customerId, documentId: { in: documents.map((document) => document.id) } },
-    select: { documentId: true, version: true },
+    where: { customerId: { in: customerIds }, documentId: { in: documents.map((document) => document.id) } },
+    select: { customerId: true, documentId: true, version: true },
   });
-  const signed = new Set(accepted.map((row) => `${row.documentId}@${row.version}`));
-  return documents.filter((document) => !signed.has(`${document.id}@${document.version}`));
+  const signed = new Set(accepted.map((row) => `${row.customerId}:${row.documentId}@${row.version}`));
+  for (const customerId of new Set(customerIds)) {
+    const missing = documents.filter((document) => !signed.has(`${customerId}:${document.id}@${document.version}`));
+    if (missing.length) owed.set(customerId, missing);
+  }
+  return owed;
 }
 
 /**

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { AppointmentStatus } from "@prisma/client";
 import { arrivalLevel, arrivalThresholds, minutesLate } from "@/lib/arrivals";
 import { pickupWatchlist, formatWait } from "@/lib/pickups";
-import { capacityConflicts } from "@/lib/kennels";
+import { capacityConflicts, KENNELABLE_STATUSES } from "@/lib/kennels";
 import { OCCUPYING_STATUSES } from "@/lib/stations";
 import { shopDayRange } from "@/lib/utils";
 import { getConfig } from "@/lib/config";
@@ -36,6 +36,16 @@ export const ALERT_DOT: Record<AlertSeverity, string> = {
 
 const SEVERITY_ORDER: Record<AlertSeverity, number> = { critical: 0, warning: 1, info: 2 };
 
+/**
+ * The stages a groom is actually under way in. A pet waiting for a table has
+ * not started, and a finished one has stopped, so neither can overrun.
+ */
+const GROOMING_STATUSES: AppointmentStatus[] = [
+  AppointmentStatus.IN_PROGRESS,
+  AppointmentStatus.DRYING,
+  AppointmentStatus.FINISHING,
+];
+
 /** How far ahead a lapsed vaccination is worth a phone call. */
 const VACCINATION_LOOKAHEAD_DAYS = 7;
 
@@ -63,7 +73,16 @@ export async function serviceAlerts(): Promise<ServiceAlert[]> {
         checkedInAt: true,
         durationMins: true,
         staffId: true,
+        status: true,
         pet: { select: { name: true } },
+        // When the groom began: the first step into a work stage. There is no
+        // start column, because the audit trail already records the moment.
+        statusHistory: {
+          where: { status: { in: GROOMING_STATUSES } },
+          orderBy: { changedAt: "asc" },
+          take: 1,
+          select: { changedAt: true },
+        },
       },
     }),
     capacityConflicts(start, end),
@@ -123,6 +142,7 @@ export async function serviceAlerts(): Promise<ServiceAlert[]> {
   if (missed.length > 0) {
     alerts.push({
       id: "arrival-missed",
+      appointmentIds: missed.map((visit) => visit.id),
       severity: "critical",
       title: `${missed.length} appointment${missed.length === 1 ? "" : "s"} treated as missed`,
       detail: list(missed.map((visit) => `${visit.pet.name} ${minutesLate(visit.scheduledAt)}m`)),
@@ -132,6 +152,7 @@ export async function serviceAlerts(): Promise<ServiceAlert[]> {
   if (runningLate.length > 0) {
     alerts.push({
       id: "arrival-late",
+      appointmentIds: runningLate.map((visit) => visit.id),
       severity: "warning",
       title: `${runningLate.length} arrival${runningLate.length === 1 ? "" : "s"} running late`,
       detail: list(
@@ -150,6 +171,7 @@ export async function serviceAlerts(): Promise<ServiceAlert[]> {
   if (stalled.length > 0) {
     alerts.push({
       id: "waiting-unstarted",
+      appointmentIds: stalled.map((visit) => visit.id),
       severity: "warning",
       title: `${stalled.length} checked in over 30 min ago, not started`,
       detail: list(stalled.map((visit) => visit.pet.name)),
@@ -170,11 +192,15 @@ export async function serviceAlerts(): Promise<ServiceAlert[]> {
   }
 
   // ── Grooms overrunning their slot ─────────────────────────
-  const overrunning = onFloor.filter((visit) => {
-    if (!visit.checkedInAt || !visit.durationMins) return false;
-    const elapsed = (Date.now() - visit.checkedInAt.getTime()) / 60000;
-    return elapsed > visit.durationMins * 1.25;
-  });
+  // Timed from the groom's start, not the check-in: time spent waiting for a
+  // table is the shop's queue, which "waiting-unstarted" already reports.
+  const overrunning = onFloor
+    .filter((visit) => GROOMING_STATUSES.includes(visit.status) && visit.durationMins)
+    .map((visit) => {
+      const startedAt = visit.statusHistory[0]?.changedAt ?? visit.checkedInAt;
+      return { ...visit, elapsed: startedAt ? Math.round((Date.now() - startedAt.getTime()) / 60000) : 0 };
+    })
+    .filter((visit) => visit.elapsed > visit.durationMins! * 1.25);
   if (overrunning.length > 0) {
     alerts.push({
       id: "overrunning",
@@ -182,10 +208,7 @@ export async function serviceAlerts(): Promise<ServiceAlert[]> {
       severity: "warning",
       title: `${overrunning.length} groom${overrunning.length === 1 ? "" : "s"} over the booked time`,
       detail: list(
-        overrunning.map((visit) => {
-          const elapsed = Math.round((Date.now() - visit.checkedInAt!.getTime()) / 60000);
-          return `${visit.pet.name} ${elapsed}/${visit.durationMins}m`;
-        })
+        overrunning.map((visit) => `${visit.pet.name} ${visit.elapsed}/${visit.durationMins}m`)
       ),
       href: "/staff/stations",
     });
@@ -241,8 +264,20 @@ export async function serviceAlerts(): Promise<ServiceAlert[]> {
 
   // ── Nowhere to put the next arrival ───────────────────────
   if (conflicts.shortfall > 0) {
+    // The same visits `kennelDemand()` counts as reserved: the ones the
+    // shortfall will actually land on.
+    const unhoused = await prisma.appointment.findMany({
+      where: {
+        needsKennel: true,
+        kennelId: null,
+        scheduledAt: { gte: start, lt: end },
+        status: { in: [AppointmentStatus.SCHEDULED, ...KENNELABLE_STATUSES] },
+      },
+      select: { id: true },
+    });
     alerts.push({
       id: "kennel-shortfall",
+      appointmentIds: unhoused.map((visit) => visit.id),
       severity: "critical",
       title: `Kennel space short by ${conflicts.shortfall}`,
       detail: `${conflicts.committed}/${conflicts.capacity} committed today`,

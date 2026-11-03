@@ -11,7 +11,8 @@ import {
   shopDayRangeForKey,
 } from "@/lib/utils";
 import { checkInWithKennel, moveStatus } from "./actions";
-import CheckInDialog from "@/components/CheckInDialog";
+import CheckInDialog, { type ShotWarning } from "@/components/CheckInDialog";
+import { VACCINE_LEVEL_LABEL, checksForPets } from "@/lib/vaccinations";
 import StageRail from "@/components/StageRail";
 import {
   KENNELABLE_STATUSES,
@@ -202,7 +203,15 @@ export default async function StaffAppointmentsPage(props: PageProps) {
     prisma.appointment.findMany({
       where,
       include: {
-        pet: { select: { id: true, name: true, hasBiteHistory: true } },
+        pet: {
+          select: {
+            id: true,
+            name: true,
+            hasBiteHistory: true,
+            healthFlags: true,
+            temperamentNotes: true,
+          },
+        },
         customer: { select: { id: true, firstName: true, lastName: true, phone: true } },
         station: { select: { id: true, name: true } },
         staff: { select: { id: true, name: true } },
@@ -255,6 +264,26 @@ export default async function StaffAppointmentsPage(props: PageProps) {
   ];
 
   const listQuery = queryString(filters);
+
+  // What to ask for at the door, for the pets still to arrive. Two queries for
+  // the list, and none at all when the shop checks no certificates.
+  const shotChecks = await checksForPets(
+    appointments
+      .filter((appt) => appt.status === AppointmentStatus.SCHEDULED)
+      .map((appt) => appt.pet.id),
+    config
+  );
+  // Only what is wrong: a line saying every shot is current is one more thing
+  // to read past with a dog on the lead.
+  const shotWarningsFor = (petId: string): ShotWarning[] =>
+    (shotChecks.get(petId) ?? [])
+      .filter((check) => check.level !== "current")
+      .map((check) => ({
+        name: check.name,
+        status: VACCINE_LEVEL_LABEL[check.level],
+        expiresOn: check.expiresOn ? formatShopDate(check.expiresOn) : null,
+        blocks: check.blocks,
+      }));
 
   const isFiltered =
     Boolean(filters.q || filters.staffId) || filters.group !== DEFAULT_GROUP;
@@ -695,6 +724,10 @@ export default async function StaffAppointmentsPage(props: PageProps) {
                             kennels={kennelChoicesFor(appt.customer.id)}
                             listQuery={listQuery}
                             needsKennel={appt.needsKennel}
+                            biteHistory={appt.pet.hasBiteHistory}
+                            healthFlags={appt.pet.healthFlags}
+                            temperamentNotes={appt.pet.temperamentNotes}
+                            shots={shotWarningsFor(appt.pet.id)}
                           />
                         ) : next ? (
                           <form action={moveStatus} className="inline">

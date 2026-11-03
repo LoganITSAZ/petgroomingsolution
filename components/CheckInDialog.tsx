@@ -9,8 +9,19 @@ import Modal from "./Modal";
  *
  * Arrival and kennelling happen together at the counter, so the button opens a
  * dialog that asks the one question that matters at that moment: which
- * compartment is this pet going into?
+ * compartment is this pet going into? What the counter must know before taking
+ * the lead -- a bite history, shots not current, the pet's health flags -- sits
+ * above that question, and only when there is something to say.
  */
+
+/** One shot that is not current, already worded on the server. */
+export interface ShotWarning {
+  name: string;
+  status: string;
+  expiresOn: string | null;
+  /** Past the shop's grace period, or never on file. */
+  blocks: boolean;
+}
 
 export interface KennelChoice {
   id: string;
@@ -30,6 +41,10 @@ export default function CheckInDialog({
   kennels,
   listQuery,
   needsKennel,
+  biteHistory = false,
+  healthFlags = [],
+  temperamentNotes = null,
+  shots = [],
 }: {
   action: (formData: FormData) => Promise<void>;
   appointmentId: string;
@@ -38,8 +53,14 @@ export default function CheckInDialog({
   kennels: KennelChoice[];
   listQuery: string;
   needsKennel: boolean;
+  biteHistory?: boolean;
+  healthFlags?: string[];
+  temperamentNotes?: string | null;
+  shots?: ShotWarning[];
 }) {
   const [open, setOpen] = useState(false);
+  const hasWarnings =
+    biteHistory || shots.length > 0 || healthFlags.length > 0 || Boolean(temperamentNotes);
 
   return (
     <>
@@ -69,7 +90,59 @@ export default function CheckInDialog({
           </button>
         </div>
 
-        <form action={action} className="mt-3 space-y-3">
+        {hasWarnings && (
+          <div className="mt-3 space-y-2">
+            {biteHistory && <p className="bite-warning text-sm">⚠ Bite history</p>}
+
+            {shots.length > 0 && (
+              <ul className="rounded-lg border border-well-line bg-well divide-y divide-well-line text-sm">
+                {shots.map((shot) => (
+                  <li
+                    key={shot.name}
+                    className="flex items-baseline justify-between gap-3 px-3 py-1.5"
+                  >
+                    <span className="font-semibold text-stone-800">{shot.name}</span>
+                    <span
+                      className={`text-right text-xs font-semibold ${
+                        shot.blocks ? "text-red-700" : "text-amber-700"
+                      }`}
+                    >
+                      {shot.status}
+                      {shot.expiresOn && (
+                        <span className="font-normal text-stone-500"> · {shot.expiresOn}</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {healthFlags.length > 0 && (
+              <p className="flex flex-wrap gap-1">
+                {healthFlags.map((flag) => (
+                  <span
+                    key={flag}
+                    className="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full"
+                  >
+                    {flag}
+                  </span>
+                ))}
+              </p>
+            )}
+
+            {temperamentNotes && (
+              <p className="text-sm text-stone-600 whitespace-pre-wrap">
+                <span className="font-semibold text-stone-700">Temperament: </span>
+                {temperamentNotes}
+              </p>
+            )}
+          </div>
+        )}
+
+        <form
+          action={action}
+          className={`mt-3 space-y-3 ${hasWarnings ? "border-t border-well-line pt-3" : ""}`}
+        >
           <input type="hidden" name="appointmentId" value={appointmentId} />
           <input type="hidden" name="listQuery" value={listQuery} />
 

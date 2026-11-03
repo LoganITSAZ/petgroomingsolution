@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AppointmentStatus } from "@prisma/client";
-import { BOARD_COLUMNS, VISIT_STAGES, boardColumnFor, boardWaitingSince, nextStatus, stageIndexFor } from "./appointment-flow";
+import { BOARD_COLUMNS, VISIT_STAGES, boardColumnFor, boardColumnForVisit, boardWaitingSince, nextStatus, stageIndexFor } from "./appointment-flow";
 
 describe("board wait ordering", () => {
   const at = (hour: number) => new Date(Date.UTC(2026, 8, 15, hour));
@@ -73,7 +73,7 @@ describe("visit stages", () => {
 
 describe("floor board columns", () => {
   it("walks left to right as the visit advances", () => {
-    // A board whose columns disagree with the flow makes dragging meaningless:
+    // A board whose columns disagree with the flow makes moving meaningless:
     // every step of STATUS_FLOW must land in the same column or a later one.
     let status: AppointmentStatus | null = AppointmentStatus.CHECKED_IN;
     let seen = -1;
@@ -102,5 +102,21 @@ describe("floor board columns", () => {
     expect(boardColumnFor(AppointmentStatus.PICKED_UP)).toBeNull();
     expect(boardColumnFor(AppointmentStatus.CANCELLED)).toBeNull();
     expect(boardColumnFor(AppointmentStatus.NO_SHOW)).toBeNull();
+  });
+});
+
+describe("waiting board placement", () => {
+  it("keeps scheduled arrivals off the floor", () => {
+    expect(boardColumnForVisit({ status: AppointmentStatus.SCHEDULED, kennelId: null })).toBeNull();
+  });
+
+  it("keeps checked-in pets in Waiting even when placement is still needed", () => {
+    expect(boardColumnForVisit({ status: AppointmentStatus.CHECKED_IN, kennelId: null })?.key).toBe("waiting");
+    expect(boardColumnForVisit({ status: AppointmentStatus.CHECKED_IN, kennelId: "k1" })?.key).toBe("waiting");
+  });
+
+  it("allows pets at service stations and pickup without a kennel", () => {
+    expect(boardColumnForVisit({ status: AppointmentStatus.IN_PROGRESS, kennelId: null })?.key).toBe("bath");
+    expect(boardColumnForVisit({ status: AppointmentStatus.COMPLETE, kennelId: null })?.key).toBe("pickup");
   });
 });

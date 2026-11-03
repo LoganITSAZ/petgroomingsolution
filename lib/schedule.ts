@@ -57,6 +57,18 @@ export function isOnShiftNow(shifts: Shift[] | undefined, now: Date = new Date()
   return (shifts ?? []).some((shift) => shift.startsAt <= now && shift.endsAt > now);
 }
 
+/**
+ * Why someone who is not signed in is not, read off their shifts today — so the
+ * counter hears "starts at 10" rather than a warning about a person not due yet.
+ */
+export function absenceNote(name: string, shifts: Shift[] | undefined, now: Date = new Date()): string {
+  const later = (shifts ?? []).find((shift) => shift.startsAt > now);
+  if (isOnShiftNow(shifts, now)) return `${name} is on shift but not signed in`;
+  if (later) return `${name} starts at ${formatShopTime(later.startsAt)}`;
+  if (shifts?.length) return `${name} has finished for the day`;
+  return `${name} is not on today's schedule`;
+}
+
 /** "8:00 AM – 5:00 PM", or several ranges when the day is split. */
 export function describeShifts(shifts: Shift[] | undefined): string | null {
   if (!shifts || shifts.length === 0) return null;
