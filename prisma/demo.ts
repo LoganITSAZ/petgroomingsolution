@@ -97,6 +97,10 @@ const HEALTH_FLAGS = [["elderly"], ["allergy:chicken"], ["reactive"], ["arthriti
 // ── shop wall clock ──────────────────────────────────────────────────────────
 // Phoenix does not observe DST, so a fixed +7 is correct all year. Anywhere
 // else this would need a real timezone conversion.
+/** The demo instance's own admin, for anyone handed a link to it. */
+const DEMO_ADMIN_EMAIL = "admin@demo.com";
+const DEMO_ADMIN_PASSWORD = "demopassword123";
+
 const SHOP_UTC_OFFSET = 7;
 function shopTime(daysFromToday: number, hour: number, minute = 0): Date {
   // Counted from the **shop's** date, not the server's. `getUTCDate()` rolls
@@ -173,6 +177,7 @@ async function main() {
 
   // One hash for everybody: bcrypt at cost 12 is the slowest thing here.
   const passwordHash = await bcrypt.hash("demo1234", 12);
+  const demoAdminHash = await bcrypt.hash(DEMO_ADMIN_PASSWORD, 12);
 
   // ── the real shop's admins ─────────────────────────────────────────────────
   // Signing in to the test instance should take the same credentials as the
@@ -207,6 +212,18 @@ async function main() {
       await source.$disconnect();
     }
   }
+
+  // ── the demo's own admin ───────────────────────────────────────────────────
+  // A fixed login for whoever is looking at the demo, independent of the real
+  // shop's mirrored accounts above. The password is published in this file and
+  // in the console line below, so it is only ever safe because `demo.ts`
+  // refuses to run against a database that is not named test/demo/scratch/
+  // sandbox — see the guard at the top. Never seed this into a real shop.
+  await prisma.staff.upsert({
+    where: { email: DEMO_ADMIN_EMAIL },
+    update: { passwordHash: demoAdminHash, roles: ["ADMIN"], isActive: true },
+    create: { name: "Demo Admin", email: DEMO_ADMIN_EMAIL, passwordHash: demoAdminHash, roles: ["ADMIN"] },
+  });
 
   // ── staff ──────────────────────────────────────────────────────────────────
   const groomerSpecs: { name: string; roles: StaffRole[] }[] = [
@@ -337,9 +354,13 @@ async function main() {
     return freeWork.get(role)?.pop() ?? freeWork.get("GROOMER")?.pop() ?? null;
   };
 
-  /** Hand out a door to a pet that is in the shop, while doors last. */
-  const kennelFor = (status: AppointmentStatus) =>
-    (inShop(status) || status === "COMPLETE" || status === "READY_PICKUP") && chance(0.6)
+  /**
+   * Hand out a door to a pet that is in the shop, while doors last. A pet with
+   * no station always gets one -- the app never leaves a waiting pet nowhere.
+   */
+  const kennelFor = (status: AppointmentStatus, stationId: string | null) =>
+    (inShop(status) || status === "COMPLETE" || status === "READY_PICKUP") &&
+    (stationId === null || chance(0.6))
       ? freeKennels.pop()?.id ?? null
       : null;
 
@@ -455,13 +476,13 @@ async function main() {
           }));
         const duration = chosen.reduce((sum, s) => sum + (s.durationMins ?? 60), 0);
         const groomer = preferred ?? pick(groomers);
-        let status = statusFor(day);
+        const scheduledAt = shopTime(day, int(8, 15), pick([0, 30]));
+        let status = day === 0 ? reachedBy(statusFor(day), scheduledAt, duration) : statusFor(day);
         // Every table is taken. The pet is waiting for one rather than sharing
         // it -- which is what a genuinely busy morning looks like.
         const stationId = claimStation(status);
         if (stationId === null && atStation(status)) status = "CHECKED_IN";
-        const kennelId = kennelFor(status);
-        const scheduledAt = shopTime(day, int(8, 15), pick([0, 30]));
+        const kennelId = kennelFor(status, stationId);
 
         const appointment = await prisma.appointment.create({
           data: {
@@ -651,12 +672,69 @@ async function main() {
     });
   }
 
-  // The home page shows testimonials in place of the service list, so the
-  // demo shop needs a few or it falls back to the menu. Turning the flag on
-  // here is the point of a demo: a switched-off feature demonstrates nothing.
+  // Everything the shop would have typed about itself.
+  //
+  // A demo exists to be looked at, and this app hides what is unset on
+  // purpose — no address is no map, no flag is no section — so a half-filled
+  // config demonstrates the emptiness rather than the feature. Every flag is
+  // on and every identity field carries a value, which is also how a reviewer
+  // spots a broken surface: nothing is missing because nothing was typed.
+  //
+  // The domain is `.test`, reserved by RFC 6761 and resolvable nowhere, so
+  // canonicals and emails from a demo cannot point at anyone's real shop. The
+  // Twilio credentials are the same kind of fiction — they let the screens
+  // that gate on "configured" render, and a send against them simply fails.
   await prisma.systemConfig.update({
     where: { id: "global" },
-    data: { featureTestimonials: true },
+    data: {
+      // A name a shop would actually trade under — "Your Grooming Shop" is the
+      // first-boot placeholder, and it reads as unconfigured on every screen.
+      shopName: "Copper Paw Pet Grooming",
+      shopTagline: "Gentle grooming, one pet at a time.",
+      shopPhone: "(602) 555-0142",
+      shopEmail: "hello@gentlegroomer.test",
+      // A real building, so Nominatim places it and the maps have something
+      // to draw. The unit number is deliberate: `stripUnit()` is what makes
+      // this address resolve, and a demo should exercise that.
+      shopAddress: "8911 N Central Ave #104, Phoenix, AZ 85020",
+      shopWebsite: "https://gentlegroomer.test",
+      featureTestimonials: true,
+      featureSmsNotify: true,
+      featureVoiceCalls: true,
+      featureRewards: true,
+      featureDailyDigest: true,
+      featureSlotOffers: true,
+      contactRecipient: "hello@gentlegroomer.test",
+      emailFromAddress: "no-reply@gentlegroomer.test",
+      twilioAccountSid: "ACdemo00000000000000000000000000",
+      twilioAuthToken: "demo-token-not-a-real-credential",
+      twilioFromNumber: "+16025550142",
+      seoGoogleVerification: "demo-google-site-verification-token",
+      seoKeywords: "pet grooming, dog grooming, cat grooming, phoenix",
+      seoSocialTagline: "Patient grooming for nervous pets.",
+    },
+  });
+
+  // The questions the shop answers on the phone all day, which is what the
+  // public FAQ and its `FAQPage` markup are built from.
+  await prisma.faqItem.createMany({
+    data: [
+      { question: "How long does a full groom take?", answer: "Most dogs are with us two to four hours, depending on coat and temperament. We never rush a pet to hit a clock, and we ring you if a groom is running long.", sortOrder: 10 },
+      { question: "Do you take walk-ins?", answer: "Yes, during our walk-in hours. Appointments come first, so a walk-in waits for the next free table — ring ahead and we will tell you how the day looks.", sortOrder: 20 },
+      { question: "What if my pet is nervous or elderly?", answer: "Tell us when you book. We give nervous and senior pets longer slots, more breaks, and the quietest table we have free.", sortOrder: 30 },
+      { question: "What do you need from me on the first visit?", answer: "Vaccination records, your vet's number, and anything you know about how your pet handles grooming. We will ask you to sign our paperwork before the first groom.", sortOrder: 40 },
+      { question: "Will you shave my dog if the coat is matted?", answer: "Only after we have rung you. A badly matted coat sometimes cannot be brushed out safely, but the decision is yours and we record what we did either way.", sortOrder: 50 },
+    ],
+  });
+
+  // One page override, so the marketing screen shows both states: a row the
+  // shop has written, and the derived line everywhere else.
+  await prisma.seoPage.create({
+    data: {
+      path: "/about",
+      title: "About our shop — patient grooming in Phoenix",
+      description: "Meet the groomers, see how we work, and find out why nervous pets settle with us.",
+    },
   });
 
   const approvedAt = shopTime(-30, 12);
@@ -713,6 +791,7 @@ async function main() {
 
   console.log(`✅ ${CUSTOMERS} customers, ${petCount} pets, ${apptCount} appointments, ${groomers.length} staff`);
   console.log(`   Written to "${targetDatabase}". Every demo login is password \`demo1234\`.`);
+  console.log(`   Demo admin: ${DEMO_ADMIN_EMAIL} / ${DEMO_ADMIN_PASSWORD}`);
 }
 
 /** Past visits are done, today's are mid-groom, future ones are on the books. */
@@ -737,15 +816,30 @@ const inShop = (s: AppointmentStatus) =>
 const finished = (s: AppointmentStatus) =>
   (["COMPLETE", "READY_PICKUP", "PICKED_UP"] as AppointmentStatus[]).includes(s);
 
+const FLOW: AppointmentStatus[] = ["SCHEDULED", "CHECKED_IN", "IN_PROGRESS", "DRYING",
+  "FINISHING", "COMPLETE", "READY_PICKUP", "PICKED_UP"];
+/** How far apart `historyFor()` spaces a visit's steps. */
+const STEP_MS = 20 * 60_000;
+
+/**
+ * As far along as the clock allows a visit booked for `start` to have got.
+ * Its trail steps every `STEP_MS` and the groom finishes after its booked
+ * duration, so a later status would record a check-in, a start or a finish
+ * that has not happened yet -- and every timer on the floor reads those.
+ */
+function reachedBy(status: AppointmentStatus, start: Date, durationMins: number, now = new Date()) {
+  let index = Math.min(FLOW.indexOf(status), Math.floor((+now - +start) / STEP_MS));
+  if (+start + durationMins * 60_000 > +now) index = Math.min(index, FLOW.indexOf("FINISHING"));
+  return FLOW[Math.max(index, 0)];
+}
+
 /** The trail a visit leaves behind: every status it passed through, in order. */
 function historyFor(status: AppointmentStatus, start: Date, staffId: string) {
-  const FLOW: AppointmentStatus[] = ["SCHEDULED", "CHECKED_IN", "IN_PROGRESS", "DRYING",
-    "FINISHING", "COMPLETE", "READY_PICKUP", "PICKED_UP"];
   const upTo = FLOW.indexOf(status);
   const path = upTo >= 0 ? FLOW.slice(0, upTo + 1) : ["SCHEDULED" as AppointmentStatus, status];
   return path.map((s, i) => ({
     status: s,
-    changedAt: new Date(+start + i * 20 * 60_000),
+    changedAt: new Date(+start + i * STEP_MS),
     changedById: s === "SCHEDULED" ? null : staffId,
   })) satisfies Prisma.AppointmentStatusHistoryCreateWithoutAppointmentInput[];
 }
