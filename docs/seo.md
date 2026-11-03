@@ -21,7 +21,7 @@ After deployment:
 
 1. Check `/robots.txt`, `/sitemap.xml`, `/icon` and the canonical links against the public domain.
 2. Verify the domain in Google Search Console and submit `/sitemap.xml`; inspect the home and services URLs.
-3. Validate the home and services pages with Schema.org's validator and Google's Rich Results Test. Basic business markup does not guarantee a rich result.
+3. Validate the home, services and FAQ pages with Schema.org's validator and Google's Rich Results Test. Basic business markup does not guarantee a rich result.
 4. Keep Google Business Profile's website, address, phone, services, and opening hours consistent with the site. Search Console and Business Profile setup require their respective accounts.
 5. Measure mobile Core Web Vitals with PageSpeed Insights and monitor real search queries after indexing. A service-radius statement describes the intended audience; it does not restrict organic rankings to that radius.
 

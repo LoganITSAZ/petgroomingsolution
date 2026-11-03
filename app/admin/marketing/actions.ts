@@ -12,6 +12,7 @@ function done(params: string): never {
   revalidatePath("/staff/services");
   revalidatePath("/staff");
   revalidatePath("/services");
+  revalidatePath("/faq");
   revalidatePath("/");
   redirect(`/admin/marketing${params}`);
 }

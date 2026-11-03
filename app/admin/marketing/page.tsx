@@ -452,12 +452,12 @@ export default async function AdminMarketingPage(props: PageProps) {
 
       <PageSection
         title="Frequently asked questions"
-        hint={`${faq.filter((item) => item.isActive).length} shown on the services page`}
+        hint={`${faq.filter((item) => item.isActive).length} shown on the FAQ page`}
       >
         <div id="faq" className="space-y-3">
           {faq.length === 0 && (
             <p className="text-sm text-stone-400">
-              Nothing yet. Questions added here appear on the services page and are published as FAQ markup.
+              Nothing yet. Questions added here appear on the FAQ page and are published as FAQ markup.
             </p>
           )}
           {faq.map((item) => (

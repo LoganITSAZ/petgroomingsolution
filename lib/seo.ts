@@ -11,7 +11,7 @@ import type { SeoPage, SystemConfig } from "@prisma/client";
  * have them — a blank column is the derived line, not an empty tag.
  */
 
-export const PUBLIC_PATHS = ["/", "/services", "/about", "/contact"] as const;
+export const PUBLIC_PATHS = ["/", "/services", "/about", "/contact", "/faq"] as const;
 export type PublicPath = (typeof PUBLIC_PATHS)[number];
 
 export const PAGE_LABELS: Record<PublicPath, string> = {
@@ -19,6 +19,7 @@ export const PAGE_LABELS: Record<PublicPath, string> = {
   "/services": "Services & pricing",
   "/about": "About",
   "/contact": "Contact",
+  "/faq": "FAQ",
 };
 
 type Shop = Pick<
@@ -134,6 +135,7 @@ export function publicMetadata(config: Shop, path: PublicPath, override?: Overri
     "/services": ["Pet Grooming Services & Pricing", `Explore pet grooming services and current pricing at ${name}. Compare care options for your pet and contact us for help choosing a service.`],
     "/about": ["About Our Grooming Shop", `Meet ${name} and learn about our patient approach to pet grooming, with comfort and gentle handling at the heart of every visit.`],
     "/contact": ["Contact & Opening Hours", `Contact ${name} about your pet's grooming needs. Find our opening hours, location, and phone number to plan your visit.`],
+    "/faq": ["Frequently Asked Questions", `Answers to common questions about pet grooming at ${name}, from what to expect on the day to how to prepare your pet.`],
   } as const;
   const [derivedTitle, summary] = pages[path];
 

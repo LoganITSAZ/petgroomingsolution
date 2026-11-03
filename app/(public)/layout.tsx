@@ -1,5 +1,6 @@
 import { businessJsonLd, serializeJsonLd } from "@/lib/seo";
 import { geocode } from "@/lib/maps";
+import { activeFaq } from "@/lib/seo-pages";
 import Link from "next/link";
 import "./public.css";
 import OfficeIcon from "@/components/OfficeIcon";
@@ -25,6 +26,7 @@ export default async function PublicLayout({ children }: { children: React.React
   const business = businessJsonLd(config, await geocode(config.shopAddress));
   const { phone, address } = shopContact(config);
   const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const hasFaq = (await activeFaq()).length > 0;
 
   // The shop's own date decides the seasonal theme, not the visitor's.
   const shopDate = new Intl.DateTimeFormat("en-CA", {
@@ -123,6 +125,11 @@ export default async function PublicLayout({ children }: { children: React.React
             <Link href="/contact" className="rounded-lg px-2 py-2 hover:text-brand-text transition-colors">
               Contact
             </Link>
+            {hasFaq && (
+              <Link href="/faq" className="rounded-lg px-2 py-2 hover:text-brand-text transition-colors">
+                FAQ
+              </Link>
+            )}
             {config.featureOnlineBooking && (
               <Link
                 href="/portal"
@@ -143,6 +150,7 @@ export default async function PublicLayout({ children }: { children: React.React
             <Link href="/about" className="block rounded-lg px-3 py-2.5 font-medium hover:bg-brand-100/40">About</Link>
             <Link href="/services" className="block rounded-lg px-3 py-2.5 font-medium hover:bg-brand-100/40">Services</Link>
             <Link href="/contact" className="block rounded-lg px-3 py-2.5 font-medium hover:bg-brand-100/40">Contact</Link>
+            {hasFaq && <Link href="/faq" className="block rounded-lg px-3 py-2.5 font-medium hover:bg-brand-100/40">FAQ</Link>}
             {config.featureOnlineBooking && <Link href="/portal" className="mt-1 block rounded-lg bg-brand-600 px-3 py-2.5 font-bold text-brand-on-600">Book Now</Link>}
           </MobileMenu>
         </div>
