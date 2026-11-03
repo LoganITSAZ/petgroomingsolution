@@ -689,17 +689,6 @@
   box-shadow: inset 3px 0 0 rgb(var(--brand-300));
 }
 
-/* Long settings forms use document scrolling, with no nested page scrollbar. */
-#main-content:has(.shop-settings) {
-  height: auto;
-  overflow: visible;
-}
-
-.shop-settings {
-  flex: none;
-  overflow: visible;
-}
-
 @media (min-width: 1024px) {
   .shop-settings #shop-branding fieldset > .grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

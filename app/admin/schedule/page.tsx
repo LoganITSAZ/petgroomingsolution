@@ -289,7 +289,7 @@ export default async function SchedulePage(props: PageProps) {
           No groomers or bathers to schedule.
         </PageSection>
       ) : (
-        <PageSection grow scroll padded={false} bodyClassName="overflow-auto">
+        <PageSection grow scroll padded={false} bodyClassName="overflow-x-auto">
           <ScheduleWeekSync>
           <table className="w-full text-sm">
             <thead className="bg-well text-stone-500 text-[10px] tracking-tight">

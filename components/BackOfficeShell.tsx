@@ -227,12 +227,12 @@ export default async function BackOfficeShell({ children }: { children: React.Re
         </div>
       </aside>
 
-      {/* On a terminal the shell owns the viewport, so a page card's own scroll
-          band does the scrolling and its scrollbar stays on screen. Phones keep
-          document scroll — there is no visible bar to strand there. */}
+      {/* The window is the only scroller. A card that owned its own scroll put
+          a second bar beside the document's and left the page short of the
+          screen it had; a page runs down the document instead. */}
       <main
         id="main-content"
-        className="flex-1 min-w-0 md:ml-60 p-3 md:p-6 flex flex-col md:h-screen md:overflow-hidden"
+        className="flex-1 min-w-0 md:ml-60 p-3 md:p-6 flex flex-col"
       >
         {children}
       </main>

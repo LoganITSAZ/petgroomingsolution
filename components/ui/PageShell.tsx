@@ -46,7 +46,7 @@ export function PageShell({
       )}
       <section
         className={cn(
-          "page-card bg-surface border border-line/80 rounded-xl shadow-card overflow-x-hidden overflow-y-auto [&>*:first-child]:border-t-0 [&>*:first-child]:shadow-none flex-1 min-h-0 min-w-0 flex flex-col",
+          "page-card bg-surface border border-line/80 rounded-xl shadow-card overflow-x-hidden [&>*:first-child]:border-t-0 [&>*:first-child]:shadow-none flex-1 min-h-0 min-w-0 flex flex-col",
           className
         )}
       >
@@ -76,7 +76,11 @@ export function PageShell({
  * hairline, so order is the only thing a page has to get right.
  *
  * `tone`: "plain" for content, "muted" for a toolbar/summary strip.
- * `grow`: the band that takes the leftover height and scrolls inside itself.
+ * `grow`: the band that takes the leftover height.
+ * `scroll`: the band's columns are wider than the card — it scrolls sideways.
+ *   Nothing scrolls vertically inside a page: the window is the one scroller,
+ *   so a long list runs down the document rather than stranding a second bar
+ *   inside a card.
  */
 export function PageSection({
   title,
@@ -138,7 +142,7 @@ export function PageSection({
           "min-w-0",
           padded && "px-3 py-3",
           grow && "flex-1 min-h-0",
-          scroll && "overflow-auto",
+          scroll && "overflow-x-auto",
           bodyClassName
         )}
         style={bodyStyle}
