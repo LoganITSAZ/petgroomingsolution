@@ -125,7 +125,7 @@ export default function PhotoUpload({
         </span>
       )}
 
-      <form action={action} encType="multipart/form-data" className="mt-1.5 flex items-center gap-2">
+      <form action={action} className="mt-1.5 flex items-center gap-2">
         <input type="hidden" name={idField} value={idValue} />
         {/* `sr-only`, never `hidden`: `display:none` takes the input out of the
             tab order, and the label around it is not focusable on its own, so

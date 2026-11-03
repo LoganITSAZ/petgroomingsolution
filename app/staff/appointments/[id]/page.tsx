@@ -1014,7 +1014,6 @@ export default async function AppointmentDetailPage(props: PageProps) {
           {config.featureVisitPhotos && (
             <form
               action={addVisitPhoto}
-              encType="multipart/form-data"
               className="mt-3 border-t border-stone-100 pt-3 space-y-2 max-w-md"
             >
               <input type="hidden" name="appointmentId" value={appointment.id} />

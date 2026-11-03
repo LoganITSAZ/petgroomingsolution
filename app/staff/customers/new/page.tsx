@@ -47,7 +47,7 @@ export default async function NewCustomerPage(props: {
         </p>
       )}
 
-      <form action={createCustomer} encType="multipart/form-data">
+      <form action={createCustomer}>
         <PageSection bodyClassName="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="text-sm">
