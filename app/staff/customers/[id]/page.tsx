@@ -1,3 +1,4 @@
+import BiteHistoryIndicator from "@/components/BiteHistoryIndicator";
 import { prisma } from "@/lib/prisma";
 import {
   formatStatus,
@@ -359,11 +360,12 @@ export default async function CustomerDetailPage(props: PageProps) {
               className="profile-pet-card bg-surface border border-line rounded-xl p-4 flex flex-col gap-4"
             >
               <div className="flex items-start justify-between gap-2">
-                <Link href={`/staff/pets/${pet.id}`} className="group min-w-0">
-                  <ProfileAvatar src={photoUrl(pet.photoId) ?? pet.photoUrl} name={pet.name} pet size={64} />
-                  <p className="mt-3 text-lg font-bold text-ink group-hover:text-brand-text transition-colors">
-                    {pet.name}
-                  </p>
+                <div className="min-w-0">
+                  <Link href={`/staff/pets/${pet.id}`} aria-label={`View ${pet.name}'s profile`}><ProfileAvatar src={photoUrl(pet.photoId) ?? pet.photoUrl} name={pet.name} pet size={64} /></Link>
+                  <div className="mt-3 flex items-center gap-1 text-lg font-bold text-ink">
+                    <Link href={`/staff/pets/${pet.id}`} className="hover:text-brand-text hover:underline">{pet.name}</Link>
+                    {pet.hasBiteHistory && <BiteHistoryIndicator petName={pet.name} />}
+                  </div>
                   <p className="text-sm text-stone-500 mt-0.5">
                     {formatSpecies(pet.species)}
                     {pet.breed ? ` · ${pet.breed}` : ""}
@@ -371,12 +373,7 @@ export default async function CustomerDetailPage(props: PageProps) {
                   {pet.weightLbs != null && (
                     <p className="text-xs text-stone-400 mt-2">{pet.weightLbs} lbs</p>
                   )}
-                </Link>
-                {pet.hasBiteHistory && (
-                  <span className="flex-shrink-0 bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                    ⚠ Bite history
-                  </span>
-                )}
+                </div>
               </div>
               <VaccinationWarning checks={vaccinationChecks.get(pet.id) ?? []} petName={pet.name} />
               <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-line pt-3">

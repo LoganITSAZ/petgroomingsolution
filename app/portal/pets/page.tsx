@@ -1,3 +1,4 @@
+import BiteHistoryIndicator from "@/components/BiteHistoryIndicator";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
@@ -81,22 +82,17 @@ export default async function PortalPetsPage() {
                 key={pet.id}
                 className="rounded-lg border border-well-line bg-well p-3 space-y-3"
               >
-                {/* Pet name + bite badge */}
+                {/* Pet name and handling warning */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3">
                     <span className="text-3xl" aria-hidden="true">{speciesEmoji[pet.species] ?? "🐾"}</span>
                     <div>
-                      <p className="font-bold text-stone-900 text-lg leading-tight">{pet.name}</p>
+                      <div className="flex items-center gap-1 font-bold text-stone-900 text-lg leading-tight">{pet.name}{pet.hasBiteHistory && <BiteHistoryIndicator petName={pet.name} />}</div>
                       {pet.breed && (
                         <p className="text-sm text-stone-500">{pet.breed}</p>
                       )}
                     </div>
                   </div>
-                  {pet.hasBiteHistory && (
-                    <span className="shrink-0 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">
-                      Bite History on file
-                    </span>
-                  )}
                 </div>
 
                 {/* Details */}

@@ -1,3 +1,4 @@
+import BiteHistoryIndicator from "@/components/BiteHistoryIndicator";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { formatSpecies } from "@/lib/utils";
@@ -198,15 +199,14 @@ export default async function StaffCustomersPage(props: PageProps) {
                   {customer.pets.length === 0 ? (
                     <span className="text-sm text-muted">No pets on file</span>
                   ) : customer.pets.map((pet) => (
-                    <Link key={pet.id} href={`/staff/pets/${pet.id}`}
+                    <div key={pet.id}
                       className={`directory-pet ${petMatchesQuery(pet, q) ? "border-brand-500 bg-brand-500/10" : "border-transparent"}`}>
-                      <ProfileAvatar src={photoUrl(pet.photoId) ?? pet.photoUrl} name={pet.name} pet size={28} />
+                      <Link href={`/staff/pets/${pet.id}`} aria-label={`View ${pet.name}'s profile`}><ProfileAvatar src={photoUrl(pet.photoId) ?? pet.photoUrl} name={pet.name} pet size={28} /></Link>
                       <span className="min-w-0">
-                        <span className="block font-semibold text-ink">{pet.name}</span>
+                        <span className="flex items-center gap-1"><Link href={`/staff/pets/${pet.id}`} className="font-semibold text-ink hover:underline">{pet.name}</Link>{pet.hasBiteHistory && <BiteHistoryIndicator petName={pet.name} />}</span>
                         <span className="block text-xs text-muted">{pet.breed ?? formatSpecies(pet.species)}</span>
                       </span>
-                      {pet.hasBiteHistory && <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">Bite history</span>}
-                    </Link>
+                    </div>
                   ))}
                 </div>
                 <div className="directory-activity flex flex-col items-start gap-1.5">
