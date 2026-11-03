@@ -14,3 +14,18 @@ export function readTheme(value: FormDataEntryValue | null): ThemePreference {
     ? (value as ThemePreference)
     : ThemePreference.SYSTEM;
 }
+
+/**
+ * The class a layout puts on its themed wrapper.
+ *
+ * SYSTEM carries a marker of its own even though no CSS reads it. The system
+ * script adds `dark` behind React's back, and React only rewrites `class` when
+ * the string it rendered changes — so if SYSTEM and LIGHT rendered the same
+ * string, switching to Light would leave the script's `dark` in place until a
+ * hard reload.
+ */
+export function themeClass(preference: ThemePreference | undefined): string {
+  if (preference === ThemePreference.DARK) return "dark";
+  if (preference === ThemePreference.SYSTEM) return "theme-system";
+  return "";
+}

@@ -275,7 +275,6 @@ export default async function PortalProfilePage() {
 
       <PageSection title="Appearance" hint="Saves as soon as you flip it." tone="muted">
         <form action={updateProfile} className="flex items-center gap-3">
-          <input type="hidden" name="phone" value={customer.phone ?? ""} />
           <ThemeSwitch value={customer.themePreference} />
         </form>
       </PageSection>

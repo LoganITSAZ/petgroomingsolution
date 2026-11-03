@@ -29,16 +29,16 @@ export default async function StaffProfilePage(props: {
     "use server";
     const current = await auth();
     if (!current?.user || current.user.userType !== "staff") redirect("/login?type=staff");
+    // Each field is edited only when its form posted it: the theme switch is
+    // its own form, so an unsaved or blank name must not ride along with it.
     const name = (formData.get("name") as string | null)?.trim();
     const themePreference = formData.get("themePreference");
-    if (!name) redirect("/staff/profile?error=name");
+    if (name === "") redirect("/staff/profile?error=name");
 
     await prisma.staff.update({
       where: { id: current.user.id },
       data: {
-        name,
-        // Only when posted: the details form has no theme control, and writing
-        // the default there would reset the theme on every profile save.
+        ...(name && { name }),
         ...(themePreference !== null && { themePreference: readTheme(themePreference) }),
       },
     });
@@ -109,19 +109,21 @@ export default async function StaffProfilePage(props: {
             label={staff.name}
             size={96}
           />
-          {/* The theme switch submits this form the moment it changes, which is
-              why the name field travels with it. */}
-          <form id="profile-form" action={updateProfile} className="flex-1 min-w-[16rem] space-y-3">
-            <div>
-              <label htmlFor="name" className="block text-sm font-semibold text-stone-700 mb-1">Name</label>
-              <input id="name" name="name" required defaultValue={staff.name} className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <span className="block text-sm font-semibold text-stone-700 mb-1">Email</span>
-              <p className="bg-well border border-well-line rounded-lg px-3 py-2 text-sm text-stone-500">{staff.email}</p>
-            </div>
-            <ThemeSwitch value={staff.themePreference} />
-          </form>
+          <div className="flex-1 min-w-[16rem] space-y-3">
+            <form id="profile-form" action={updateProfile} className="space-y-3">
+              <div>
+                <label htmlFor="name" className="block text-sm font-semibold text-stone-700 mb-1">Name</label>
+                <input id="name" name="name" required defaultValue={staff.name} className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <span className="block text-sm font-semibold text-stone-700 mb-1">Email</span>
+                <p className="bg-well border border-well-line rounded-lg px-3 py-2 text-sm text-stone-500">{staff.email}</p>
+              </div>
+            </form>
+            <form action={updateProfile}>
+              <ThemeSwitch value={staff.themePreference} />
+            </form>
+          </div>
         </div>
       </PageSection>
 

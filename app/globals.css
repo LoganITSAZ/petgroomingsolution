@@ -51,6 +51,13 @@
     @apply bg-page text-stone-900 antialiased;
   }
 
+  /* The theme class lands on the shell wrapper (#back-office-root,
+     #portal-root), never on body — so a dark back office kept a chalk body
+     behind it, and any scroll or overscroll past the shell exposed it. */
+  body:has(.dark) {
+    --page-bg: 19 18 17;
+  }
+
   .dark {
     color-scheme: dark;
     /* Same roles, flipped: the card is #21201d, so a well recedes below it and

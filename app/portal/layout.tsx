@@ -6,6 +6,7 @@ import { signOut } from "@/lib/auth";
 import { getConfig } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
 import SystemThemeScript from "@/components/SystemThemeScript";
+import { themeClass } from "@/lib/theme-preference";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -22,7 +23,9 @@ export default async function PortalLayout({ children }: { children: React.React
   return (
     <div
       id="portal-root"
-      className={`liquid-shell min-h-screen bg-page flex flex-col ${customer?.themePreference === "DARK" ? "dark" : ""}`}
+      // The pre-paint system theme script intentionally changes this class.
+      suppressHydrationWarning={customer?.themePreference === "SYSTEM"}
+      className={`liquid-shell min-h-screen bg-page flex flex-col ${themeClass(customer?.themePreference)}`}
     >
       {customer?.themePreference === "SYSTEM" && <SystemThemeScript rootId="portal-root" nonce={nonce} />}
 

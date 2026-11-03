@@ -7,6 +7,7 @@ import { getConfig } from "@/lib/config";
 import { isEnabled, type FeatureKey } from "@/lib/features";
 import { headers } from "next/headers";
 import SystemThemeScript from "@/components/SystemThemeScript";
+import { themeClass } from "@/lib/theme-preference";
 import PresenceSwitcher from "@/components/PresenceSwitcher";
 import MobileMenu from "@/components/MobileMenu";
 import { setMyPresence } from "@/app/staff/presence-actions";
@@ -161,7 +162,9 @@ export default async function BackOfficeShell({ children }: { children: React.Re
   return (
     <div
       id="back-office-root"
-      className={`liquid-shell app-dense min-h-screen bg-page text-ink md:flex ${me?.themePreference === "DARK" ? "dark" : ""}`}
+      // The pre-paint system theme script intentionally changes this class.
+      suppressHydrationWarning={me?.themePreference === "SYSTEM"}
+      className={`liquid-shell app-dense min-h-screen bg-page text-ink md:flex ${themeClass(me?.themePreference)}`}
     >
       <style nonce={nonce} dangerouslySetInnerHTML={{ __html: themeCss(theme.tokens, "#back-office-root") }} />
       {me?.themePreference === "SYSTEM" && <SystemThemeScript rootId="back-office-root" nonce={nonce} />}
