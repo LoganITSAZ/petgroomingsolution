@@ -4,11 +4,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { buildCsp, SECURITY_HEADERS } from "@/lib/csp";
 
-// Middleware runs on the Edge runtime, so it builds its own NextAuth instance
-// from the edge-safe config rather than importing lib/auth (Prisma + bcrypt).
+// Keep request authentication independent of the Prisma-backed auth adapter.
 const { auth } = NextAuth(authConfig);
 
-export default auth(function middleware(req: NextRequest & { auth: { user?: { userType?: string; roles?: string[]; role?: string } } | null }) {
+export default auth(function proxy(req: NextRequest & { auth: { user?: { userType?: string; roles?: string[]; role?: string } } | null }) {
   const { pathname } = req.nextUrl;
   const session = req.auth;
 
@@ -85,8 +84,8 @@ export default auth(function middleware(req: NextRequest & { auth: { user?: { us
       return withSecurityHeaders(NextResponse.redirect(new URL(`/login?type=staff&callbackUrl=${encodeURIComponent(pathname)}`, req.url)));
     }
     // Staff only here; whether they are an admin is confirmed against the
-    // database in the admin layout, which is the authority. Middleware runs on
-    // the edge with no database access, so it cannot see a role granted after
+    // database in the admin layout, which is the authority. The token cannot
+    // reflect a role granted after
     // the token was issued.
     if (session.user.userType !== "staff") {
       return withSecurityHeaders(NextResponse.redirect(new URL("/staff", req.url)));
