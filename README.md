@@ -23,13 +23,13 @@ promotions, legacy customer rates, the schedule, staff, stations and kennels,
 the waiver, notifications, the public site's theme, and downloadable reports.
 
 **The shop's touchscreens** show `/station/[id]` — a kiosk view of the pet on
-that table, or a whole kennel board, updated over server-sent events. It is
-deliberately unauthenticated, and it faces the lobby, so no customer address
-ever appears on it.
+that table, or a whole kennel board, updated over server-sent events. It shows
+the owner's name, phone, address and approved collectors, so it is staff-only:
+each touchscreen signs in once with a staff account and stays signed in.
 
 ## Stack
 
-Next.js 14 (App Router) · TypeScript strict · Tailwind · Prisma + PostgreSQL ·
+Next.js 16 (App Router) · TypeScript strict · Tailwind · Prisma + PostgreSQL ·
 NextAuth v5 (credentials + JWT) · Vitest. Docker Compose behind Nginx for
 deployment.
 
@@ -70,7 +70,7 @@ app/(public)     public site — home, services and pricing, about, contact
 app/portal       customers
 app/staff        the floor
 app/admin        running the shop
-app/station      unauthenticated kiosk screens
+app/station      kiosk screens (staff sign-in)
 app/api          route handlers (they re-check auth themselves)
 lib              the domain: pricing, kennels, schedule, insights, rewards…
 components/ui    PageShell and the small shared primitives
