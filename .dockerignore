@@ -1,0 +1,12 @@
+# The image builds from a clean tree. Host node_modules and .next are builds
+# for this machine, not the container, and `next build` copies .env into
+# .next/standalone — without this file the runner image would carry the
+# deploy's ADMIN_PASSWORD, POSTGRES_PASSWORD and AUTH_SECRET.
+node_modules
+.next
+.next-check
+.git
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
