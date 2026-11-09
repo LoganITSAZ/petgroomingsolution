@@ -49,3 +49,6 @@ CLAUDE.local.md
 
 # editor
 .vscode/
+
+# database dumps (customer data) — see DEPLOY.md
+backups/
