@@ -21,12 +21,21 @@ function LoginForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const result = await signIn("credentials", {
-      email,
-      password,
-      role: userType,
-      redirect: false,
-    });
+    let result: Awaited<ReturnType<typeof signIn>>;
+    try {
+      result = await signIn("credentials", {
+        email,
+        password,
+        role: userType,
+        redirect: false,
+      });
+    } catch {
+      // Nginx answers a burst of attempts with a 429 page rather than the JSON
+      // signIn() reads, and a dropped connection throws the same way.
+      setLoading(false);
+      setError("Couldn't sign in just now. Wait a minute, then try again.");
+      return;
+    }
     setLoading(false);
     if (result?.error) {
       setError("Invalid email or password.");
