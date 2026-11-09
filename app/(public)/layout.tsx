@@ -11,7 +11,6 @@ import { shopContact } from "@/lib/shop-contact";
 import { headers } from "next/headers";
 import PublicThemeToggle, { NO_FLASH_SCRIPT } from "@/components/PublicThemeToggle";
 import { resolveTheme, themeCss } from "@/lib/themes";
-import { SHOP_TIMEZONE } from "@/lib/utils";
 import { shopState, summariseHours, type BusinessHours } from "@/lib/shop-hours";
 
 // SystemConfig is edited at runtime from /admin, so these pages must not be
@@ -30,7 +29,7 @@ export default async function PublicLayout({ children }: { children: React.React
 
   // The shop's own date decides the seasonal theme, not the visitor's.
   const shopDate = new Intl.DateTimeFormat("en-CA", {
-    timeZone: SHOP_TIMEZONE,
+    timeZone: config.shopTimezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

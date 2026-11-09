@@ -7,7 +7,7 @@ import { absenceNote, formatHours, hoursByStaff, type Shift } from './schedule';
  * it is not — the easiest thing here to get subtly wrong, and the reason these
  * are covered rather than the rendering.
  *
- * Times are built in UTC; SHOP_TIMEZONE is America/Phoenix, which has no DST,
+ * Times are built in UTC; the default shop zone is America/Phoenix, which has no DST,
  * so a shift built at 15:00Z lands on the same shop day all year.
  */
 

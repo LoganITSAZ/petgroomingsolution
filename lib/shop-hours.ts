@@ -1,4 +1,4 @@
-import { SHOP_TIMEZONE, currentShopTime } from "@/lib/utils";
+import { currentShopTime, shopTimeZone } from "@/lib/utils";
 
 /**
  * What the front of the site says about today.
@@ -49,7 +49,7 @@ function minutes(hhmm: string): number {
 }
 
 /** Index into DAY_KEYS for the shop's own day, not the server's. */
-export function shopDayIndex(now: Date = new Date(), timeZone = SHOP_TIMEZONE): number {
+export function shopDayIndex(now: Date = new Date(), timeZone = shopTimeZone()): number {
   const name = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "long" })
     .format(now)
     .toLowerCase();

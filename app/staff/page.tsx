@@ -329,7 +329,7 @@ export default async function StaffDashboard(props: {
                 </span>
               }
             >
-              <FloorBoard assign={assignLifecycleDestination} closesAt={closesAt} destinations={[
+              <FloorBoard assign={assignLifecycleDestination} closesAt={closesAt} timeZone={config.shopTimezone} destinations={[
                 // A bank, not every door: the server takes the lowest door with
                 // room for this pet, so the board stays a handful of targets.
                 ...stations.filter((station) => station.role === "KENNEL").map((station) => ({

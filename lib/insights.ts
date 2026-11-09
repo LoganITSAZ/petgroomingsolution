@@ -10,7 +10,7 @@ import { fitInsightsNow, petFitInsights } from "@/lib/groomer-fit-queries";
 import { priceInsightsNow } from "@/lib/money-per-minute-queries";
 import { kennelDemand } from "@/lib/kennels";
 import { formatCents } from "@/lib/pricing";
-import { formatServiceType, formatShopDate, SHOP_TIMEZONE, shopDayRange } from "@/lib/utils";
+import { formatServiceType, formatShopDate, shopDayRange, shopTimeZone } from "@/lib/utils";
 import { overrunsFrom, typicalOverrunMins } from "@/lib/visit-duration";
 
 /**
@@ -213,7 +213,7 @@ async function peakHours(days = 60): Promise<{ hour: number; visits: number }[]>
   for (const visit of visits) {
     const hour = Number(
       new Intl.DateTimeFormat("en-US", {
-        timeZone: SHOP_TIMEZONE,
+        timeZone: shopTimeZone(),
         hour: "2-digit",
         hourCycle: "h23",
       }).format(visit.scheduledAt)

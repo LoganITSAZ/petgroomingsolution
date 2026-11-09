@@ -2,6 +2,7 @@ import * as React from "react";
 import { prisma } from "@/lib/prisma";
 import type { SystemConfig } from "@prisma/client";
 import { DEFAULT_SHOP_NAME, DEFAULT_SHOP_TAGLINE } from "@/lib/branding";
+import { setShopTimeZone } from "@/lib/utils";
 
 /**
  * Fetch the global system config row.
@@ -19,7 +20,7 @@ import { DEFAULT_SHOP_NAME, DEFAULT_SHOP_TAGLINE } from "@/lib/branding";
 const perRequest = (React as { cache?: <T>(fn: T) => T }).cache ?? (<T,>(fn: T) => fn);
 
 export const getConfig = perRequest(async (): Promise<SystemConfig> => {
-  return prisma.systemConfig.upsert({
+  const config = await prisma.systemConfig.upsert({
     where: { id: "global" },
     update: {},
     create: {
@@ -38,6 +39,10 @@ export const getConfig = perRequest(async (): Promise<SystemConfig> => {
       walkInWindowEnd: "15:00",
     },
   });
+  // Every helper that reads the shop's clock defaults to this zone, and
+  // reading the row is what keeps it current in this process.
+  setShopTimeZone(config.shopTimezone);
+  return config;
 });
 
 // ─── Defaults ──────────────────────────────────────────────

@@ -28,6 +28,9 @@ model SystemConfig {
   shopCity       String?
   shopRegion     String?
   shopPostalCode String?
+  /// IANA zone the shop's clock runs on: its days, hours, walk-in window and
+  /// every time it shows. Read through `shopTimeZone()` in lib/utils.ts.
+  shopTimezone   String  @default("America/Phoenix")
 
   // Feature flags (toggle per deployment)
   featureOnlineBooking        Boolean @default(true) // customers can book via portal
