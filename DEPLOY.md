@@ -23,12 +23,57 @@ openssl rand -base64 32
 Compose refuses to start if `POSTGRES_PASSWORD` or `AUTH_SECRET` is missing, so
 a half-configured deploy fails immediately instead of silently.
 
+## On a VPS
+
+Any provider works; the commands assume Ubuntu. Give it **2 GB of RAM** — the
+image is built on the box, and the build needs more memory than the running
+shop does. On a 1 GB plan, add swap before the first build:
+
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+Install Docker, let your user run it, and clone the repo (sign out and back in
+after the `usermod`):
+
+```bash
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER"
+sudo git clone https://github.com/LoganITSAZ/petgroomingsolution.git /opt/gentlegroomer
+sudo chown -R "$USER" /opt/gentlegroomer
+```
+
+Open only SSH and the web:
+
+```bash
+sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw enable
+```
+
+Docker publishes ports around `ufw`, which is why Compose binds Postgres to
+`127.0.0.1` — nothing but 80 and 443 faces the internet.
+
+Turn on the provider's automatic backups too. That is the off-site copy of the
+nightly dumps described under Backups, and it covers the box itself.
+
+Updating later is `git pull` then `docker compose up -d --build` from
+`/opt/gentlegroomer`, with a dump taken first — migrations only run forward, so
+rolling back means the previous commit **and** the backup from before it. If
+`git pull` refuses because of the domain edited into `nginx.tls.conf`,
+`git stash && git pull && git stash pop` carries the edit across.
+
 ## First login
 
 Use the `ADMIN_EMAIL` and `ADMIN_PASSWORD` values from `.env`. The account is
 created only when the database has no staff at all. **Change the password
 immediately** — Admin → Staff. The seed runs on every deploy and is idempotent:
 it never resurrects a removed account or resets an existing password.
+
+Then open Admin → Shop Settings and pick the shop's **Time Zone**. A new shop
+starts on `America/Phoenix`, and a VPS keeps its own clock on UTC, so this
+setting is what decides the shop's day, its hours, the walk-in window and when
+reminders go out. The field shows the shop's clock as it will read it.
 
 ## HTTPS
 
