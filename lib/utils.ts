@@ -54,17 +54,47 @@ export function formatVisitEvent(eventType: string): string {
   return map[eventType] ?? formatStatus(eventType);
 }
 
+/** The zone a shop runs on until it picks its own in Shop Settings. */
+export const DEFAULT_SHOP_TIMEZONE = "America/Phoenix";
+
+/** Whether the runtime knows `value` as an IANA time zone. */
+export function isTimeZone(value: string): boolean {
+  if (!value) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// On globalThis rather than in a module variable: Next can instantiate this
+// module more than once in one server process, and every copy must agree.
+const zoneHolder = globalThis as { __shopTimeZone?: string };
+
 /**
- * IANA timezone the shop operates in. Every business-hours / walk-in-window
- * comparison must resolve through this so that the server (which may run in
- * UTC) and the browser (which runs in the viewer's zone) agree.
+ * IANA timezone the shop operates in: `SystemConfig.shopTimezone`, set in
+ * Shop Settings. Every business-hours / walk-in-window comparison resolves
+ * through this so that the server (which runs in UTC) and the browser agree.
+ *
+ * `getConfig()` refreshes it on every read and instrumentation.ts loads it at
+ * boot, which is what lets the helpers below default to it without being
+ * handed the config. A browser never reads the config, so a client component
+ * is handed the zone by its server parent and passes it explicitly.
  */
-export const SHOP_TIMEZONE = "America/Phoenix";
+export function shopTimeZone(): string {
+  return zoneHolder.__shopTimeZone ?? DEFAULT_SHOP_TIMEZONE;
+}
+
+/** Called with each config read. A zone the runtime does not know is ignored. */
+export function setShopTimeZone(zone: string): void {
+  if (isTimeZone(zone)) zoneHolder.__shopTimeZone = zone;
+}
 
 /** Current wall-clock time in the shop's timezone, as "HH:MM" (24-hour). */
 export function currentShopTime(
   now: Date = new Date(),
-  timeZone: string = SHOP_TIMEZONE
+  timeZone: string = shopTimeZone()
 ): string {
   return new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -140,7 +170,7 @@ function zonedMidnight(utcCalendarMs: number, timeZone: string): Date {
  */
 export function shopDayRange(
   now: Date = new Date(),
-  timeZone: string = SHOP_TIMEZONE
+  timeZone: string = shopTimeZone()
 ): { start: Date; end: Date } {
   const [year, month, day] = new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -168,7 +198,7 @@ export function shopDayRange(
  */
 export function shopDayRangeForKey(
   key: string,
-  timeZone: string = SHOP_TIMEZONE
+  timeZone: string = shopTimeZone()
 ): { start: Date; end: Date } | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
   if (!match) return null;
@@ -189,24 +219,25 @@ export function shopDayRangeForKey(
 /** Format a date in the shop's timezone (server renders in UTC otherwise). */
 export function formatShopDate(
   date: Date,
-  options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" }
+  options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" },
+  timeZone: string = shopTimeZone()
 ): string {
-  return new Intl.DateTimeFormat("en-US", { ...options, timeZone: SHOP_TIMEZONE }).format(date);
+  return new Intl.DateTimeFormat("en-US", { ...options, timeZone }).format(date);
 }
 
 /** Format a clock time in the shop's timezone, e.g. "9:30 AM". */
-export function formatShopTime(date: Date): string {
+export function formatShopTime(date: Date, timeZone: string = shopTimeZone()): string {
   return new Intl.DateTimeFormat("en-US", {
-    timeZone: SHOP_TIMEZONE,
+    timeZone,
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
 }
 
 /** Shop-local calendar day key, e.g. "2026-08-23". */
-export function shopDayKey(date: Date = new Date()): string {
+export function shopDayKey(date: Date = new Date(), timeZone: string = shopTimeZone()): string {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: SHOP_TIMEZONE,
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -307,9 +338,9 @@ export function isFloorStaff(roles: readonly string[]): boolean {
 }
 
 /** Shop-local clock in 24-hour form, for <input type="time"> values. */
-export function formatShopTime24(date: Date): string {
+export function formatShopTime24(date: Date, timeZone: string = shopTimeZone()): string {
   return new Intl.DateTimeFormat("en-GB", {
-    timeZone: SHOP_TIMEZONE,
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",

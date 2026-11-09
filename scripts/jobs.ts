@@ -9,6 +9,7 @@
  * requests and cannot reach the in-process SSE map in lib/station-events.ts --
  * a job that must repaint a kiosk has to go through the app instead.
  */
+import { getConfig } from "../lib/config";
 import { JOBS, dueJobs, type ScheduledJob } from "../lib/jobs";
 
 const TICK_MS = 60_000;
@@ -20,6 +21,10 @@ function stamp(): string {
 /** Run one job, reporting whatever it did. A throw is logged, never fatal. */
 async function runJob(job: ScheduledJob, now: Date): Promise<void> {
   try {
+    // Loads the shop's time zone into this process before the job reads the
+    // clock; it is a separate process from the app, so the app's read is not
+    // shared, and a zone changed in Shop Settings lands on the next run.
+    await getConfig();
     const result = await job.run(now);
     if (result.status === "skipped") {
       console.log(`${stamp()} ${job.name}: skipped — ${result.reason}`);

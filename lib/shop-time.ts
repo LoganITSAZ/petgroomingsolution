@@ -1,4 +1,4 @@
-import { SHOP_TIMEZONE, formatShopTime24, shopDayKey, zoneOffsetMs } from "@/lib/utils";
+import { formatShopTime24, shopDayKey, shopTimeZone, zoneOffsetMs } from "@/lib/utils";
 
 /**
  * Converting the shop's wall clock into instants.
@@ -13,8 +13,9 @@ export function shopMoment(dayKey: string, time: string): Date {
   const [hour, minute] = time.split(":").map(Number);
   const naive = Date.UTC(year, month - 1, day, hour, minute);
   // Two passes so a DST change on that date still resolves correctly.
-  const first = naive - zoneOffsetMs(new Date(naive), SHOP_TIMEZONE);
-  return new Date(naive - zoneOffsetMs(new Date(first), SHOP_TIMEZONE));
+  const zone = shopTimeZone();
+  const first = naive - zoneOffsetMs(new Date(naive), zone);
+  return new Date(naive - zoneOffsetMs(new Date(first), zone));
 }
 
 /**

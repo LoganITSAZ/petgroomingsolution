@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { getConfig } from "@/lib/config";
-import { SHOP_TIMEZONE } from "@/lib/utils";
 import {
   THEME_PRESETS,
   resolveTheme,
@@ -76,7 +75,7 @@ export default async function AppearancePage(props: PageProps) {
   const config = await getConfig();
 
   const [, month, day] = new Intl.DateTimeFormat("en-CA", {
-    timeZone: SHOP_TIMEZONE,
+    timeZone: config.shopTimezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

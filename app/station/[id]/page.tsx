@@ -9,7 +9,8 @@ import type { StationAppointment } from "@/lib/station-events";
 
 type Station = { id: string; name: string; role: string; isActive: boolean; kennelColumns: number | null };
 type Kennel = { id: string; label: string; isActive: boolean; appointments: StationAppointment[] };
-type Snapshot = { station: Station; appointments?: StationAppointment[]; kennels?: Kennel[] };
+// `timeZone` rides on the stream's opening message: a browser has no config of its own.
+type Snapshot = { station: Station; appointments?: StationAppointment[]; kennels?: Kennel[]; timeZone?: string };
 // EventSource retries a dropped stream after about 3s; give it double that
 // before telling the room the screen is offline.
 const RECONNECT_GRACE_MS = 6_000;
@@ -27,7 +28,7 @@ function ProfilePhoto({ src, name }: { src: string | null; name: string }) {
   ) : null;
 }
 
-function VisitDetails({ visit }: { visit: StationAppointment }) {
+function VisitDetails({ visit, timeZone }: { visit: StationAppointment; timeZone?: string }) {
   const { pet, customer } = visit;
   return (
     <div className="station-details grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr]">
@@ -43,8 +44,8 @@ function VisitDetails({ visit }: { visit: StationAppointment }) {
         <dl className="station-facts grid grid-cols-2 gap-4">
           <Detail label="Weight">{pet.weightLbs != null ? `${pet.weightLbs} lbs` : null}</Detail>
           <Detail label="Coat">{pet.coatType ? formatCoatType(pet.coatType) : null}</Detail>
-          <Detail label="Date of birth">{pet.dateOfBirth ? formatShopDate(new Date(pet.dateOfBirth)) : null}</Detail>
-          <Detail label="Vaccination proof confirmed">{pet.vaccinationsConfirmedAt ? formatShopDate(new Date(pet.vaccinationsConfirmedAt)) : "Not confirmed"}</Detail>
+          <Detail label="Date of birth">{pet.dateOfBirth ? formatShopDate(new Date(pet.dateOfBirth), undefined, timeZone) : null}</Detail>
+          <Detail label="Vaccination proof confirmed">{pet.vaccinationsConfirmedAt ? formatShopDate(new Date(pet.vaccinationsConfirmedAt), undefined, timeZone) : "Not confirmed"}</Detail>
           <Detail label="Profile">{pet.isActive ? "Active" : "Inactive"}</Detail>
           <Detail label="Bite history">{pet.hasBiteHistory ? "Yes — use caution" : "None recorded"}</Detail>
           <Detail label="Vet">{[pet.vetName, pet.vetPhone].filter(Boolean).join(" · ") || null}</Detail>
@@ -63,8 +64,8 @@ function VisitDetails({ visit }: { visit: StationAppointment }) {
       <section aria-label="Current visit" className="station-panel min-w-0 rounded-2xl bg-stone-800 p-5 space-y-5">
         <h2 className="station-section-title font-display text-2xl font-bold">Current visit</h2>
         <dl className="station-facts grid grid-cols-2 gap-4">
-          <Detail label="Appointment">{formatShopDate(new Date(visit.scheduledAt))} · {formatShopTime(new Date(visit.scheduledAt))}</Detail>
-          <Detail label="Checked in">{visit.checkedInAt ? formatShopTime(new Date(visit.checkedInAt)) : null}</Detail>
+          <Detail label="Appointment">{formatShopDate(new Date(visit.scheduledAt), undefined, timeZone)} · {formatShopTime(new Date(visit.scheduledAt), timeZone)}</Detail>
+          <Detail label="Checked in">{visit.checkedInAt ? formatShopTime(new Date(visit.checkedInAt), timeZone) : null}</Detail>
           <Detail label="Groomer">{visit.staff?.name}</Detail>
           <Detail label="Estimated duration">{visit.durationMins != null ? `${visit.durationMins} minutes` : null}</Detail>
         </dl>
@@ -121,16 +122,18 @@ function StationWorkspace({ id }: { id: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [clock, setClock] = useState("");
+  const [timeZone, setTimeZone] = useState<string>();
   const [error, setError] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
   const advancingRef = useRef(false);
 
   useEffect(() => {
-    const tick = () => setClock(currentShopTime());
+    // Blank until the stream says which zone: the default would show Phoenix.
+    const tick = () => setClock(timeZone ? currentShopTime(new Date(), timeZone) : "");
     tick();
     const timer = setInterval(tick, 15_000);
     return () => clearInterval(timer);
-  }, []);
+  }, [timeZone]);
 
   useEffect(() => {
     let disposed = false;
@@ -157,6 +160,7 @@ function StationWorkspace({ id }: { id: string }) {
       if (disposed) return;
       try {
         const data: Snapshot = JSON.parse(event.data);
+        if (data.timeZone) setTimeZone(data.timeZone);
         if (!data.station) return;
         clearOffline();
         setSnapshot(data);
@@ -251,7 +255,7 @@ function StationWorkspace({ id }: { id: string }) {
           <div className="min-w-0"><p className="station-eyebrow">Right now · {visit.pet.name}</p><p className="station-section-title font-display text-3xl font-bold">{formatStatus(visit.status)}</p></div>
           {next && station?.role !== "KENNEL" && <button type="button" onClick={advance} disabled={advancing || !connected} className="station-advance min-h-14 w-full sm:w-auto rounded-xl bg-brand-600 px-6 py-4 text-xl font-bold text-brand-on-600 disabled:opacity-50 touch-manipulation">{advancing ? "Updating…" : `→ ${formatStatus(next)}`}</button>}
         </div>
-        <VisitDetails visit={visit} />
+        <VisitDetails visit={visit} timeZone={timeZone} />
       </> : snapshot ? <section className="station-empty" aria-label="Station ready">
         <div className="station-empty-mark" aria-hidden="true">
           <svg viewBox="0 0 48 48" fill="none"><rect x="8" y="10" width="32" height="24" rx="5" stroke="currentColor" strokeWidth="2" /><path d="M18 40h12M24 34v6m-7-18 5 5 10-10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>

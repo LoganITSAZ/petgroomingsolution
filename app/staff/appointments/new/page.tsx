@@ -78,7 +78,7 @@ export default async function NewStaffAppointmentPage(props: PageProps) {
   const missed = customerId ? await recentMissedVisits(customerId) : null;
 
   // Default datetime: next full hour, at least 1 hour from now. The input is
-  // shop wall clock, so it is formatted in SHOP_TIMEZONE — getTimezoneOffset()
+  // shop wall clock, so it is formatted in the shop's time zone — getTimezoneOffset()
   // is the server's, which is UTC in production.
   const defaultDt = new Date(new Date().getTime() + 60 * 60 * 1000);
   defaultDt.setMinutes(0, 0, 0);
