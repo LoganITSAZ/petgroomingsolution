@@ -37,11 +37,11 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/gentlegroomer
       SEED_ON_START: ${SEED_ON_START:-true}
       SHOP_NAME: ${SHOP_NAME:-Your Grooming Shop}
+      SHOP_TAGLINE: ${SHOP_TAGLINE:-}
       SHOP_PHONE: ${SHOP_PHONE:-}
       SHOP_EMAIL: ${SHOP_EMAIL:-}
       SHOP_ADDRESS: ${SHOP_ADDRESS:-}
       SHOP_WEBSITE: ${SHOP_WEBSITE:-}
-      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-}
       EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-}
       # Empty falls back to admin@<the shop's own domain> — see lib/branding.ts.
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
