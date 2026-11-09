@@ -13,6 +13,7 @@ import BrandColorField from "@/components/admin/BrandColorField";
 import DocumentSettings from "./DocumentSettings";
 import VaccineRequirements from "./VaccineRequirements";
 import SaveToast from "@/components/SaveToast";
+import { DEFAULT_SHOP_TIMEZONE, formatShopDate, formatShopTime, isTimeZone } from "@/lib/utils";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -52,6 +53,10 @@ async function saveSettings(formData: FormData) {
   const shopCity = String(formData.get("shopCity") ?? "").trim() || null;
   const shopRegion = String(formData.get("shopRegion") ?? "").trim() || null;
   const shopPostalCode = String(formData.get("shopPostalCode") ?? "").trim() || null;
+  const shopTimezone = String(formData.get("shopTimezone") ?? "");
+  if (!isTimeZone(shopTimezone)) {
+    redirect("/admin/settings?error=bad_timezone");
+  }
 
   /*
    * The switches this form owns, read from the registry rather than named
@@ -160,6 +165,7 @@ async function saveSettings(formData: FormData) {
       shopCity,
       shopRegion,
       shopPostalCode,
+      shopTimezone,
       ...postedFlags,
       rewardVisitsPerReward,
       rewardLabel,
@@ -199,6 +205,18 @@ async function saveSettings(formData: FormData) {
 
 const FIELD =
   "w-full border border-stone-200 rounded-lg px-3 py-2 text-sm ";
+
+/** Every zone the runtime knows, by region; the saved one is kept even if the list lacks it. */
+function timeZoneGroups(current: string): [string, string[]][] {
+  const zones = Intl.supportedValuesOf("timeZone");
+  if (!zones.includes(current)) zones.push(current);
+  const groups = new Map<string, string[]>();
+  for (const zone of zones) {
+    const region = zone.includes("/") ? zone.split("/")[0] : "Other";
+    groups.set(region, [...(groups.get(region) ?? []), zone]);
+  }
+  return [...groups];
+}
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -285,6 +303,9 @@ interface PageProps {
 export default async function SettingsPage(props: PageProps) {
   const searchParams = await props.searchParams;
   const config = await getConfig();
+  const shopZone = config?.shopTimezone ?? DEFAULT_SHOP_TIMEZONE;
+  const now = new Date();
+  const shopClock = `${formatShopTime(now, shopZone)}, ${formatShopDate(now, { weekday: "short", month: "short", day: "numeric" }, shopZone)}`;
 
   return (
     <PageShell
@@ -300,6 +321,7 @@ export default async function SettingsPage(props: PageProps) {
       )}
 
       {searchParams.error === "bad_color" && <SaveToast tone="error">Enter every color as #rrggbb.</SaveToast>}
+      {searchParams.error === "bad_timezone" && <SaveToast tone="error">Choose a time zone from the list.</SaveToast>}
       <form action={saveSettings} className="grid items-start lg:grid-cols-2">
         <Section title="Shop Information">
           <Field name="shopName" label="Shop Name" hint="Used across the public site, emails and the staff screens.">
@@ -343,6 +365,20 @@ export default async function SettingsPage(props: PageProps) {
               </div>
             </div>
           )}
+
+          <Field name="shopTimezone" label="Time Zone" hint={`Shop clock now: ${shopClock}.`}>
+            <select id="shopTimezone" name="shopTimezone" defaultValue={shopZone} className={FIELD}>
+              {timeZoneGroups(shopZone).map(([region, zones]) => (
+                <optgroup key={region} label={region}>
+                  {zones.map((zone) => (
+                    <option key={zone} value={zone}>
+                      {zone.split("/").slice(1).join(" / ").replaceAll("_", " ") || zone}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </Field>
 
           <Field name="shopWebsite" label="Live website URL">
             <input type="url" id="shopWebsite" name="shopWebsite" defaultValue={config?.shopWebsite ?? ""} placeholder="https://your-domain.example" className={FIELD} />

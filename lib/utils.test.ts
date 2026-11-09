@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+  DEFAULT_SHOP_TIMEZONE,
+  isTimeZone,
   isWithinWalkInWindow,
+  setShopTimeZone,
+  shopDayKey,
   shopDayRange,
   shopDayRangeForKey,
+  shopTimeZone,
   formatShopDate,
+  formatShopTime,
   currentShopTime,
 } from './utils';
 
@@ -114,6 +120,47 @@ describe('utils', () => {
     
     it('is exclusive on the end boundary', () => {
       expect(isWithinWalkInWindow('09:00', '12:00')).toBe(false);
+    });
+  });
+
+  describe("the shop's own time zone", () => {
+    // 05:30 UTC on Aug 23: still 10:30pm on the 22nd in Phoenix (UTC-7), and
+    // already 1:30am on the 23rd in New York (UTC-4 in summer).
+    const at = new Date(Date.UTC(2026, 7, 23, 5, 30));
+
+    afterEach(() => {
+      setShopTimeZone(DEFAULT_SHOP_TIMEZONE);
+    });
+
+    it('is Phoenix until the shop says otherwise', () => {
+      expect(shopTimeZone()).toBe('America/Phoenix');
+      expect(shopDayKey(at)).toBe('2026-08-22');
+    });
+
+    it('moves the day, the clock and the day boundary once the shop sets one', () => {
+      setShopTimeZone('America/New_York');
+      expect(shopDayKey(at)).toBe('2026-08-23');
+      expect(formatShopTime(at)).toBe('1:30 AM');
+      expect(shopDayRange(at).start.toISOString()).toBe('2026-08-23T04:00:00.000Z');
+    });
+
+    it('keeps the zone it has when handed one that does not exist', () => {
+      setShopTimeZone('America/New_York');
+      setShopTimeZone('Mars/Olympus');
+      expect(shopTimeZone()).toBe('America/New_York');
+    });
+
+    it('takes the zone a browser screen was handed over the default', () => {
+      expect(formatShopTime(at, 'America/New_York')).toBe('1:30 AM');
+      expect(formatShopTime(at)).toBe('10:30 PM');
+    });
+
+    it('accepts real IANA zones only', () => {
+      expect(isTimeZone('America/Chicago')).toBe(true);
+      expect(isTimeZone('UTC')).toBe(true);
+      expect(isTimeZone('')).toBe(false);
+      expect(isTimeZone('Mars/Olympus')).toBe(false);
+      expect(isTimeZone('toString')).toBe(false);
     });
   });
 });

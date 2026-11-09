@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { STATION_APPOINTMENT_SELECT, subscribeToStation } from "@/lib/station-events";
 import { getKennelBoard } from "@/lib/kennels";
 import { OCCUPYING_STATUSES } from "@/lib/stations";
+import { shopTimeZone } from "@/lib/utils";
 import { StationRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 
@@ -42,11 +43,13 @@ export async function GET(
     start(controller) {
       const unsubscribe = subscribeToStation(stationId, controller);
 
-      // Send initial state immediately
+      // Send initial state immediately, with the shop's zone: the kiosk is a
+      // browser and reads the clock through this rather than the config.
+      const timeZone = shopTimeZone();
       const initial = `data: ${JSON.stringify(
         isKennel
-          ? { type: "init", station, kennels }
-          : { type: "init", appointments, station }
+          ? { type: "init", station, kennels, timeZone }
+          : { type: "init", appointments, station, timeZone }
       )}\n\n`;
       controller.enqueue(encoder.encode(initial));
 

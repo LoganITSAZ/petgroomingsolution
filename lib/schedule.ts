@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { expectedReturnsByDay } from "@/lib/demand";
 import { StaffPresence } from "@prisma/client";
-import { SHOP_TIMEZONE, formatShopDate, formatShopTime, shopDayKey, shopDayRange } from "@/lib/utils";
+import { shopTimeZone, formatShopDate, formatShopTime, shopDayKey, shopDayRange } from "@/lib/utils";
 import { shopMoment } from "@/lib/shop-time";
 
 /**
@@ -129,7 +129,7 @@ export function weekDays(anchor: Date = new Date()): Date[] {
   const { start } = shopDayRange(anchor);
   // Monday-first, computed from the shop's own day.
   const weekday = Number(
-    new Intl.DateTimeFormat("en-US", { timeZone: SHOP_TIMEZONE, weekday: "short" })
+    new Intl.DateTimeFormat("en-US", { timeZone: shopTimeZone(), weekday: "short" })
       .format(start)
       .replace(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/, (day) =>
         String(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(day))
@@ -272,7 +272,7 @@ const WEEKDAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "f
 
 /** The shop's opening hours for a given day, or null when it is closed. */
 function hoursFor(businessHours: BusinessHours, day: Date): DayHours {
-  const name = new Intl.DateTimeFormat("en-US", { timeZone: SHOP_TIMEZONE, weekday: "long" })
+  const name = new Intl.DateTimeFormat("en-US", { timeZone: shopTimeZone(), weekday: "long" })
     .format(day)
     .toLowerCase();
   return businessHours[name] ?? businessHours[WEEKDAY_KEYS[day.getUTCDay()]] ?? null;

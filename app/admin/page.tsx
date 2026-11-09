@@ -1,7 +1,7 @@
 import { getConfig } from "@/lib/config";
 import { prisma } from "@/lib/prisma";
 import { stationSubscriberCounts } from "@/lib/station-events";
-import { formatShopDate, formatShopTime, SHOP_TIMEZONE } from "@/lib/utils";
+import { formatShopDate, formatShopTime, shopTimeZone } from "@/lib/utils";
 import pkg from "@/package.json";
 import Link from "next/link";
 import { PageShell, PageSection } from "@/components/ui";
@@ -235,7 +235,7 @@ export default async function AdminOverview() {
   return (
     <PageShell
       title="System Status"
-      subtitle={`Read live at ${formatShopTime(now)} on ${formatShopDate(now)} (${SHOP_TIMEZONE}).`}
+      subtitle={`Read live at ${formatShopTime(now)} on ${formatShopDate(now)} (${shopTimeZone()}).`}
     >
       {!dbOnline && (
         <div className="border-t border-stone-100 bg-red-50 px-3 py-2">
@@ -317,7 +317,7 @@ export default async function AdminOverview() {
             ok={nodeEnv === "production"}
             warn={nodeEnv !== "production"}
           />
-          <Row label="Shop timezone" value={SHOP_TIMEZONE} />
+          <Row label="Shop timezone" value={shopTimeZone()} />
           <Row
             label="Last reminder sent"
             value={

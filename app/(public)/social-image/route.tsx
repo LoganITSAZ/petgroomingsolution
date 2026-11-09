@@ -1,7 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getConfig } from "@/lib/config";
 import { resolveTheme } from "@/lib/themes";
-import { SHOP_TIMEZONE } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +16,7 @@ export async function GET() {
   const config = await getConfig();
 
   // The shop's own date decides the seasonal theme, not the crawler's.
-  const [, month, day] = new Intl.DateTimeFormat("en-CA", { timeZone: SHOP_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" })
+  const [, month, day] = new Intl.DateTimeFormat("en-CA", { timeZone: config.shopTimezone, year: "numeric", month: "2-digit", day: "2-digit" })
     .format(new Date())
     .split("-")
     .map(Number);

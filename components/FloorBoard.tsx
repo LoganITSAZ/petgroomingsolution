@@ -145,6 +145,7 @@ export default function FloorBoard({
   capacity,
   move,
   closesAt,
+  timeZone,
 }: {
   pets: BoardPet[];
   destinations?: LifecycleDestination[];
@@ -155,6 +156,8 @@ export default function FloorBoard({
   move: (appointmentId: string, columnKey: string) => Promise<{ ok: boolean; error?: string }>;
   /** Today's closing time (epoch ms), from the shop's business hours; absent on a day with none. */
   closesAt?: number | null;
+  /** The shop's zone from SystemConfig: this renders in a browser, which has no config of its own. */
+  timeZone?: string;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -274,7 +277,7 @@ export default function FloorBoard({
     const readyFrom = (bookedMins?: number | null) => {
       const at = bookedMins ? Math.ceil((Date.now() + bookedMins * 60_000) / 300_000) * 300_000 : 0;
       const afterClose = Boolean(at && closesAt && at > closesAt);
-      return { afterClose, ready: at ? `ready around ${formatShopTime(new Date(at))}${afterClose ? ", after closing" : ""}` : "" };
+      return { afterClose, ready: at ? `ready around ${formatShopTime(new Date(at), timeZone)}${afterClose ? ", after closing" : ""}` : "" };
     };
     const openDialog = (id: string, name: string) => {
       const arrival = (arrivals ?? NO_ARRIVALS).find((entry) => entry.id === id);
@@ -400,7 +403,7 @@ export default function FloorBoard({
       if ($dests.length && !$free.length) $dialogBody.prepend($("<p>", {
         class: styles.destinationsHint, "data-all-busy": "", role: "status", text: "Nothing is free right now. Move a pet on, then check this one in." + (() => {
           const soonest = destinations.filter((entry) => entry.freesAt).sort((a, b) => a.freesAt! - b.freesAt!)[0];
-          return soonest?.freesAt ? ` ${soonest.label} should be done around ${formatShopTime(new Date(soonest.freesAt))}.` : "";
+          return soonest?.freesAt ? ` ${soonest.label} should be done around ${formatShopTime(new Date(soonest.freesAt), timeZone)}.` : "";
         })(),
       }));
       const $lead = $suggested.not(":disabled");
@@ -1039,7 +1042,7 @@ export default function FloorBoard({
       reopen.current = $dialog.is("[open]") ? { id: String($dialog.attr("data-id")), name: String($dialog.attr("data-name")), more: $dialogMore.prop("open") } : null;
       $root.empty();
     };
-  }, [pets, arrivals, destinations, assign, capacity, move, router, boardId, closesAt]);
+  }, [pets, arrivals, destinations, assign, capacity, move, router, boardId, closesAt, timeZone]);
 
   return (
     <div className={styles.board} id={arrivals ? "arrivals" : undefined}>
