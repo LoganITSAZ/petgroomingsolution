@@ -102,6 +102,13 @@ function filled(value: string | null | undefined): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+/** Every Twilio credential is typed in: what texts and calls both stand on. */
+export function twilioConfigured(
+  config: Pick<FeatureConfig, "twilioAccountSid" | "twilioAuthToken" | "twilioFromNumber">
+): boolean {
+  return filled(config.twilioAccountSid) && filled(config.twilioAuthToken) && filled(config.twilioFromNumber);
+}
+
 export const FEATURES: Feature[] = [
   {
     key: "featureOnlineBooking",
@@ -155,11 +162,7 @@ export const FEATURES: Feature[] = [
     group: "Notifications",
     offMeans: "silent",
     needs: (config) =>
-      filled(config.twilioAccountSid) &&
-      filled(config.twilioAuthToken) &&
-      filled(config.twilioFromNumber)
-        ? null
-        : "Twilio credentials are missing — add them on the Notifications page.",
+      twilioConfigured(config) ? null : "Twilio credentials are missing — add them on the Notifications page.",
   },
   {
     key: "featureAppointmentReminders",
@@ -236,11 +239,7 @@ export const FEATURES: Feature[] = [
     group: "Notifications",
     offMeans: "silent",
     needs: (config) =>
-      filled(config.twilioAccountSid) &&
-      filled(config.twilioAuthToken) &&
-      filled(config.twilioFromNumber)
-        ? null
-        : "Twilio credentials are missing — add them on the Notifications page.",
+      twilioConfigured(config) ? null : "Twilio credentials are missing — add them on the Notifications page.",
   },
   {
     key: "featureWaiverRequired",
