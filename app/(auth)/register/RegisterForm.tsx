@@ -91,6 +91,14 @@ export default function RegisterForm({ action, documents }: RegisterFormProps) {
         {serverError && ERROR_MESSAGES[serverError] && (
           <p role="alert" className="text-red-700 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
             {ERROR_MESSAGES[serverError]}
+            {/* The counter and the client-list import both make accounts with no
+                password, and their owners land here first. */}
+            {serverError === "email_taken" && (
+              <>
+                {" "}If the shop added you,{" "}
+                <Link href="/forgot-password" className="font-semibold underline">set your password</Link> to sign in.
+              </>
+            )}
           </p>
         )}
 
