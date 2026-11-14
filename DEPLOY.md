@@ -103,8 +103,9 @@ Every customer needs an email, so a row without one is skipped and named by its
 spreadsheet row; add those customers at the counter. Running it again is safe:
 a customer already here is never edited, only pets they do not have yet are
 added, and nobody is emailed or texted. Imported customers have no portal
-password until they set one with "Forgot password" on the sign-in page. Delete
-the CSV afterwards — it is the shop's whole client list.
+password until they set one with "Forgot password" on the sign-in page, which
+needs email delivery (`RESEND_API_KEY`) working first; the import says so when
+it is not. Delete the CSV afterwards — it is the shop's whole client list.
 
 ## HTTPS
 
