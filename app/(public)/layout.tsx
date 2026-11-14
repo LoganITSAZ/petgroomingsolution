@@ -7,7 +7,6 @@ import OfficeIcon from "@/components/OfficeIcon";
 import PublicStatusRefresh from "@/components/PublicStatusRefresh";
 import MobileMenu from "@/components/MobileMenu";
 import { getConfig } from "@/lib/config";
-import { shopContact } from "@/lib/shop-contact";
 import { headers } from "next/headers";
 import PublicThemeToggle, { NO_FLASH_SCRIPT } from "@/components/PublicThemeToggle";
 import { resolveTheme, themeCss } from "@/lib/themes";
@@ -23,7 +22,10 @@ export default async function PublicLayout({ children }: { children: React.React
   // Coordinates come from the same cached lookup the maps use, so the business
   // markup carries a real location without asking the shop for one.
   const business = businessJsonLd(config, await geocode(config.shopAddress));
-  const { phone, address } = shopContact(config);
+  // Saved details only. shopContact() fills gaps with samples, and a footer on
+  // every page — the privacy policy's included — is no place for a fake number.
+  const phone = config.shopPhone?.trim();
+  const address = config.shopAddress?.trim();
   const nonce = (await headers()).get("x-nonce") ?? undefined;
   const hasFaq = (await activeFaq()).length > 0;
 
@@ -175,10 +177,10 @@ export default async function PublicLayout({ children }: { children: React.React
           </div>
           <div>
             <p className="font-semibold text-white mb-1">Contact</p>
-            <p><a href={`tel:${phone}`} className="hover:underline">{phone}</a></p>
+            {phone && <p><a href={`tel:${phone}`} className="hover:underline">{phone}</a></p>}
             <p><Link href="/contact#contact-form" className="hover:underline">Send us a message</Link></p>
-            <p>{address}</p>
-            {config.shopAddress?.trim() && <p className="mt-2">Welcoming pets from within 20 miles of our shop.</p>}
+            {address && <p>{address}</p>}
+            {address && <p className="mt-2">Welcoming pets from within 20 miles of our shop.</p>}
           </div>
         </div>
       </footer>
