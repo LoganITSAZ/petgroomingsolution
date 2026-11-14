@@ -88,20 +88,27 @@ export function decodeCsv(bytes: Uint8Array): string {
 /**
  * RFC 4180: quoted fields may hold commas, line breaks and doubled quotes.
  * Blank lines come back as records so row numbers match the spreadsheet.
+ *
+ * A quote opens a field only at its start; one later in a cell (`6" tall`) is
+ * just a character. A quoted field still open at the end of the file throws:
+ * read leniently, it would swallow every row after it into one cell, and
+ * those customers would vanish without being reported as skipped.
  */
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
   let quoted = false;
+  let quotedFrom = 0;
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
     if (quoted) {
       if (char !== '"') field += char;
       else if (text[i + 1] === '"') field += text[++i];
       else quoted = false;
-    } else if (char === '"') {
+    } else if (char === '"' && field === "") {
       quoted = true;
+      quotedFrom = rows.length + 1;
     } else if (char === ",") {
       row.push(field);
       field = "";
@@ -114,6 +121,11 @@ export function parseCsv(text: string): string[][] {
     } else {
       field += char;
     }
+  }
+  if (quoted) {
+    throw new Error(
+      `Row ${quotedFrom} opens a quoted cell that never closes, so every row after it would run into that cell. Fix that row in the spreadsheet and save it again.`
+    );
   }
   if (field || row.length) {
     row.push(field);
@@ -225,10 +237,22 @@ function joinAddress(cell: (field: ImportField) => string): string {
 }
 
 function readPet(name: string, cell: (field: ImportField) => string, warn: (message: string) => void): ImportPet {
+  // Plainly pounds or nothing: the size tier and the price are read off this
+  // number, so "10 kg", "-5" or "12-15" is left for the shop to check rather
+  // than stored as a measurement it never was.
   const weightText = cell("weight");
-  const weight = Number(/\d+(\.\d+)?/.exec(weightText)?.[0]);
-  const weightLbs = weight > 0 ? weight : null;
-  if (weightText && weightLbs === null) warn(`weight "${weightText}" could not be read, left blank`);
+  const pounds = /^(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?|#)?\.?$/i.exec(weightText);
+  const weightLbs = pounds && Number(pounds[1]) > 0 ? Number(pounds[1]) : null;
+  if (weightText && weightLbs === null) warn(`weight "${weightText}" is not a weight in pounds, left blank`);
+
+  // Anything but a plain no is a bite history. A banner on a dog that never
+  // bit costs a glance; the opposite mistake costs a groomer a bite. What the
+  // old system said beyond a bare yes is kept where the station shows it.
+  const biteText = cell("biteHistory");
+  const hasBiteHistory = Boolean(biteText) && !/^(n|no|none|never|false|0|-+)$/i.test(biteText);
+  const biteNote = hasBiteHistory && !/^(y|yes|true|x|1)$/i.test(biteText) ? `Bite history: ${biteText}` : null;
+  if (biteNote) warn(`bites "${biteText}" read as a bite history, kept in temperament notes`);
+
   return {
     name,
     species: readSpecies(cell("species")),
@@ -236,11 +260,11 @@ function readPet(name: string, cell: (field: ImportField) => string, warn: (mess
     breed: cell("breed") || null,
     weightLbs,
     groomingNotes: cell("groomingNotes") || null,
-    temperamentNotes: cell("temperament") || null,
+    temperamentNotes: [cell("temperament"), biteNote].filter(Boolean).join("\n") || null,
     healthFlags: cell("health").split(/[;\n]/).map((flag) => flag.trim()).filter(Boolean),
     vetName: cell("vetName") || null,
     vetPhone: cell("vetPhone") || null,
-    hasBiteHistory: /^(y|yes|true|1|x)\b/i.test(cell("biteHistory")),
+    hasBiteHistory,
   };
 }
 
