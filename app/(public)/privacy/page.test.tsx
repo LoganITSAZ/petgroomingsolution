@@ -3,7 +3,14 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 vi.mock("@/lib/config", () => ({ getConfig: vi.fn() }));
+vi.mock("@/lib/maps", () => ({ geocode: vi.fn(async () => null) }));
+vi.mock("@/lib/seo-pages", () => ({ activeFaq: vi.fn(async () => []) }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+// Client islands that need a real browser or a mounted app router, and carry no contact details.
+vi.mock("@/components/PublicStatusRefresh", () => ({ default: () => null }));
+vi.mock("@/components/PublicThemeToggle", () => ({ default: () => null, NO_FLASH_SCRIPT: "" }));
 import { getConfig } from "@/lib/config";
+import PublicLayout from "../layout";
 import PrivacyPage from "./page";
 
 type Config = Awaited<ReturnType<typeof getConfig>>;
@@ -46,5 +53,17 @@ it("says nothing about texts, and gives only the contact details the shop saved"
   expect(screen.queryByText(/Twilio/)).toBeNull();
   expect(screen.getByRole("link", { name: "hello@bark.test" })).toBeTruthy();
   // shopContact() fills gaps with sample details; a privacy request must never go to one.
+  expect(document.body.textContent).not.toMatch(/555-0147|example\.com|Example Lane/);
+});
+
+it("shows no sample contact details anywhere on the route, the shared footer included", async () => {
+  vi.mocked(getConfig).mockResolvedValue({
+    ...shop,
+    businessHours: {},
+    shopTimezone: "America/Phoenix",
+    featureOnlineBooking: false,
+  } as unknown as Config);
+  render(await PublicLayout({ children: await PrivacyPage() }));
+  expect(screen.getByRole("link", { name: "Privacy Policy" })).toBeTruthy();
   expect(document.body.textContent).not.toMatch(/555-0147|example\.com|Example Lane/);
 });
