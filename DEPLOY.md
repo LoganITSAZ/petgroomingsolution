@@ -61,7 +61,10 @@ Updating later is `git pull` then `docker compose up -d --build` from
 `/opt/gentlegroomer`, with a dump taken first — migrations only run forward, so
 rolling back means the previous commit **and** the backup from before it. If
 `git pull` refuses because of the domain edited into `nginx.tls.conf`,
-`git stash && git pull && git stash pop` carries the edit across.
+`git stash && git pull && git stash pop` carries the edit across. Finish with
+`docker compose restart nginx`: Compose rebuilds what changed but cannot see
+that a mounted config file did, so nginx otherwise keeps running the
+configuration it started with, however old that is.
 
 ## First login
 
@@ -121,6 +124,7 @@ counted.
 docker compose logs -f app        # application logs
 docker compose ps                 # health of each container
 docker compose up -d --build      # deploy a new version (migrations included)
+docker compose restart nginx      # load a changed nginx.conf
 docker compose down               # stop everything; data survives in a volume
 ```
 
