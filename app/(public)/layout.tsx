@@ -22,8 +22,8 @@ export default async function PublicLayout({ children }: { children: React.React
   // Coordinates come from the same cached lookup the maps use, so the business
   // markup carries a real location without asking the shop for one.
   const business = businessJsonLd(config, await geocode(config.shopAddress));
-  // Saved details only. shopContact() fills gaps with samples, and a footer on
-  // every page — the privacy policy's included — is no place for a fake number.
+  // Saved details only: an unset phone or address prints nothing, never a
+  // sample — this footer sits under the privacy policy too.
   const phone = config.shopPhone?.trim();
   const address = config.shopAddress?.trim();
   const nonce = (await headers()).get("x-nonce") ?? undefined;

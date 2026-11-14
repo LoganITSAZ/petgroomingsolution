@@ -26,8 +26,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PrivacyPage() {
   const config = await getConfig();
   const name = config.shopName.trim();
-  // The saved details only. shopContact() fills gaps with sample ones, and a
-  // privacy request sent to a sample address goes nowhere.
+  // The saved details only: a privacy request sent to a made-up address goes
+  // nowhere.
   const email = config.shopEmail?.trim();
   const phone = config.shopPhone?.trim();
   const address = config.shopAddress?.trim();

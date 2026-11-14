@@ -7,7 +7,6 @@ import AddressMap from "@/components/AddressMap";
 import PublicVisitCard from "@/components/PublicVisitCard";
 import OfficeIcon from "@/components/OfficeIcon";
 import { getConfig } from "@/lib/config";
-import { shopContact } from "@/lib/shop-contact";
 import styles from "./contact.module.css";
 
 export async function generateMetadata() {
@@ -26,16 +25,20 @@ function ContactIcon({ kind }: { kind: "phone" | "email" }) {
 
 export default async function ContactPage() {
   const config = await getConfig();
-  const { phone, address, hasAddress } = shopContact(config);
+  // Saved details only: no number, no call button, rather than a sample one.
+  const phone = config.shopPhone?.trim();
+  const address = config.shopAddress?.trim();
 
   // The call and message buttons, condensed into the visit card's contact band.
   const contact = (
     <div className={styles.contactMethods}>
-      <a href={`tel:${phone}`} className={`${styles.contactCard} ${styles.callCard}`}>
-        <span className={styles.icon}><ContactIcon kind="phone" /></span>
-        <span className={styles.cardCopy}><span className={styles.label}>Give us a ring</span><span className={styles.contactValue}>{phone}</span></span>
-        <span className={styles.arrow} aria-hidden="true">↗</span>
-      </a>
+      {phone && (
+        <a href={`tel:${phone}`} className={`${styles.contactCard} ${styles.callCard}`}>
+          <span className={styles.icon}><ContactIcon kind="phone" /></span>
+          <span className={styles.cardCopy}><span className={styles.label}>Give us a ring</span><span className={styles.contactValue}>{phone}</span></span>
+          <span className={styles.arrow} aria-hidden="true">↗</span>
+        </a>
+      )}
       <a href="#contact-form" className={`${styles.contactCard} ${styles.emailCard}`}>
         <span className={styles.icon}><ContactIcon kind="email" /></span>
         <span className={styles.cardCopy}><span className={styles.label}>Drop us a note</span><span className={styles.contactValue}>Send us a message</span></span>
@@ -65,9 +68,9 @@ export default async function ContactPage() {
       {/* One module: the visit card, with the map sliding out from behind its
           left edge. The card carries the address and directions, so the map
           needs no words of its own; no address, no map, and the card stands alone. */}
-      <section className={`${styles.visitModule} ${hasAddress ? styles.withMap : ""}`} aria-label="Plan your visit">
+      <section className={`${styles.visitModule} ${address ? styles.withMap : ""}`} aria-label="Plan your visit">
         <div className={styles.visitCard}><PublicVisitCard config={config} contact={contact} /></div>
-        {hasAddress && <AddressMap address={address} title={`Map showing ${config.shopName}`} height={360} className={styles.map} credit />}
+        {address && <AddressMap address={address} title={`Map showing ${config.shopName}`} height={360} className={styles.map} credit />}
       </section>
 
       {config.featureOnlineBooking && (

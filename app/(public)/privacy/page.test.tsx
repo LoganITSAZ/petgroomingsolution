@@ -52,7 +52,7 @@ it("says nothing about texts, and gives only the contact details the shop saved"
   expect(screen.queryByRole("heading", { name: "Text messages" })).toBeNull();
   expect(screen.queryByText(/Twilio/)).toBeNull();
   expect(screen.getByRole("link", { name: "hello@bark.test" })).toBeTruthy();
-  // shopContact() fills gaps with sample details; a privacy request must never go to one.
+  // The site used to fill unset details with samples; a privacy request must never go to one.
   expect(document.body.textContent).not.toMatch(/555-0147|example\.com|Example Lane/);
 });
 
