@@ -18,6 +18,7 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "staff:password": "tsx scripts/reset-password.ts",
+    "customers:import": "tsx scripts/import-customers.ts",
     "db:demo": "tsx prisma/demo.ts",
     "jobs:once": "tsx scripts/jobs.ts once",
     "jobs:loop": "tsx scripts/jobs.ts loop",
