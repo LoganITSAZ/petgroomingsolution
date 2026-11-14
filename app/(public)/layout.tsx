@@ -165,6 +165,7 @@ export default async function PublicLayout({ children }: { children: React.React
               <span aria-hidden="true">{theme.preset.motif ?? "🐾"}</span> {config.shopName}
             </p>
             <p className="italic opacity-80">Patience, Love &amp; Kindness</p>
+            <p className="mt-3"><Link href="/privacy" className="hover:underline">Privacy Policy</Link></p>
           </div>
           <div>
             <p className="font-semibold text-white mb-1">Hours</p>
