@@ -72,6 +72,11 @@ async function main() {
     if (additions.length) console.log(`${add} ${count(addedPets, "pet")} to ${count(additions.length, "customer")} already here.`);
     if (untouched) console.log(`${count(untouched, "customer")} already here, nothing new for them.`);
     if (plan.skipped.length) console.log(`${count(plan.skipped.length, "row")} skipped, listed above.`);
+    // "Forgot password" is the only way into an imported account, and without
+    // email delivery it sends nothing. Staff can still book these customers.
+    if (fresh.length && !process.env.RESEND_API_KEY?.trim()) {
+      console.log("Email is not set up here (RESEND_API_KEY), so these customers cannot set a portal password until it is.");
+    }
   };
 
   if (!commit) {
