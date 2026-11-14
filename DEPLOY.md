@@ -78,6 +78,34 @@ starts on `America/Phoenix`, and a VPS keeps its own clock on UTC, so this
 setting is what decides the shop's day, its hours, the walk-in window and when
 reminders go out. The field shows the shop's clock as it will read it.
 
+## Bringing in the shop's client list
+
+If the shop already keeps its customers somewhere — a spreadsheet, or an export
+from its old booking software — save the list as CSV and import it rather than
+typing it in. A row per customer works, and so does a row per pet with the
+owner repeated on each: rows that share an email become one customer with
+several pets. Headers are matched loosely ("First Name", "E-mail", "Cell
+Phone", "Pet Name", "Breed", "Weight", "Notes", "Bites", "Vet" and their usual
+spellings), and the first run is a dry run that writes nothing and lists which
+column it read as what. Renaming a header in the spreadsheet is the fix for
+one it missed.
+
+```bash
+scp clients.csv you@your-server:~      # from your own computer
+
+cd /opt/gentlegroomer                  # then on the server
+docker compose exec -T jobs npx tsx scripts/import-customers.ts < ~/clients.csv
+docker compose exec -T jobs npx tsx scripts/import-customers.ts --commit < ~/clients.csv
+rm ~/clients.csv
+```
+
+Every customer needs an email, so a row without one is skipped and named by its
+spreadsheet row; add those customers at the counter. Running it again is safe:
+a customer already here is never edited, only pets they do not have yet are
+added, and nobody is emailed or texted. Imported customers have no portal
+password until they set one with "Forgot password" on the sign-in page. Delete
+the CSV afterwards — it is the shop's whole client list.
+
 ## HTTPS
 
 Do this before the first sign-in. With `NEXTAUTH_URL` on `https://`, the

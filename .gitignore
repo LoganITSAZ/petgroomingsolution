@@ -52,3 +52,6 @@ CLAUDE.local.md
 
 # database dumps (customer data) — see DEPLOY.md
 backups/
+
+# client lists brought in with scripts/import-customers.ts (customer data)
+*.csv
