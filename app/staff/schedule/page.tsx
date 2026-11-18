@@ -8,13 +8,14 @@ import { getConfig } from "@/lib/config";
 import {
   HOURS_LEVEL_CLASS,
   HOURS_LEVEL_LABEL,
+  addShopCalendarDays,
   describeShifts,
   formatHours,
   hoursByStaff,
   shiftsBetween,
   weekDays,
 } from "@/lib/schedule";
-import { formatShopDate, formatShopTime, shopDayKey } from "@/lib/utils";
+import { formatShopDate, formatShopTime, shopDayKey, shopDayRange } from "@/lib/utils";
 
 // Screen readers announce the title first; without one every page in the
 // app reads as the same document (WCAG 2.4.2).
@@ -27,8 +28,6 @@ export const metadata = { title: "Schedule" };
  * not an admin question. Editing still is — this screen has no controls, and
  * admins get a link across to the editor.
  */
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface PageProps {
   searchParams: Promise<{ week?: string }>;
@@ -43,7 +42,7 @@ export default async function StaffSchedulePage(props: PageProps) {
   const anchor = searchParams.week ? new Date(`${searchParams.week}T12:00:00Z`) : new Date();
   const days = weekDays(anchor);
   const weekStart = days[0];
-  const weekEnd = new Date(days[6].getTime() + DAY_MS);
+  const weekEnd = shopDayRange(days[6]).end;
   const todayKey = shopDayKey(new Date());
 
   const [staff, shifts, config, isAdmin] = await Promise.all([
@@ -68,8 +67,8 @@ export default async function StaffSchedulePage(props: PageProps) {
   const mine = meId ? hoursByStaffId.get(meId) : undefined;
   const myShifts = meId ? shifts.filter((shift) => shift.staffId === meId) : [];
 
-  const prevWeek = shopDayKey(new Date(weekStart.getTime() - 7 * DAY_MS));
-  const nextWeek = shopDayKey(new Date(weekStart.getTime() + 7 * DAY_MS));
+  const prevWeek = shopDayKey(addShopCalendarDays(weekStart, -7));
+  const nextWeek = shopDayKey(addShopCalendarDays(weekStart, 7));
 
   return (
     <PageShell

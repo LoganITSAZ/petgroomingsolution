@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   HOURS_LEVEL_CLASS,
   HOURS_LEVEL_LABEL,
+  addShopCalendarDays,
   formatHours,
   hoursByStaff,
   scheduleAdvice,
@@ -11,7 +12,7 @@ import {
   weekDays,
 } from "@/lib/schedule";
 import { getConfig } from "@/lib/config";
-import { formatShopDate, formatShopTime24, shopDayKey } from "@/lib/utils";
+import { formatShopDate, formatShopTime24, shopDayKey, shopDayRange } from "@/lib/utils";
 import { deleteShift, generateWeek, saveShift } from "./actions";
 import ScheduleWeekSync from "./ScheduleWeekSync";
 import { PageShell, PageSection } from "@/components/ui";
@@ -37,8 +38,6 @@ const ERRORS: Record<string, string> = {
   backwards: "A shift has to end after it starts.",
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 const ADVICE_GROUPS = [
   { scope: "days", label: "Cover" },
   { scope: "people", label: "People" },
@@ -60,7 +59,7 @@ export default async function SchedulePage(props: PageProps) {
   const anchor = searchParams.week ? new Date(`${searchParams.week}T12:00:00Z`) : new Date();
   const days = weekDays(anchor);
   const weekStart = days[0];
-  const weekEnd = new Date(days[6].getTime() + DAY_MS);
+  const weekEnd = shopDayRange(days[6]).end;
   const weekKey = shopDayKey(weekStart);
 
   const [staff, shifts, config] = await Promise.all([
@@ -97,8 +96,8 @@ export default async function SchedulePage(props: PageProps) {
   }
 
   const errorMessage = searchParams.error ? ERRORS[searchParams.error] : undefined;
-  const prevWeek = shopDayKey(new Date(weekStart.getTime() - 7 * DAY_MS));
-  const nextWeek = shopDayKey(new Date(weekStart.getTime() + 7 * DAY_MS));
+  const prevWeek = shopDayKey(addShopCalendarDays(weekStart, -7));
+  const nextWeek = shopDayKey(addShopCalendarDays(weekStart, 7));
   const inputClass =
     "w-full border border-stone-200 rounded px-1.5 py-1 text-xs ";
 
