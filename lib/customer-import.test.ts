@@ -142,9 +142,10 @@ describe("planImport", () => {
       "Ann,Lee,ann@example.com,C,10 kg",
       "Ann,Lee,ann@example.com,D,-5",
       "Ann,Lee,ann@example.com,E,12-15 lbs",
+      `Ann,Lee,ann@example.com,F,${"9".repeat(400)}`,
     ]);
-    expect(result.households[0].pets.map((pet) => pet.weightLbs)).toEqual([25, 12.5, null, null, null]);
-    expect(result.warnings.map((warning) => warning.row)).toEqual([4, 5, 6]);
+    expect(result.households[0].pets.map((pet) => pet.weightLbs)).toEqual([25, 12.5, null, null, null, null]);
+    expect(result.warnings.map((warning) => warning.row)).toEqual([4, 5, 6, 7]);
   });
 
   it("builds one address line from split columns", () => {
