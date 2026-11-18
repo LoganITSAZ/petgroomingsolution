@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { requestPasswordReset, type ResetSubject } from "@/lib/password-reset";
+import { allowAuthAttempt } from "@/lib/auth-rate-limit";
 
 export const metadata = { title: "Forgot Password" };
 
@@ -14,6 +16,10 @@ async function sendResetLink(formData: FormData) {
   const email = ((formData.get("email") as string | null) ?? "").trim();
   const subject: ResetSubject = formData.get("type") === "staff" ? "staff" : "customer";
 
+  if (!allowAuthAttempt("password-reset", await headers())) {
+    redirect(`/forgot-password?sent=1&type=${subject}&limited=1`);
+  }
+
   // Always the same answer, whether or not the address is on file: a form that
   // says "no such account" is a way to ask who the shop's customers are.
   await requestPasswordReset(email, subject);
@@ -22,11 +28,12 @@ async function sendResetLink(formData: FormData) {
 }
 
 export default async function ForgotPasswordPage(props: {
-  searchParams: Promise<{ sent?: string; type?: string }>;
+  searchParams: Promise<{ sent?: string; type?: string; limited?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const userType: ResetSubject = searchParams.type === "staff" ? "staff" : "customer";
   const sent = searchParams.sent === "1";
+  const limited = searchParams.limited === "1";
 
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
@@ -36,8 +43,9 @@ export default async function ForgotPasswordPage(props: {
         {sent ? (
           <>
             <p className="text-sm text-stone-600 mt-4">
-              If that address has an account, a link to choose a new password is on its way. It
-              works once and expires in an hour.
+              {limited
+                ? "Too many requests have come from this network. Please wait a few minutes before trying again."
+                : "If that address has an account, a link to choose a new password is on its way. It works once and expires in an hour."}
             </p>
             <p className="text-sm text-stone-500 mt-3">
               Nothing arrived? Check the spam folder, or ask again — the newest link is the one that

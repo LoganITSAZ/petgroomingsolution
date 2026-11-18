@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getConfig } from "@/lib/config";
 import { acceptDocuments, activeDocuments } from "@/lib/documents";
 import { storeImageDataUrl } from "@/lib/photos";
+import { allowAuthAttempt } from "@/lib/auth-rate-limit";
 import RegisterForm from "./RegisterForm";
 
 // Screen readers announce the title first; without one every page in the
@@ -24,6 +25,11 @@ export default async function RegisterPage() {
 
   async function registerAction(formData: FormData) {
     "use server";
+
+    const reqHeaders = await headers();
+    if (!allowAuthAttempt("register", reqHeaders)) {
+      redirect("/register?error=rate_limited");
+    }
 
     const cfg = await getConfig();
 
@@ -75,7 +81,6 @@ export default async function RegisterPage() {
 
     // What they agreed to, one row each, with the signature they drew.
     if (required.length > 0) {
-      const reqHeaders = await headers();
       const signature = await storeImageDataUrl(formData.get("signature"));
       await acceptDocuments(customer.id, required, {
         signedName: (formData.get("signedName") as string | null) ?? null,

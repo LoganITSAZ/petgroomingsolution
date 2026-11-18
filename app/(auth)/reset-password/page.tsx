@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { allowAuthAttempt } from "@/lib/auth-rate-limit";
 import {
   MIN_PASSWORD_LENGTH,
   consumePasswordReset,
@@ -20,6 +22,7 @@ const FORM_ERROR: Record<string, string> = {
   ...DEAD_LINK,
   weak: `Pick a password of at least ${MIN_PASSWORD_LENGTH} characters.`,
   mismatch: "Those two passwords do not match.",
+  rate_limited: "Too many attempts. Please wait a few minutes before trying again.",
 };
 
 async function setNewPassword(formData: FormData) {
@@ -36,6 +39,7 @@ async function setNewPassword(formData: FormData) {
   const back: (error: string) => never = (error) =>
     redirect(`/reset-password?token=${encodeURIComponent(token)}&error=${error}`);
 
+  if (!allowAuthAttempt("set-password", await headers())) back("rate_limited");
   if (password !== confirm) back("mismatch");
 
   const result = await consumePasswordReset(token, password);

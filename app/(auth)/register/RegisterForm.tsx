@@ -19,6 +19,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   password_mismatch: "Passwords do not match.",
   waiver_required: "Please accept every document to continue.",
   email_taken: "An account with that email already exists.",
+  rate_limited: "Too many attempts. Please wait a few minutes before trying again.",
 };
 
 export default function RegisterForm({ action, documents }: RegisterFormProps) {
