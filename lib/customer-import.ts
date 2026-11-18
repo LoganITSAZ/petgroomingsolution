@@ -242,7 +242,8 @@ function readPet(name: string, cell: (field: ImportField) => string, warn: (mess
   // than stored as a measurement it never was.
   const weightText = cell("weight");
   const pounds = /^(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?|#)?\.?$/i.exec(weightText);
-  const weightLbs = pounds && Number(pounds[1]) > 0 ? Number(pounds[1]) : null;
+  const parsedWeight = pounds ? Number(pounds[1]) : null;
+  const weightLbs = parsedWeight !== null && Number.isFinite(parsedWeight) && parsedWeight > 0 ? parsedWeight : null;
   if (weightText && weightLbs === null) warn(`weight "${weightText}" is not a weight in pounds, left blank`);
 
   // Anything but a plain no is a bite history. A banner on a dog that never
