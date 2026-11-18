@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { absenceNote, formatHours, hoursByStaff, type Shift } from './schedule';
+import { afterEach, describe, it, expect } from 'vitest';
+import { absenceNote, addShopDays, formatHours, hoursByStaff, weekDays, type Shift } from './schedule';
+import { setShopTimeZone, shopDayKey, shopDayRange } from './utils';
 
 /**
  * The schedule's arithmetic. Overtime is read off scheduled hours before the week
@@ -131,6 +132,28 @@ describe('schedule hours', () => {
       expect(ada.daysWorked).toBe(1);
       expect(ada.minutes).toBe(7 * 60);
     });
+  });
+});
+
+describe('shop-local schedule weeks', () => {
+  afterEach(() => setShopTimeZone('America/Phoenix'));
+
+  it('keeps weeks and navigation on calendar days across the fall DST change', () => {
+    setShopTimeZone('America/New_York');
+    const days = weekDays(new Date('2026-10-26T12:00:00Z'));
+
+    expect(days.map((day) => shopDayKey(day))).toEqual([
+      '2026-10-26',
+      '2026-10-27',
+      '2026-10-28',
+      '2026-10-29',
+      '2026-10-30',
+      '2026-10-31',
+      '2026-11-01',
+    ]);
+    expect(shopDayKey(addShopDays(days[0], 7))).toBe('2026-11-02');
+    expect(shopDayKey(addShopDays(days[0], -7))).toBe('2026-10-19');
+    expect(shopDayRange(days[6]).end.toISOString()).toBe('2026-11-02T05:00:00.000Z');
   });
 });
 
