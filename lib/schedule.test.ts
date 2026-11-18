@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { absenceNote, formatHours, hoursByStaff, type Shift } from './schedule';
+import {
+  absenceNote,
+  addShopCalendarDays,
+  formatHours,
+  hoursByStaff,
+  weekDays,
+  type Shift,
+} from './schedule';
+import { setShopTimeZone, shopDayKey, shopDayRange } from './utils';
 
 /**
  * The schedule's arithmetic. Overtime is read off scheduled hours before the week
@@ -142,5 +150,29 @@ describe('absenceNote', () => {
     expect(absenceNote('Ada', day, new Date(Date.UTC(2026, 7, 3, 16, 0)))).toBe('Ada is on shift but not signed in');
     expect(absenceNote('Ada', day, new Date(Date.UTC(2026, 7, 3, 23, 30)))).toBe('Ada has finished for the day');
     expect(absenceNote('Ada', undefined)).toBe("Ada is not on today's schedule");
+  });
+});
+
+describe('shop-local schedule weeks', () => {
+  it('keeps week navigation and day boundaries correct across the fall DST change', () => {
+    setShopTimeZone('America/New_York');
+    try {
+      const days = weekDays(new Date('2026-10-26T16:00:00Z'));
+
+      expect(days.map((day) => shopDayKey(day))).toEqual([
+        '2026-10-26',
+        '2026-10-27',
+        '2026-10-28',
+        '2026-10-29',
+        '2026-10-30',
+        '2026-10-31',
+        '2026-11-01',
+      ]);
+      expect(shopDayKey(addShopCalendarDays(days[0], -7))).toBe('2026-10-19');
+      expect(shopDayKey(addShopCalendarDays(days[0], 7))).toBe('2026-11-02');
+      expect(shopDayRange(days[6]).end.toISOString()).toBe('2026-11-02T05:00:00.000Z');
+    } finally {
+      setShopTimeZone('America/Phoenix');
+    }
   });
 });

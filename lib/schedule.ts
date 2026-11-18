@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { expectedReturnsByDay } from "@/lib/demand";
 import { StaffPresence } from "@prisma/client";
-import { shopTimeZone, formatShopDate, formatShopTime, shopDayKey, shopDayRange } from "@/lib/utils";
+import {
+  shopTimeZone,
+  formatShopDate,
+  formatShopTime,
+  shopDayKey,
+  shopDayRange,
+  shopDayRangeForKey,
+} from "@/lib/utils";
 import { shopMoment } from "@/lib/shop-time";
 
 /**
@@ -127,19 +134,18 @@ export async function scheduleGaps(now: Date = new Date()): Promise<ScheduleGap[
 /** The seven days of the week a schedule grid shows, starting Monday. */
 export function weekDays(anchor: Date = new Date()): Date[] {
   const { start } = shopDayRange(anchor);
-  // Monday-first, computed from the shop's own day.
-  const weekday = Number(
-    new Intl.DateTimeFormat("en-US", { timeZone: shopTimeZone(), weekday: "short" })
-      .format(start)
-      .replace(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/, (day) =>
-        String(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(day))
-      )
-  );
+  const [year, month, day] = shopDayKey(start).split("-").map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const monday = addShopCalendarDays(start, -((weekday + 6) % 7));
+  return Array.from({ length: 7 }, (_, offset) => addShopCalendarDays(monday, offset));
+}
 
-  const monday = shopDayRange(new Date(start.getTime() - weekday * DAY_MS)).start;
-  return Array.from({ length: 7 }, (_, offset) =>
-    shopDayRange(new Date(monday.getTime() + offset * DAY_MS)).start
-  );
+/** Add calendar days in the shop's timezone, returning the day's start instant. */
+export function addShopCalendarDays(day: Date, offset: number): Date {
+  const [year, month, date] = shopDayKey(day).split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, date + offset));
+  const key = shifted.toISOString().slice(0, 10);
+  return shopDayRangeForKey(key)!.start;
 }
 
 export { shopDayKey };
@@ -298,7 +304,7 @@ export async function scheduleAdvice({
 }): Promise<ScheduleAdvice[]> {
   const advice: ScheduleAdvice[] = [];
   const weekStart = days[0];
-  const weekEnd = new Date(days[days.length - 1].getTime() + DAY_MS);
+  const weekEnd = shopDayRange(days[days.length - 1]).end;
 
   // ── Overtime and near-overtime, worst first ───────────────
   const hours = hoursByStaff(staff, shifts, weekStart, weekEnd, overtimeHours);
