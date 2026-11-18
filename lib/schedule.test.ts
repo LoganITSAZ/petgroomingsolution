@@ -1,5 +1,24 @@
-import { describe, it, expect } from 'vitest';
-import { absenceNote, formatHours, hoursByStaff, type Shift } from './schedule';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { DEFAULT_SHOP_TIMEZONE, setShopTimeZone, shopDayKey, shopDayRange } from './utils';
+
+const mocks = vi.hoisted(() => ({ groupBy: vi.fn() }));
+vi.mock('@/lib/prisma', () => ({ prisma: { appointment: { groupBy: mocks.groupBy } } }));
+vi.mock('@/lib/demand', () => ({ expectedReturnsByDay: vi.fn().mockResolvedValue(new Map()) }));
+
+import {
+  absenceNote,
+  addShopDays,
+  formatHours,
+  hoursByStaff,
+  scheduleAdvice,
+  weekDays,
+  type Shift,
+} from './schedule';
+
+afterEach(() => {
+  setShopTimeZone(DEFAULT_SHOP_TIMEZONE);
+  vi.clearAllMocks();
+});
 
 /**
  * The schedule's arithmetic. Overtime is read off scheduled hours before the week
@@ -142,5 +161,45 @@ describe('absenceNote', () => {
     expect(absenceNote('Ada', day, new Date(Date.UTC(2026, 7, 3, 16, 0)))).toBe('Ada is on shift but not signed in');
     expect(absenceNote('Ada', day, new Date(Date.UTC(2026, 7, 3, 23, 30)))).toBe('Ada has finished for the day');
     expect(absenceNote('Ada', undefined)).toBe("Ada is not on today's schedule");
+  });
+});
+
+describe('shop-local schedule weeks', () => {
+  it('keeps week days, navigation, and the end boundary aligned across DST', async () => {
+    setShopTimeZone('America/New_York');
+    mocks.groupBy.mockResolvedValue([]);
+
+    const days = weekDays(new Date('2026-10-26T16:00:00.000Z'));
+
+    expect(days.map((day) => shopDayKey(day))).toEqual([
+      '2026-10-26',
+      '2026-10-27',
+      '2026-10-28',
+      '2026-10-29',
+      '2026-10-30',
+      '2026-10-31',
+      '2026-11-01',
+    ]);
+    expect(shopDayKey(addShopDays(days[0], 7))).toBe('2026-11-02');
+    expect(shopDayRange(days[6]).end.toISOString()).toBe('2026-11-02T05:00:00.000Z');
+
+    await scheduleAdvice({
+      days,
+      shifts: [],
+      staff: [],
+      businessHours: {},
+      overtimeHours: 40,
+    });
+
+    expect(mocks.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          scheduledAt: {
+            gte: days[0],
+            lt: new Date('2026-11-02T05:00:00.000Z'),
+          },
+        },
+      })
+    );
   });
 });

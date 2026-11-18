@@ -192,7 +192,7 @@ volume, so one dump is the whole shop. Nightly at 3am, kept for 30 days, from
 the host's crontab (`crontab -e`; use the path the repo is cloned to):
 
 ```
-0 3 * * * cd /opt/gentlegroomer && mkdir -p backups && docker compose exec -T db pg_dump -U postgres gentlegroomer | gzip > backups/$(date +\%F).sql.gz && find backups -name '*.sql.gz' -mtime +30 -delete
+0 3 * * * cd /opt/gentlegroomer && mkdir -p backups && day=$(date +\%F) && tmp=$(mktemp -d "backups/.$day.XXXXXX") && trap 'rm -rf "$tmp"' 0 && docker compose exec -T db pg_dump -U postgres gentlegroomer > "$tmp/backup.sql" && gzip -c "$tmp/backup.sql" > "$tmp/backup.sql.gz" && mv "$tmp/backup.sql.gz" "backups/$day.sql.gz" && find backups -name '*.sql.gz' -mtime +30 -delete
 ```
 
 A backup on the same disk does not survive the disk. Copy `backups/` off the
